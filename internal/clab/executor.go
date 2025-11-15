@@ -201,3 +201,5 @@ func RunCommandWithWriters(ctx context.Context, stdout io.Writer, stderr io.Writ
 	// since we've already streamed them to the provided writers
 	return "", "", err
 }
+
+// SetContainerOwnerLabel updates the clab-owner label on a docker container.

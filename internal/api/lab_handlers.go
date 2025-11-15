@@ -791,55 +791,74 @@ func RedeployLabHandler(c *gin.Context) {
 	}
 	log.Debugf("RedeployLab user '%s', lab '%s': Using original topology path '%s'", username, labName, originalTopoPath)
 
-	// --- Execute clab redeploy ---
-	args := []string{"redeploy", "--topo", originalTopoPath}
+	// Determine the owner label we want to preserve (default to authenticated user)
+	targetOwner := username
+	if info, exists, err := getLabInfo(c.Request.Context(), username, labName); err == nil && exists && info != nil && info.Owner != "" {
+		targetOwner = info.Owner
+	}
 
-	// Add flags based on query parameters
+	// --- Destroy existing lab before re-deploying ---
+	destroyArgs := []string{"destroy", "--topo", originalTopoPath}
 	if cleanup {
-		args = append(args, "--cleanup")
+		destroyArgs = append(destroyArgs, "--cleanup")
 	}
 	if graceful {
-		args = append(args, "--graceful")
-	}
-	if graph {
-		args = append(args, "--graph")
-	}
-	if network != "" {
-		args = append(args, "--network", network)
-	}
-	if ipv4Subnet != "" {
-		args = append(args, "--ipv4-subnet", ipv4Subnet)
-	}
-	if ipv6Subnet != "" {
-		args = append(args, "--ipv6-subnet", ipv6Subnet)
-	}
-	if maxWorkers > 0 { // Only add if explicitly set > 0
-		args = append(args, "--max-workers", strconv.Itoa(maxWorkers))
+		destroyArgs = append(destroyArgs, "--graceful")
 	}
 	if keepMgmtNet {
-		args = append(args, "--keep-mgmt-net")
+		destroyArgs = append(destroyArgs, "--keep-mgmt-net")
+	}
+	if maxWorkers > 0 {
+		destroyArgs = append(destroyArgs, "--max-workers", strconv.Itoa(maxWorkers))
+	}
+
+	log.Infof("RedeployLab user '%s': Destroying lab '%s' before re-deploy...", username, labName)
+	destroyStdout, destroyStderr, destroyErr := clab.RunClabCommand(c.Request.Context(), username, destroyArgs...)
+	if destroyStderr != "" {
+		log.Warnf("RedeployLab user '%s', lab '%s': clab destroy stderr: %s", username, labName, destroyStderr)
+	}
+	if destroyErr != nil {
+		log.Errorf("RedeployLab failed for user '%s', lab '%s': clab destroy error: %v", username, labName, destroyErr)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to destroy lab '%s': %s", labName, destroyErr.Error())})
+		return
+	}
+	log.Debugf("RedeployLab user '%s': Destroy output for lab '%s': %s", username, labName, strings.TrimSpace(destroyStdout))
+
+	// --- Deploy lab again using --reconfigure semantics ---
+	deployArgs := []string{"deploy", "--owner", targetOwner, "--topo", originalTopoPath, "--reconfigure"}
+	if graph {
+		deployArgs = append(deployArgs, "--graph")
+	}
+	if network != "" {
+		deployArgs = append(deployArgs, "--network", network)
+	}
+	if ipv4Subnet != "" {
+		deployArgs = append(deployArgs, "--ipv4-subnet", ipv4Subnet)
+	}
+	if ipv6Subnet != "" {
+		deployArgs = append(deployArgs, "--ipv6-subnet", ipv6Subnet)
+	}
+	if maxWorkers > 0 {
+		deployArgs = append(deployArgs, "--max-workers", strconv.Itoa(maxWorkers))
 	}
 	if skipPostDeploy {
-		args = append(args, "--skip-post-deploy")
+		deployArgs = append(deployArgs, "--skip-post-deploy")
 	}
 	if exportTemplate != "" {
-		args = append(args, "--export-template", exportTemplate)
+		deployArgs = append(deployArgs, "--export-template", exportTemplate)
 	}
 	if skipLabdirAcl {
-		args = append(args, "--skip-labdir-acl")
+		deployArgs = append(deployArgs, "--skip-labdir-acl")
 	}
 
-	log.Infof("RedeployLab user '%s': Executing clab redeploy for lab '%s'...", username, labName)
-	stdout, stderr, err := clab.RunClabCommand(c.Request.Context(), username, args...)
-
-	// Handle command execution results
+	log.Infof("RedeployLab user '%s': Deploying lab '%s' with reconfigure...", username, labName)
+	stdout, stderr, err := clab.RunClabCommand(c.Request.Context(), username, deployArgs...)
 	if stderr != "" {
-		log.Warnf("RedeployLab user '%s', lab '%s': clab redeploy stderr: %s", username, labName, stderr)
+		log.Warnf("RedeployLab user '%s', lab '%s': clab deploy stderr: %s", username, labName, stderr)
 	}
 	if err != nil {
-		log.Errorf("RedeployLab failed for user '%s', lab '%s': clab redeploy command execution error: %v", username, labName, err)
+		log.Errorf("RedeployLab failed for user '%s', lab '%s': clab deploy error: %v", username, labName, err)
 		errMsg := fmt.Sprintf("Failed to redeploy lab '%s': %s", labName, err.Error())
-		// Only append stderr to the response if it looks like a significant error message
 		if stderr != "" && (strings.Contains(stderr, "level=error") || strings.Contains(stderr, "failed") || strings.Contains(stderr, "panic")) {
 			errMsg += "\nstderr: " + stderr
 		}
@@ -847,9 +866,7 @@ func RedeployLabHandler(c *gin.Context) {
 		return
 	}
 
-	log.Infof("RedeployLab user '%s': clab redeploy for lab '%s' executed successfully.", username, labName)
-
-	// Return plain text output for redeploy (no JSON format support)
+	log.Infof("RedeployLab user '%s': Lab '%s' redeployed successfully via destroy+deploy.", username, labName)
 	c.JSON(http.StatusOK, gin.H{"output": stdout})
 }
 

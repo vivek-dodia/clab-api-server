@@ -287,9 +287,13 @@ func GenerateTopologyHandler(c *gin.Context) {
 		response.Message = fmt.Sprintf("Topology '%s' generated and deployed successfully.", req.Name)
 		// SavedFilePath is already set correctly
 
-		// Attempt to capture deploy output (try JSON first)
+		// Attempt to capture deploy output (try JSON first, even if wrapped in banners)
 		var deployResult json.RawMessage
-		if err := json.Unmarshal([]byte(deployStdout), &deployResult); err == nil {
+		cleanDeployOutput := extractJSONFromClabOutput(deployStdout)
+		if cleanDeployOutput == "" {
+			cleanDeployOutput = deployStdout
+		}
+		if err := json.Unmarshal([]byte(cleanDeployOutput), &deployResult); err == nil {
 			response.DeployOutput = deployResult
 		} else {
 			// If not JSON, store as plain text within the RawMessage (needs quoting and escaping)
@@ -308,4 +312,19 @@ func GenerateTopologyHandler(c *gin.Context) {
 		// If OutputFile was set, SavedFilePath is already populated.
 		c.JSON(http.StatusOK, response)
 	}
+}
+
+// extractJSONFromClabOutput attempts to isolate the JSON block from clab CLI output
+// that may include banners, warnings, or ANSI art before/after the JSON payload.
+func extractJSONFromClabOutput(output string) string {
+	start := strings.Index(output, "{")
+	end := strings.LastIndex(output, "}")
+	if start == -1 || end == -1 || end <= start {
+		return ""
+	}
+	candidate := output[start : end+1]
+	if json.Valid([]byte(candidate)) {
+		return candidate
+	}
+	return ""
 }
