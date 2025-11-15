@@ -70,7 +70,7 @@ func (s *LabTopologySuite) TestGenerateTopology() {
 	jsonPayload := s.mustMarshal(generateRequest)
 
 	generateURL := fmt.Sprintf("%s/api/v1/generate", s.cfg.APIURL)
-	bodyBytes, statusCode, err := s.doRequest("POST", generateURL, userHeaders, bytes.NewBuffer(jsonPayload), s.cfg.RequestTimeout)
+	bodyBytes, statusCode, err := s.doRequest("POST", generateURL, userHeaders, bytes.NewBuffer(jsonPayload), s.cfg.DeployTimeout)
 	s.Require().NoError(err, "Failed to execute generate topology request")
 	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 generating topology for '%s'. Body: %s", generatedLabName, string(bodyBytes))
 

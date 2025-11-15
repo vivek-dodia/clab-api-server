@@ -180,11 +180,23 @@ func getLabInfo(ctx context.Context, username string, labName string) (info *mod
 	if inspectErr != nil {
 		// Check common "not found" scenarios - these are NOT errors for this function
 		errMsg := inspectErr.Error()
-		if strings.Contains(inspectStdout, "no containers found") ||
-			strings.Contains(errMsg, "no containers found") ||
-			strings.Contains(errMsg, "no containerlab labs found") ||
-			strings.Contains(inspectStderr, "no containers found") ||
-			strings.Contains(inspectStderr, "Could not find containers for lab") {
+		lowerStdout := strings.ToLower(inspectStdout)
+		lowerStderr := strings.ToLower(inspectStderr)
+		lowerErr := strings.ToLower(errMsg)
+		labNotFoundMsg := strings.ToLower(fmt.Sprintf("lab '%s' not found", labName))
+
+		if strings.Contains(lowerStdout, "no containers found") ||
+			strings.Contains(lowerErr, "no containers found") ||
+			strings.Contains(lowerErr, "no containerlab labs found") ||
+			strings.Contains(lowerStderr, "no containers found") ||
+			strings.Contains(lowerStderr, "could not find containers for lab") ||
+			strings.Contains(lowerStdout, "could not find containers for lab") ||
+			strings.Contains(lowerStdout, "not found - no running containers") ||
+			strings.Contains(lowerStderr, "not found - no running containers") ||
+			strings.Contains(lowerErr, "not found - no running containers") ||
+			strings.Contains(lowerStdout, labNotFoundMsg) ||
+			strings.Contains(lowerStderr, labNotFoundMsg) ||
+			strings.Contains(lowerErr, labNotFoundMsg) {
 			log.Debugf("getLabInfo: Lab '%s' not found (inspect reported no containers).", labName)
 			return nil, false, nil // Lab does not exist, no error
 		}
@@ -216,6 +228,7 @@ func getLabInfo(ctx context.Context, username string, labName string) (info *mod
 	return &containers[0], true, nil // Lab exists
 }
 
+// ensureLabOwnerLabels re-applies the desired owner label to all containers in a lab.
 // verifyLabOwnership checks if a lab exists and is owned by the user.
 // Returns the original topology path (if found) and nil error on success.
 // Sends appropriate HTTP error response and returns non-nil error on failure.
