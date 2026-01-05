@@ -271,7 +271,7 @@ func verifyLabOwnership(c *gin.Context, username, labName string) (string, error
 
 	// Lab exists, now check ownership
 	actualOwner := labInfo.Owner
-	originalTopoPath := labInfo.LabPath // Use LabPath (relative) or AbsLabPath? LabPath is what clab usually needs.
+	originalTopoPath := labInfo.AbsLabPath // Using AbsLabPath as LabPath (relative) does not delete lab dir on cleanup
 
 	// Check superuser status or direct ownership
 	if isSuperuser(username) {
