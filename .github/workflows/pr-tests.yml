@@ -42,7 +42,7 @@ jobs:
           go-version: '1.24.x'
 
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/go/pkg/mod
@@ -133,7 +133,7 @@ jobs:
 
       - name: Upload HTML test report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: go-test-report
           path: test-reports/test-report.html
