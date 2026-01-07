@@ -75,10 +75,13 @@ func (s *VersionSuite) TestCheckVersionEndpoint() {
 	err = json.Unmarshal(bodyBytes, &checkResp)
 	s.Require().NoError(err, "Failed to unmarshal version check response. Body: %s", string(bodyBytes))
 
-	// Verify check result field is not empty
-	s.Assert().NotEmpty(checkResp.CheckResult, "CheckResult field is empty in response")
+	// Note: checkResult may be empty if containerlab is already up-to-date.
+	// The 'clab version check' command only outputs when a newer version is available.
+	// We just verify the endpoint responds successfully with a valid JSON structure.
 
-	if !s.T().Failed() {
-		s.logSuccess("Successfully performed version check. Result: %s", checkResp.CheckResult)
+	if checkResp.CheckResult != "" {
+		s.logSuccess("Version check found update info: %s", checkResp.CheckResult)
+	} else {
+		s.logSuccess("Version check completed - containerlab appears to be up-to-date")
 	}
 }
