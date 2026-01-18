@@ -64,3 +64,6 @@ all_docker_files.txt
 
 # Local runner workspace created when using act
 .runner-workspace/
+
+CLAUDE.md
+AGENTS.md

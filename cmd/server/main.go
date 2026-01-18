@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -21,6 +20,7 @@ import (
 	_ "github.com/srl-labs/clab-api-server/docs"
 	"github.com/srl-labs/clab-api-server/internal/api"
 	"github.com/srl-labs/clab-api-server/internal/auth"
+	"github.com/srl-labs/clab-api-server/internal/clab"
 	"github.com/srl-labs/clab-api-server/internal/config"
 	"github.com/srl-labs/clab-api-server/internal/templates"
 )
@@ -101,11 +101,11 @@ func main() {
 		log.Warn("Using default JWT secret. Change JWT_SECRET environment variable or .env file for production!")
 	}
 
-	// --- Check dependencies ---
-	if _, err := exec.LookPath("containerlab"); err != nil {
-		log.Fatalf("'containerlab' command not found in PATH. Please install Containerlab (containerlab.dev).")
-	}
-	log.Info("'clab' command found in PATH.")
+	// --- Initialize Containerlab Service ---
+	log.Info("Initializing Containerlab service (using library directly)...")
+	clabService := clab.NewService()
+	api.SetClabService(clabService)
+	log.Infof("Containerlab service initialized with runtime: %s", config.AppConfig.ClabRuntime)
 
 	// --- Initialize SSH Manager ---
 	log.Info("Initializing SSH Session Manager...")
