@@ -445,56 +445,6 @@ definitions:
         - $ref: '#/definitions/models.ServerInfo'
         description: Basic server information
     type: object
-  models.NetemInterfaceInfo:
-    properties:
-      corruption:
-        description: Percentage (might be missing in older clab versions)
-        type: number
-      delay:
-        description: Duration string or empty
-        type: string
-      interface:
-        description: Interface name
-        type: string
-      jitter:
-        description: Duration string or empty
-        type: string
-      packet_loss:
-        description: Percentage
-        type: number
-      rate:
-        description: Kbit/s
-        type: integer
-    type: object
-  models.NetemSetRequest:
-    properties:
-      corruption:
-        description: Percentage (0.0 to 100.0)
-        example: 0.1
-        type: number
-      delay:
-        description: Duration string (e.g., "100ms", "1s")
-        example: 50ms
-        type: string
-      jitter:
-        description: Duration string, requires Delay
-        example: 5ms
-        type: string
-      loss:
-        description: Percentage (0.0 to 100.0)
-        example: 10.5
-        type: number
-      rate:
-        description: Kbit/s (non-negative integer)
-        example: 1000
-        type: integer
-    type: object
-  models.NetemShowResponse:
-    additionalProperties:
-      items:
-        $ref: '#/definitions/models.NetemInterfaceInfo'
-      type: array
-    type: object
   models.NodeInterfaceInfo:
     properties:
       interfaces:
@@ -808,13 +758,12 @@ paths:
       - Health
   /api/v1/labs:
     get:
-      description: Get details about all running labs, filtered by the 'owner' field
-        matching the authenticated user (unless user is in SUPERUSER_GROUP).
+      description: Get details about all running labs (filtered by owner unless superuser).
       produces:
       - application/json
       responses:
         "200":
-          description: Filtered JSON output from 'clab inspect --all'
+          description: All labs
           schema:
             $ref: '#/definitions/models.ClabInspectOutput'
         "401":
@@ -822,7 +771,7 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error or clab execution failed
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -833,41 +782,36 @@ paths:
     post:
       consumes:
       - application/json
-      description: |-
-        Deploys a containerlab topology. Requires EITHER 'topologyContent' OR 'topologySourceUrl' in the request body, but not both. The lab will be owned by the authenticated user.
-        The 'topologyContent' field accepts a JSON object for the topology structure.
-        Deployment is DENIED if a lab with the target name already exists, UNLESS 'reconfigure=true' is specified AND the authenticated user owns the existing lab.
-        Optional deployment flags are provided as query parameters.
+      description: Deploys a containerlab topology. Requires EITHER 'topologyContent'
+        OR 'topologySourceUrl' in the request body, but not both.
       parameters:
-      - description: 'Deployment Source: Provide ''topologyContent'' OR ''topologySourceUrl''.'
+      - description: Deployment Source
         in: body
         name: deploy_request
         required: true
         schema:
           $ref: '#/definitions/models.DeployRequest'
-      - description: 'Allow overwriting an existing lab IF owned by the user (default:
-          false).'
+      - description: Allow overwriting an existing lab IF owned by the user
         in: query
         name: reconfigure
         type: boolean
-      - description: Limit concurrent workers (0 or omit for default).
+      - description: Limit concurrent workers
         in: query
         name: maxWorkers
         type: integer
-      - description: Custom Go template file for topology data export ('__full' for
-          full export).
+      - description: Custom Go template file for topology data export
         in: query
         name: exportTemplate
         type: string
-      - description: Comma-separated list of node names to deploy.
+      - description: Comma-separated list of node names to deploy
         in: query
         name: nodeFilter
         type: string
-      - description: 'Skip post-deploy actions defined for nodes (default: false).'
+      - description: Skip post-deploy actions
         in: query
         name: skipPostDeploy
         type: boolean
-      - description: 'Skip setting extended ACLs on lab directory (default: false).'
+      - description: Skip setting extended ACLs on lab directory
         in: query
         name: skipLabdirAcl
         type: boolean
@@ -875,12 +819,11 @@ paths:
       - application/json
       responses:
         "200":
-          description: Raw JSON output from 'clab deploy' (or plain text on error)
+          description: Deployed lab details
           schema:
-            type: object
+            $ref: '#/definitions/models.ClabInspectOutput'
         "400":
-          description: Invalid input (e.g., missing/both content/URL, invalid flags/params,
-            invalid topology name)
+          description: Invalid input
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "401":
@@ -888,17 +831,15 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "403":
-          description: Forbidden (Attempting to reconfigure a lab owned by another
-            user)
+          description: Forbidden
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "409":
-          description: Conflict (Lab already exists and reconfigure=false or not specified)
+          description: Conflict
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error (e.g., file system errors, clab execution
-            failed)
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -908,29 +849,26 @@ paths:
       - Labs
   /api/v1/labs/{labName}:
     delete:
-      description: |-
-        Destroys a lab by name, checking ownership via 'owner' field from clab inspect.
-        Optionally cleans up the lab directory (~/.clab/<labname>) if 'cleanup=true' is passed and the API deployed it from content.
+      description: Destroys a lab by name, checking ownership.
       parameters:
       - description: Name of the lab to destroy
         in: path
         name: labName
         required: true
         type: string
-      - description: 'Remove lab directory (~/.clab/<labname>) after destroy (default:
-          false)'
+      - description: Remove lab directory after destroy
         in: query
         name: cleanup
         type: boolean
-      - description: 'Attempt graceful shutdown of containers (default: false)'
+      - description: Attempt graceful shutdown
         in: query
         name: graceful
         type: boolean
-      - description: 'Keep the management network (default: false)'
+      - description: Keep the management network
         in: query
         name: keepMgmtNet
         type: boolean
-      - description: Destroy only specific nodes (comma-separated)
+      - description: Destroy only specific nodes
         in: query
         name: nodeFilter
         type: string
@@ -942,7 +880,7 @@ paths:
           schema:
             $ref: '#/definitions/models.GenericSuccessResponse'
         "400":
-          description: Invalid lab name or node filter
+          description: Invalid lab name
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "401":
@@ -950,11 +888,11 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "404":
-          description: Lab not found or not owned by user
+          description: Lab not found
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error or clab execution failed
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -963,15 +901,14 @@ paths:
       tags:
       - Labs
     get:
-      description: Get details about a specific running lab, checking ownership via
-        'owner' field. Supports '--details'.
+      description: Get details about a specific running lab.
       parameters:
       - description: Name of the lab to inspect
         in: path
         name: labName
         required: true
         type: string
-      - description: Include full container details (like docker inspect)
+      - description: Include full container details
         in: query
         name: details
         type: boolean
@@ -979,10 +916,11 @@ paths:
       - application/json
       responses:
         "200":
-          description: Raw JSON output if 'details=true' is used (structure matches
-            'docker inspect')
+          description: Lab containers
           schema:
-            type: object
+            items:
+              $ref: '#/definitions/models.ClabContainerInfo'
+            type: array
         "400":
           description: Invalid lab name
           schema:
@@ -992,11 +930,11 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "404":
-          description: Lab not found or not owned by user
+          description: Lab not found
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error or clab execution failed
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -1005,69 +943,22 @@ paths:
       tags:
       - Labs
     put:
-      description: |-
-        Redeploys a lab by name, effectively running destroy and then deploy. Checks ownership.
-        Uses the original topology file path found during inspection. Optional flags are provided via query parameters.
+      description: Redeploys a lab by name (destroy + deploy).
       parameters:
       - description: Name of the lab to redeploy
         in: path
         name: labName
         required: true
         type: string
-      - description: 'Remove containerlab artifacts before deploy (default: false)'
-        in: query
-        name: cleanup
-        type: boolean
-      - description: 'Attempt graceful shutdown of containers (default: false)'
-        in: query
-        name: graceful
-        type: boolean
-      - description: 'Generate graph during redeploy (default: false)'
-        in: query
-        name: graph
-        type: boolean
-      - description: Override management network name
-        in: query
-        name: network
-        type: string
-      - description: Override management network IPv4 subnet (CIDR)
-        in: query
-        name: ipv4Subnet
-        type: string
-      - description: Override management network IPv6 subnet (CIDR)
-        in: query
-        name: ipv6Subnet
-        type: string
-      - description: Limit concurrent workers (0 or omit for default).
-        in: query
-        name: maxWorkers
-        type: integer
-      - description: 'Keep the management network during destroy phase (default: false)'
-        in: query
-        name: keepMgmtNet
-        type: boolean
-      - description: 'Skip post-deploy actions defined for nodes (default: false)'
-        in: query
-        name: skipPostDeploy
-        type: boolean
-      - description: Custom Go template file for topology data export ('__full' for
-          full export).
-        in: query
-        name: exportTemplate
-        type: string
-      - description: 'Skip setting extended ACLs on lab directory (default: false)'
-        in: query
-        name: skipLabdirAcl
-        type: boolean
       produces:
       - application/json
       responses:
         "200":
-          description: Raw output from 'clab redeploy'
+          description: Redeployed lab details
           schema:
-            type: object
+            $ref: '#/definitions/models.ClabInspectOutput'
         "400":
-          description: Invalid lab name or query parameter options
+          description: Invalid lab name
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "401":
@@ -1075,11 +966,11 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "404":
-          description: Lab not found or not owned by user
+          description: Lab not found
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error or clab execution failed
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -1091,20 +982,18 @@ paths:
     post:
       consumes:
       - application/json
-      description: Executes a command on nodes within a specific lab. Checks ownership.
-        Supports filtering by a single node name.
+      description: Executes a command on nodes within a specific lab.
       parameters:
-      - description: Name of the lab where the command should be executed
+      - description: Name of the lab
         in: path
         name: labName
         required: true
         type: string
-      - description: Execute only on this specific node (must match container name,
-          e.g., clab-my-test-lab-srl1)
+      - description: Execute only on this specific node
         in: query
         name: nodeFilter
         type: string
-      - description: Output format ('plain' or 'json'). Default is 'json'.
+      - description: Output format ('plain' or 'json')
         in: query
         name: format
         type: string
@@ -1118,11 +1007,11 @@ paths:
       - application/json
       responses:
         "200":
-          description: Plain text output (if format=plain)
+          description: Execution result
           schema:
-            type: string
+            $ref: '#/definitions/models.ExecResponse'
         "400":
-          description: Invalid input (lab name, node filter, format, request body)
+          description: Invalid input
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "401":
@@ -1130,11 +1019,11 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "404":
-          description: Lab not found or not owned by user
+          description: Lab not found
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error or clab execution failed
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -1144,15 +1033,14 @@ paths:
       - Labs
   /api/v1/labs/{labName}/interfaces:
     get:
-      description: Get network interface details for nodes in a specific lab, checking
-        ownership.
+      description: Get network interface details for nodes in a specific lab.
       parameters:
       - description: Name of the lab
         in: path
         name: labName
         required: true
         type: string
-      - description: Filter interfaces for a specific node name
+      - description: Filter interfaces for a specific node
         in: query
         name: node
         type: string
@@ -1160,13 +1048,13 @@ paths:
       - application/json
       responses:
         "200":
-          description: JSON output from 'clab inspect interfaces'
+          description: Interface details
           schema:
             items:
               $ref: '#/definitions/models.NodeInterfaceInfo'
             type: array
         "400":
-          description: Invalid lab name or node name
+          description: Invalid lab name
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "401":
@@ -1174,11 +1062,11 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "404":
-          description: Lab not found or not owned by user
+          description: Lab not found
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error or clab execution failed
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -1186,110 +1074,6 @@ paths:
       summary: List Lab Interfaces
       tags:
       - Labs
-  /api/v1/labs/{labName}/nodes/{nodeName}/interfaces/{interfaceName}/netem:
-    delete:
-      description: Removes all network impairments from a specific interface of a
-        node (container) within a lab. Checks container ownership.
-      parameters:
-      - description: Name of the lab
-        in: path
-        name: labName
-        required: true
-        type: string
-      - description: Full name of the container (node)
-        in: path
-        name: nodeName
-        required: true
-        type: string
-      - description: Name of the interface within the container
-        in: path
-        name: interfaceName
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Impairments reset successfully
-          schema:
-            $ref: '#/definitions/models.GenericSuccessResponse'
-        "400":
-          description: Invalid input (lab/container/interface name)
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "401":
-          description: Unauthorized (JWT)
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "404":
-          description: Lab, container (node), or interface not found / not owned
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "500":
-          description: Internal server error or clab execution failed
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Reset Network Emulation
-      tags:
-      - Tools - Netem
-    put:
-      consumes:
-      - application/json
-      description: Sets network impairments (delay, jitter, loss, rate, corruption)
-        on a specific interface of a node (container) within a lab. Checks container
-        ownership.
-      parameters:
-      - description: Name of the lab
-        in: path
-        name: labName
-        required: true
-        type: string
-      - description: Full name of the container (node)
-        in: path
-        name: nodeName
-        required: true
-        type: string
-      - description: Name of the interface within the container
-        in: path
-        name: interfaceName
-        required: true
-        type: string
-      - description: Network Emulation Parameters
-        in: body
-        name: netem_params
-        required: true
-        schema:
-          $ref: '#/definitions/models.NetemSetRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Impairments set successfully
-          schema:
-            $ref: '#/definitions/models.GenericSuccessResponse'
-        "400":
-          description: Invalid input (lab/container/interface name, netem params)
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "401":
-          description: Unauthorized (JWT)
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "404":
-          description: Lab, container (node), or interface not found / not owned
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "500":
-          description: Internal server error or clab execution failed
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Set Network Emulation
-      tags:
-      - Tools - Netem
   /api/v1/labs/{labName}/nodes/{nodeName}/logs:
     get:
       description: Get logs from a specific lab node (container). When follow=true,
@@ -1353,49 +1137,6 @@ paths:
       summary: Get Node Logs
       tags:
       - Logs
-  /api/v1/labs/{labName}/nodes/{nodeName}/netem:
-    get:
-      description: Shows network impairments for all interfaces on a specific node
-        (container) within a lab. Checks container ownership.
-      parameters:
-      - description: Name of the lab
-        in: path
-        name: labName
-        required: true
-        type: string
-      - description: Full name of the container (node)
-        in: path
-        name: nodeName
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Current network emulation parameters
-          schema:
-            $ref: '#/definitions/models.NetemShowResponse'
-        "400":
-          description: Invalid input (lab/container name)
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "401":
-          description: Unauthorized (JWT)
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "404":
-          description: Lab or container (node) not found / not owned
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "500":
-          description: Internal server error or clab execution failed
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Show Network Emulation
-      tags:
-      - Tools - Netem
   /api/v1/labs/{labName}/nodes/{nodeName}/ssh:
     post:
       consumes:
@@ -1452,15 +1193,14 @@ paths:
       - SSH Access
   /api/v1/labs/{labName}/save:
     post:
-      description: Saves the running configuration for nodes in a specific lab. Checks
-        ownership.
+      description: Saves the running configuration for nodes in a lab.
       parameters:
-      - description: Name of the lab to save configuration for
+      - description: Name of the lab
         in: path
         name: labName
         required: true
         type: string
-      - description: Save config only for specific nodes (comma-separated)
+      - description: Save config only for specific nodes
         in: query
         name: nodeFilter
         type: string
@@ -1468,11 +1208,11 @@ paths:
       - application/json
       responses:
         "200":
-          description: Configuration save command executed, includes detailed output.
+          description: Configuration saved
           schema:
             $ref: '#/definitions/models.SaveConfigResponse'
         "400":
-          description: Invalid lab name or node filter
+          description: Invalid input
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "401":
@@ -1480,11 +1220,11 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "404":
-          description: Lab not found or not owned by user
+          description: Lab not found
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error or clab execution failed
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -1496,58 +1236,31 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: |-
-        Deploys a containerlab topology provided as a .zip or .tar.gz archive. The archive must contain the .clab.yml file and any necessary bind-mount files/directories. The lab will be owned by the authenticated user.
-        The lab name is taken from the 'labName' query parameter. The archive is extracted to the user's ~/.clab/<labName>/ directory.
-        Deployment is DENIED if a lab with the target name already exists, UNLESS 'reconfigure=true' is specified AND the authenticated user owns the existing lab.
+      description: Deploys a containerlab topology provided as a .zip or .tar.gz archive.
       parameters:
-      - description: Lab archive (.zip or .tar.gz) containing topology file and bind
-          mounts.
+      - description: Lab archive (.zip or .tar.gz)
         in: formData
         name: labArchive
         required: true
         type: file
-      - description: Name for the lab. This determines the extraction directory (~/.clab/<labName>).
+      - description: Name for the lab
         in: query
         name: labName
         required: true
         type: string
-      - description: 'Allow overwriting an existing lab IF owned by the user (default:
-          false).'
+      - description: Allow overwriting an existing lab
         in: query
         name: reconfigure
-        type: boolean
-      - description: Limit concurrent workers (0 or omit for default).
-        in: query
-        name: maxWorkers
-        type: integer
-      - description: Custom Go template file for topology data export ('__full' for
-          full export).
-        in: query
-        name: exportTemplate
-        type: string
-      - description: Comma-separated list of node names to deploy.
-        in: query
-        name: nodeFilter
-        type: string
-      - description: 'Skip post-deploy actions defined for nodes (default: false).'
-        in: query
-        name: skipPostDeploy
-        type: boolean
-      - description: 'Skip setting extended ACLs on lab directory (default: false).'
-        in: query
-        name: skipLabdirAcl
         type: boolean
       produces:
       - application/json
       responses:
         "200":
-          description: Raw JSON output from 'clab deploy' (or plain text on error)
+          description: Deployed lab details
           schema:
-            type: object
+            $ref: '#/definitions/models.ClabInspectOutput'
         "400":
-          description: Invalid input (e.g., missing archive, invalid labName, invalid
-            archive format, missing topology file in archive)
+          description: Invalid input
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "401":
@@ -1555,17 +1268,15 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "403":
-          description: Forbidden (Attempting to reconfigure a lab owned by another
-            user)
+          description: Forbidden
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "409":
-          description: Conflict (Lab already exists and reconfigure=false or not specified)
+          description: Conflict
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error (e.g., file system errors, extraction
-            errors, clab execution failed)
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -2144,8 +1855,8 @@ paths:
       - Users
   /api/v1/version:
     get:
-      description: Retrieves the installed containerlab version information by running
-        'clab version'.
+      description: Retrieves version information about the containerlab library in
+        use.
       produces:
       - application/json
       responses:
@@ -2158,7 +1869,7 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
-          description: Internal server error or clab execution failed
+          description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -2168,8 +1879,8 @@ paths:
       - Version
   /api/v1/version/check:
     get:
-      description: Checks if a newer version of containerlab is available by running
-        'clab version check'.
+      description: This endpoint has been deprecated. Version checks are no longer
+        supported when using containerlab as a library.
       produces:
       - application/json
       responses:
@@ -2179,10 +1890,6 @@ paths:
             $ref: '#/definitions/models.VersionCheckResponse'
         "401":
           description: Unauthorized
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "500":
-          description: Internal server error or clab execution failed
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:

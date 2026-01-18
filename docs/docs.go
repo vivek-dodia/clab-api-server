@@ -137,7 +137,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get details about all running labs, filtered by the 'owner' field matching the authenticated user (unless user is in SUPERUSER_GROUP).",
+                "description": "Get details about all running labs (filtered by owner unless superuser).",
                 "produces": [
                     "application/json"
                 ],
@@ -147,7 +147,7 @@ const docTemplate = `{
                 "summary": "List All Labs",
                 "responses": {
                     "200": {
-                        "description": "Filtered JSON output from 'clab inspect --all'",
+                        "description": "All labs",
                         "schema": {
                             "$ref": "#/definitions/models.ClabInspectOutput"
                         }
@@ -159,7 +159,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal server error or clab execution failed",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -172,7 +172,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deploys a containerlab topology. Requires EITHER 'topologyContent' OR 'topologySourceUrl' in the request body, but not both. The lab will be owned by the authenticated user.\nThe 'topologyContent' field accepts a JSON object for the topology structure.\nDeployment is DENIED if a lab with the target name already exists, UNLESS 'reconfigure=true' is specified AND the authenticated user owns the existing lab.\nOptional deployment flags are provided as query parameters.",
+                "description": "Deploys a containerlab topology. Requires EITHER 'topologyContent' OR 'topologySourceUrl' in the request body, but not both.",
                 "consumes": [
                     "application/json"
                 ],
@@ -185,7 +185,7 @@ const docTemplate = `{
                 "summary": "Deploy Lab",
                 "parameters": [
                     {
-                        "description": "Deployment Source: Provide 'topologyContent' OR 'topologySourceUrl'.",
+                        "description": "Deployment Source",
                         "name": "deploy_request",
                         "in": "body",
                         "required": true,
@@ -195,50 +195,50 @@ const docTemplate = `{
                     },
                     {
                         "type": "boolean",
-                        "description": "Allow overwriting an existing lab IF owned by the user (default: false).",
+                        "description": "Allow overwriting an existing lab IF owned by the user",
                         "name": "reconfigure",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "Limit concurrent workers (0 or omit for default).",
+                        "description": "Limit concurrent workers",
                         "name": "maxWorkers",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Custom Go template file for topology data export ('__full' for full export).",
+                        "description": "Custom Go template file for topology data export",
                         "name": "exportTemplate",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Comma-separated list of node names to deploy.",
+                        "description": "Comma-separated list of node names to deploy",
                         "name": "nodeFilter",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
-                        "description": "Skip post-deploy actions defined for nodes (default: false).",
+                        "description": "Skip post-deploy actions",
                         "name": "skipPostDeploy",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
-                        "description": "Skip setting extended ACLs on lab directory (default: false).",
+                        "description": "Skip setting extended ACLs on lab directory",
                         "name": "skipLabdirAcl",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Raw JSON output from 'clab deploy' (or plain text on error)",
+                        "description": "Deployed lab details",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/models.ClabInspectOutput"
                         }
                     },
                     "400": {
-                        "description": "Invalid input (e.g., missing/both content/URL, invalid flags/params, invalid topology name)",
+                        "description": "Invalid input",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -250,19 +250,19 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "Forbidden (Attempting to reconfigure a lab owned by another user)",
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "409": {
-                        "description": "Conflict (Lab already exists and reconfigure=false or not specified)",
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error (e.g., file system errors, clab execution failed)",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -277,7 +277,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deploys a containerlab topology provided as a .zip or .tar.gz archive. The archive must contain the .clab.yml file and any necessary bind-mount files/directories. The lab will be owned by the authenticated user.\nThe lab name is taken from the 'labName' query parameter. The archive is extracted to the user's ~/.clab/\u003clabName\u003e/ directory.\nDeployment is DENIED if a lab with the target name already exists, UNLESS 'reconfigure=true' is specified AND the authenticated user owns the existing lab.",
+                "description": "Deploys a containerlab topology provided as a .zip or .tar.gz archive.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -291,64 +291,34 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "file",
-                        "description": "Lab archive (.zip or .tar.gz) containing topology file and bind mounts.",
+                        "description": "Lab archive (.zip or .tar.gz)",
                         "name": "labArchive",
                         "in": "formData",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Name for the lab. This determines the extraction directory (~/.clab/\u003clabName\u003e).",
+                        "description": "Name for the lab",
                         "name": "labName",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "boolean",
-                        "description": "Allow overwriting an existing lab IF owned by the user (default: false).",
+                        "description": "Allow overwriting an existing lab",
                         "name": "reconfigure",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Limit concurrent workers (0 or omit for default).",
-                        "name": "maxWorkers",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Custom Go template file for topology data export ('__full' for full export).",
-                        "name": "exportTemplate",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Comma-separated list of node names to deploy.",
-                        "name": "nodeFilter",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Skip post-deploy actions defined for nodes (default: false).",
-                        "name": "skipPostDeploy",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Skip setting extended ACLs on lab directory (default: false).",
-                        "name": "skipLabdirAcl",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Raw JSON output from 'clab deploy' (or plain text on error)",
+                        "description": "Deployed lab details",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/models.ClabInspectOutput"
                         }
                     },
                     "400": {
-                        "description": "Invalid input (e.g., missing archive, invalid labName, invalid archive format, missing topology file in archive)",
+                        "description": "Invalid input",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -360,19 +330,19 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "Forbidden (Attempting to reconfigure a lab owned by another user)",
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "409": {
-                        "description": "Conflict (Lab already exists and reconfigure=false or not specified)",
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error (e.g., file system errors, extraction errors, clab execution failed)",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -387,7 +357,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get details about a specific running lab, checking ownership via 'owner' field. Supports '--details'.",
+                "description": "Get details about a specific running lab.",
                 "produces": [
                     "application/json"
                 ],
@@ -405,16 +375,19 @@ const docTemplate = `{
                     },
                     {
                         "type": "boolean",
-                        "description": "Include full container details (like docker inspect)",
+                        "description": "Include full container details",
                         "name": "details",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Raw JSON output if 'details=true' is used (structure matches 'docker inspect')",
+                        "description": "Lab containers",
                         "schema": {
-                            "type": "object"
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.ClabContainerInfo"
+                            }
                         }
                     },
                     "400": {
@@ -430,13 +403,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Lab not found or not owned by user",
+                        "description": "Lab not found",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error or clab execution failed",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -449,7 +422,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Redeploys a lab by name, effectively running destroy and then deploy. Checks ownership.\nUses the original topology file path found during inspection. Optional flags are provided via query parameters.",
+                "description": "Redeploys a lab by name (destroy + deploy).",
                 "produces": [
                     "application/json"
                 ],
@@ -464,83 +437,17 @@ const docTemplate = `{
                         "name": "labName",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Remove containerlab artifacts before deploy (default: false)",
-                        "name": "cleanup",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Attempt graceful shutdown of containers (default: false)",
-                        "name": "graceful",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Generate graph during redeploy (default: false)",
-                        "name": "graph",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Override management network name",
-                        "name": "network",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Override management network IPv4 subnet (CIDR)",
-                        "name": "ipv4Subnet",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Override management network IPv6 subnet (CIDR)",
-                        "name": "ipv6Subnet",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Limit concurrent workers (0 or omit for default).",
-                        "name": "maxWorkers",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Keep the management network during destroy phase (default: false)",
-                        "name": "keepMgmtNet",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Skip post-deploy actions defined for nodes (default: false)",
-                        "name": "skipPostDeploy",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Custom Go template file for topology data export ('__full' for full export).",
-                        "name": "exportTemplate",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Skip setting extended ACLs on lab directory (default: false)",
-                        "name": "skipLabdirAcl",
-                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Raw output from 'clab redeploy'",
+                        "description": "Redeployed lab details",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/models.ClabInspectOutput"
                         }
                     },
                     "400": {
-                        "description": "Invalid lab name or query parameter options",
+                        "description": "Invalid lab name",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -552,13 +459,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Lab not found or not owned by user",
+                        "description": "Lab not found",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error or clab execution failed",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -571,7 +478,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Destroys a lab by name, checking ownership via 'owner' field from clab inspect.\nOptionally cleans up the lab directory (~/.clab/\u003clabname\u003e) if 'cleanup=true' is passed and the API deployed it from content.",
+                "description": "Destroys a lab by name, checking ownership.",
                 "produces": [
                     "application/json"
                 ],
@@ -589,25 +496,25 @@ const docTemplate = `{
                     },
                     {
                         "type": "boolean",
-                        "description": "Remove lab directory (~/.clab/\u003clabname\u003e) after destroy (default: false)",
+                        "description": "Remove lab directory after destroy",
                         "name": "cleanup",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
-                        "description": "Attempt graceful shutdown of containers (default: false)",
+                        "description": "Attempt graceful shutdown",
                         "name": "graceful",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
-                        "description": "Keep the management network (default: false)",
+                        "description": "Keep the management network",
                         "name": "keepMgmtNet",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Destroy only specific nodes (comma-separated)",
+                        "description": "Destroy only specific nodes",
                         "name": "nodeFilter",
                         "in": "query"
                     }
@@ -620,7 +527,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid lab name or node filter",
+                        "description": "Invalid lab name",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -632,13 +539,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Lab not found or not owned by user",
+                        "description": "Lab not found",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error or clab execution failed",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -653,7 +560,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Executes a command on nodes within a specific lab. Checks ownership. Supports filtering by a single node name.",
+                "description": "Executes a command on nodes within a specific lab.",
                 "consumes": [
                     "application/json"
                 ],
@@ -667,20 +574,20 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Name of the lab where the command should be executed",
+                        "description": "Name of the lab",
                         "name": "labName",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Execute only on this specific node (must match container name, e.g., clab-my-test-lab-srl1)",
+                        "description": "Execute only on this specific node",
                         "name": "nodeFilter",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Output format ('plain' or 'json'). Default is 'json'.",
+                        "description": "Output format ('plain' or 'json')",
                         "name": "format",
                         "in": "query"
                     },
@@ -696,13 +603,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Plain text output (if format=plain)",
+                        "description": "Execution result",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/models.ExecResponse"
                         }
                     },
                     "400": {
-                        "description": "Invalid input (lab name, node filter, format, request body)",
+                        "description": "Invalid input",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -714,13 +621,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Lab not found or not owned by user",
+                        "description": "Lab not found",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error or clab execution failed",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -735,7 +642,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get network interface details for nodes in a specific lab, checking ownership.",
+                "description": "Get network interface details for nodes in a specific lab.",
                 "produces": [
                     "application/json"
                 ],
@@ -753,14 +660,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Filter interfaces for a specific node name",
+                        "description": "Filter interfaces for a specific node",
                         "name": "node",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "JSON output from 'clab inspect interfaces'",
+                        "description": "Interface details",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -769,7 +676,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid lab name or node name",
+                        "description": "Invalid lab name",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -781,167 +688,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Lab not found or not owned by user",
+                        "description": "Lab not found",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error or clab execution failed",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/labs/{labName}/nodes/{nodeName}/interfaces/{interfaceName}/netem": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Sets network impairments (delay, jitter, loss, rate, corruption) on a specific interface of a node (container) within a lab. Checks container ownership.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Tools - Netem"
-                ],
-                "summary": "Set Network Emulation",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Name of the lab",
-                        "name": "labName",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Full name of the container (node)",
-                        "name": "nodeName",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Name of the interface within the container",
-                        "name": "interfaceName",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Network Emulation Parameters",
-                        "name": "netem_params",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.NetemSetRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Impairments set successfully",
-                        "schema": {
-                            "$ref": "#/definitions/models.GenericSuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid input (lab/container/interface name, netem params)",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized (JWT)",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Lab, container (node), or interface not found / not owned",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error or clab execution failed",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Removes all network impairments from a specific interface of a node (container) within a lab. Checks container ownership.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Tools - Netem"
-                ],
-                "summary": "Reset Network Emulation",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Name of the lab",
-                        "name": "labName",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Full name of the container (node)",
-                        "name": "nodeName",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Name of the interface within the container",
-                        "name": "interfaceName",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Impairments reset successfully",
-                        "schema": {
-                            "$ref": "#/definitions/models.GenericSuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid input (lab/container/interface name)",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized (JWT)",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Lab, container (node), or interface not found / not owned",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error or clab execution failed",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -1040,71 +793,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/labs/{labName}/nodes/{nodeName}/netem": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Shows network impairments for all interfaces on a specific node (container) within a lab. Checks container ownership.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Tools - Netem"
-                ],
-                "summary": "Show Network Emulation",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Name of the lab",
-                        "name": "labName",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Full name of the container (node)",
-                        "name": "nodeName",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Current network emulation parameters",
-                        "schema": {
-                            "$ref": "#/definitions/models.NetemShowResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid input (lab/container name)",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized (JWT)",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Lab or container (node) not found / not owned",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error or clab execution failed",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/labs/{labName}/nodes/{nodeName}/ssh": {
             "post": {
                 "security": [
@@ -1194,7 +882,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Saves the running configuration for nodes in a specific lab. Checks ownership.",
+                "description": "Saves the running configuration for nodes in a lab.",
                 "produces": [
                     "application/json"
                 ],
@@ -1205,27 +893,27 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Name of the lab to save configuration for",
+                        "description": "Name of the lab",
                         "name": "labName",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Save config only for specific nodes (comma-separated)",
+                        "description": "Save config only for specific nodes",
                         "name": "nodeFilter",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Configuration save command executed, includes detailed output.",
+                        "description": "Configuration saved",
                         "schema": {
                             "$ref": "#/definitions/models.SaveConfigResponse"
                         }
                     },
                     "400": {
-                        "description": "Invalid lab name or node filter",
+                        "description": "Invalid input",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -1237,13 +925,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Lab not found or not owned by user",
+                        "description": "Lab not found",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error or clab execution failed",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -2130,7 +1818,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Retrieves the installed containerlab version information by running 'clab version'.",
+                "description": "Retrieves version information about the containerlab library in use.",
                 "produces": [
                     "application/json"
                 ],
@@ -2152,7 +1840,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal server error or clab execution failed",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -2167,7 +1855,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Checks if a newer version of containerlab is available by running 'clab version check'.",
+                "description": "This endpoint has been deprecated. Version checks are no longer supported when using containerlab as a library.",
                 "produces": [
                     "application/json"
                 ],
@@ -2184,12 +1872,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error or clab execution failed",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -2880,74 +2562,6 @@ const docTemplate = `{
                 }
             }
         },
-        "models.NetemInterfaceInfo": {
-            "type": "object",
-            "properties": {
-                "corruption": {
-                    "description": "Percentage (might be missing in older clab versions)",
-                    "type": "number"
-                },
-                "delay": {
-                    "description": "Duration string or empty",
-                    "type": "string"
-                },
-                "interface": {
-                    "description": "Interface name",
-                    "type": "string"
-                },
-                "jitter": {
-                    "description": "Duration string or empty",
-                    "type": "string"
-                },
-                "packet_loss": {
-                    "description": "Percentage",
-                    "type": "number"
-                },
-                "rate": {
-                    "description": "Kbit/s",
-                    "type": "integer"
-                }
-            }
-        },
-        "models.NetemSetRequest": {
-            "type": "object",
-            "properties": {
-                "corruption": {
-                    "description": "Percentage (0.0 to 100.0)",
-                    "type": "number",
-                    "example": 0.1
-                },
-                "delay": {
-                    "description": "Duration string (e.g., \"100ms\", \"1s\")",
-                    "type": "string",
-                    "example": "50ms"
-                },
-                "jitter": {
-                    "description": "Duration string, requires Delay",
-                    "type": "string",
-                    "example": "5ms"
-                },
-                "loss": {
-                    "description": "Percentage (0.0 to 100.0)",
-                    "type": "number",
-                    "example": 10.5
-                },
-                "rate": {
-                    "description": "Kbit/s (non-negative integer)",
-                    "type": "integer",
-                    "example": 1000
-                }
-            }
-        },
-        "models.NetemShowResponse": {
-            "type": "object",
-            "additionalProperties": {
-                "type": "array",
-                "items": {
-                    "$ref": "#/definitions/models.NetemInterfaceInfo"
-                }
-            }
-        },
         "models.NodeInterfaceInfo": {
             "type": "object",
             "properties": {
@@ -3236,7 +2850,7 @@ const docTemplate = `{
                 "port": {
                     "description": "UDP port number for the VxLAN tunnel. Defaults to 14789 if omitted.",
                     "type": "integer",
-                    "example": 14789
+                    "example": 4789
                 },
                 "remote": {
                     "description": "Remote VTEP IP address.",
