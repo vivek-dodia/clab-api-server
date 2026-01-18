@@ -19,16 +19,6 @@ DIST_DIR="dist"
 # -----------------------------------------------------------------------------
 # Build functions
 # -----------------------------------------------------------------------------
-function build-builder-image {
-    echo "Building builder image..."
-    docker build -t ghcr.io/srl-labs/clab-api-server/clab-api-builder:latest -f docker/build.dockerfile .
-}
-
-function build-with-builder-image {
-    echo "Building clab-api-server using the builder image..."
-    docker run --rm -i -t -v $(pwd):/app ghcr.io/srl-labs/clab-api-server/clab-api-builder:latest
-}
-
 function setup-env {
     echo "Setting up build environment..."
     mkdir -p "${DIST_DIR}"
@@ -110,8 +100,6 @@ function help {
   compgen -A function | grep -v "^_" | cat -n
 
   printf "\nExtended help:\n"
-  echo "  build-builder-image  - Build the Docker builder image"
-  echo "  build-with-builder-image - Build using the Docker builder image"
   echo "  build-local          - Build for local architecture"
   echo "  build-amd64          - Build for linux/amd64"
   echo "  build-arm64          - Build for linux/arm64 (requires cross-tools)"

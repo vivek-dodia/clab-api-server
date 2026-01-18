@@ -18,7 +18,7 @@ The Containerlab API Server consists of several key components:
 
 ### Deployment Models
 
-The server can be deployed in three primary configurations:
+The server can be deployed in two primary configurations:
 
 1. **Binary Installation**
    - Direct installation on a Linux host
@@ -26,17 +26,10 @@ The server can be deployed in three primary configurations:
    - Interacts directly with the host's container runtime
    - Recommended for production environments
 
-2. **Docker-in-Docker (DinD)**
-   - Runs within a Docker container with its own Docker daemon
-   - Fully self-contained solution with complete isolation
-   - Labs run inside containers that are themselves inside the API container
-   - Useful for testing, development, or when strict isolation is required
-
-3. **Docker-out-of-Docker (DooD)**
-   - Runs within a Docker container but uses the host's Docker daemon
-   - Better performance than DinD with fewer isolation layers
-   - Requires privileged access to the host Docker socket
-   - Good balance of isolation and performance for most use cases
+2. **Containerlab Tools Command**
+   - Use `containerlab tools api-server start` to run as a container
+   - Automatically pulls and configures the Docker image
+   - Good for quick deployments and testing
 
 ### User Privilege Model
 
@@ -60,24 +53,11 @@ The API server employs a hybrid model for privileges:
 
 ### Data Persistence Architecture
 
-The API server stores data in several locations depending on deployment mode:
+The API server stores data in the following locations:
 
-#### Binary Installation
 - **Configuration**: Central config in `/etc/clab-api-server.env`
 - **User Home Directories**: Lab files and topologies stored in each user's `~/.clab/` directory
 - **Container Data**: Normal Docker storage on the host
-
-#### Docker-in-Docker (DinD)
-- **Configuration**: Environment file at `docker/common/.env`
-- **User Home Directories**: Stored in the `clab-api-home-data` Docker volume
-- **User Account Info**: Persisted in the `clab-api-config-data` Docker volume
-- **Inner Docker Data**: Stored in the `clab-api-dind-data` Docker volume
-
-#### Docker-out-of-Docker (DooD)
-- **Configuration**: Environment file at `docker/common/.env`
-- **User Home Directories**: Stored in the `clab-api-home-data` Docker volume
-- **User Account Info**: Persisted in the `clab-api-config-data` Docker volume
-- **Container Data**: Uses the host's Docker storage
 
 ## Detailed Deployment Guide
 
@@ -165,126 +145,6 @@ sudo systemctl daemon-reload
 sudo systemctl restart clab-api-server
 ```
 
-### Docker-in-Docker (DinD) Deployment
-
-#### Prerequisites
-- Linux system with Docker
-- Docker Compose (v2.x preferred)
-
-#### Deployment Steps
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/srl-labs/clab-api-server.git
-   cd clab-api-server
-   ```
-
-2. **Configure environment**:
-   ```bash
-   cp docker/common/.env.example docker/common/.env
-   nano docker/common/.env
-   ```
-
-   Critical settings:
-   - `JWT_SECRET`: Set to a strong random string
-   - `API_SERVER_HOST`: Set to the server's IP address or hostname
-   - `API_PORT`: Server listening port (default: 8080)
-   - `SSH_BASE_PORT` & `SSH_MAX_PORT`: Range of ports for SSH tunnels
-
-3. **Build and start the service**:
-   ```bash
-   # Build the Docker image
-   docker compose -f docker/dind/docker-compose.yml build
-
-   # Start the service using the management script
-   ./clab-api-manager.sh dind start
-   ```
-
-4. **Verify operation**:
-   ```bash
-   ./clab-api-manager.sh dind status
-   curl http://localhost:8080/health
-   ```
-
-#### DinD Architecture Details
-
-The Docker-in-Docker deployment uses:
-
-- **Privileged container**: Required for nested Docker functionality
-- **Multiple Docker volumes**:
-  - `clab-api-dind-data`: For the inner Docker daemon's data
-  - `clab-api-home-data`: For user home directories
-  - `clab-api-config-data`: For persistent user/group configuration
-
-The entrypoint script performs several important functions:
-- Starts the inner Docker daemon
-- Sets up user persistence mechanisms
-- Configures necessary groups
-- Exposes required ports for the API and SSH tunnels
-
-### Docker-out-of-Docker (DooD) Deployment
-
-#### Prerequisites
-- Linux system with Docker
-- Docker Compose (v2.x preferred)
-
-#### Deployment Steps
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/srl-labs/clab-api-server.git
-   cd clab-api-server
-   ```
-
-2. **Configure environment**:
-   ```bash
-   cp docker/common/.env.example docker/common/.env
-   nano docker/common/.env
-   ```
-
-   Critical settings (same as DinD, but runtime implications differ):
-   - `JWT_SECRET`: Set to a strong random string
-   - `API_SERVER_HOST`: Set to the server's IP address or hostname
-   - `API_PORT`: Server listening port (default: 8080)
-   - `SSH_BASE_PORT` & `SSH_MAX_PORT`: Range of ports for SSH tunnels
-
-3. **Build and start the service**:
-   ```bash
-   # Build the Docker image
-   docker compose -f docker/dood/docker-compose.yml build
-
-   # Start the service using the management script
-   ./clab-api-manager.sh dood start
-   ```
-
-4. **Verify operation**:
-   ```bash
-   ./clab-api-manager.sh dood status
-   curl http://localhost:8080/health
-   ```
-
-#### DooD Architecture Details
-
-The Docker-out-of-Docker deployment uses:
-
-- **Host's Docker socket**: Mounted into the container as `/var/run/docker.sock`
-- **Network mode: host**: Uses the host's networking stack directly
-- **PID namespace: host**: Shares the host's process namespace
-- **Privileged mode**: Required for full containerlab functionality
-- **Docker volumes**:
-  - `clab-api-home-data`: For user home directories
-  - `clab-api-config-data`: For persistent user/group configuration
-- **Host mounts**:
-  - `/var/run/docker.sock`: Docker socket for container control
-  - `/var/run/netns`: Network namespaces for containerlab
-  - `/var/lib/docker/containers`: Container data visibility
-
-The entrypoint script:
-- Sets up user persistence mechanisms
-- Configures necessary groups
-- Creates symbolic links for shared labs directories
-- Verifies Docker socket access
-
 ## Detailed Configuration Reference
 
 ### Environment Variables
@@ -309,7 +169,7 @@ The entrypoint script:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CLAB_RUNTIME` | `docker` | Container runtime used by Containerlab |
-| `CLAB_SHARED_LABS_DIR` | `/opt/containerlab/labs` | Shared labs directory on host (DooD only) |
+| `CLAB_SHARED_LABS_DIR` | `/opt/containerlab/labs` | Shared labs directory on host |
 
 #### SSH Proxy Settings
 | Variable | Default | Description |
@@ -327,58 +187,7 @@ The entrypoint script:
 
 ## Data Persistence & Backup
 
-### Understanding Persistence in DinD/DooD
-
-Both containerized deployments use Docker volumes for persistence:
-
-1. **Configuration Volume** (`clab-api-config-data`)
-   - Contains Linux user/group information
-   - Includes `/etc/passwd`, `/etc/shadow`, `/etc/group`, etc.
-   - Critical for user authentication and permissions
-
-2. **Home Volume** (`clab-api-home-data`)
-   - Contains all user home directories
-   - Stores lab topologies and configurations
-   - Contains user-specific settings and SSH keys
-
-3. **Docker Data Volume** (`clab-api-dind-data`, DinD only)
-   - Contains the inner Docker daemon's data
-   - Stores container images, volumes, networks
-   - Not present in DooD mode (uses host Docker)
-
-### Backup and Restore
-
-The `clab-api-manager.sh` script provides backup and restore functionality:
-
-#### Creating a Backup
-```bash
-./clab-api-manager.sh dind backup
-# or
-./clab-api-manager.sh dood backup
-```
-
-This creates a timestamped backup file in the current directory:
-```
-clab-api-volumes-backup-dind-20250424-123456.tar.gz
-```
-
-The backup includes all persistent volumes in a single compressed tarball.
-
-#### Restoring from Backup
-```bash
-# First stop the service
-./clab-api-manager.sh dind stop
-
-# Then restore
-./clab-api-manager.sh dind restore clab-api-volumes-backup-dind-20250424-123456.tar.gz
-
-# Restart the service
-./clab-api-manager.sh dind start
-```
-
-**Important**: The restore operation erases all existing data in the volumes. You will be prompted for confirmation before proceeding.
-
-### Binary Installation Backups
+### Backups
 
 For binary installations, use standard Linux backup procedures:
 
@@ -410,8 +219,6 @@ For binary installations, use standard Linux backup procedures:
 
 ### Creating API Users
 
-#### For Binary Installation
-
 ```bash
 # Create a regular API user
 sudo useradd -m -s /bin/bash example-user
@@ -422,25 +229,6 @@ sudo usermod -aG clab_api example-user
 sudo useradd -m -s /bin/bash admin-user
 sudo passwd admin-user
 sudo usermod -aG clab_admins admin-user
-```
-
-#### For Docker Installation
-
-You can either use the API itself (via a superuser account) or CLI commands:
-
-```bash
-# Access the container
-docker exec -it clab-api-dind bash
-
-# Create a regular API user
-useradd -m -s /bin/bash example-user
-echo "example-user:password" | chpasswd
-usermod -aG clab_api example-user
-
-# Create a superuser
-useradd -m -s /bin/bash admin-user
-echo "admin-user:password" | chpasswd
-usermod -aG clab_admins admin-user
 ```
 
 ### Lab Ownership & Access Control
@@ -544,37 +332,9 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/users
 
 ## Performance Considerations
 
-### Deployment Mode Comparison
-
-| Aspect | Binary | DinD | DooD |
-|--------|--------|------|------|
-| **Performance** | Best | Moderate | Good |
-| **Isolation** | Minimal | Highest | Medium |
-| **Resource Usage** | Low | High | Medium |
-| **Setup Complexity** | Medium | Low | Low |
-| **Security Model** | Complex | Simple | Medium |
-| **Scalability** | High | Limited | Medium |
-
-### Optimizing for Performance
-
-1. **Binary Installation**
-   - Most direct and highest performance
-   - Recommended for production environments with high load
-   - Consider using a dedicated user rather than root
-
-2. **DooD Deployment**
-   - Good compromise between isolation and performance
-   - Use for multi-tenant environments where resource efficiency matters
-   - Consider using a dedicated Docker daemon if security is a concern
-
-3. **DinD Deployment**
-   - Highest isolation but with performance overhead
-   - Good for development, testing, or demo environments
-   - Consider increasing container resources for better performance
+For production environments with high load, the binary installation offers the best performance as it interacts directly with the host's container runtime. Consider using a dedicated non-root user with Docker group membership rather than running as root.
 
 ## Troubleshooting
-
-### Binary Installation
 
 Check the service status and logs:
 
@@ -588,29 +348,6 @@ Common issues:
 - Required Linux groups don't exist (user creation/login issues)
 - Server user doesn't have Docker permissions (lab deployment failures)
 - Network port conflicts (server start failures)
-
-### Docker Installation
-
-Check container status and logs:
-
-```bash
-./clab-api-manager.sh dind status
-./clab-api-manager.sh dind logs
-```
-
-Or directly with Docker:
-
-```bash
-docker ps | grep clab-api
-docker logs clab-api-dind
-```
-
-Common issues:
-- Configuration errors in `.env` file
-- Port conflicts with host services
-- Docker socket permission issues (DooD)
-- Inner Docker daemon startup failures (DinD)
-- Volume permission issues
 
 ### Specific Error Scenarios
 
@@ -697,8 +434,6 @@ The API can be used with custom web interfaces or dashboards:
 
 ## Upgrade Procedures
 
-### Binary Installation
-
 Use the install script with the `upgrade` action:
 
 ```bash
@@ -711,42 +446,8 @@ Or specify a version:
 curl -sL https://raw.githubusercontent.com/srl-labs/clab-api-server/main/install.sh | sudo -E bash -s -- --version v0.1.1 upgrade
 ```
 
-### Docker Installation
-
-Pull the latest code, rebuild the images, and restart:
-
-```bash
-cd clab-api-server
-git pull
-
-# For DinD
-docker compose -f docker/dind/docker-compose.yml build
-./clab-api-manager.sh dind restart
-
-# For DooD
-docker compose -f docker/dood/docker-compose.yml build
-./clab-api-manager.sh dood restart
-```
-
-Alternatively, for specific versions:
-
-```bash
-cd clab-api-server
-git checkout v0.1.1
-
-# For DinD
-docker compose -f docker/dind/docker-compose.yml build
-./clab-api-manager.sh dind restart
-
-# For DooD
-docker compose -f docker/dood/docker-compose.yml build
-./clab-api-manager.sh dood restart
-```
-
 ## Conclusion
 
 The Containerlab API Server provides a powerful, flexible interface for managing network labs programmatically. By understanding its architecture, deployment options, and configuration details, you can successfully integrate it into your environment and leverage its capabilities for network automation, testing, and education.
-
-The choice between binary installation, Docker-in-Docker, and Docker-out-of-Docker depends on your specific requirements for performance, isolation, and security. Each approach has its strengths and considerations, making the API server adaptable to various use cases.
 
 For the latest information and updates, refer to the project repository and the embedded API documentation available via the Swagger UI or ReDoc interfaces.

@@ -109,27 +109,9 @@ docker run -d \
 > Volume mounts enable Docker management, networking features, Linux PAM authentication, and user file storage.
 
 
-### 4. Other Docker Deployment Options
-
-The repository also includes support for Docker-in-Docker (DinD) and Docker-out-of-Docker (DooD) deployment models:
-
-- **Docker-in-Docker (DinD)**: A fully isolated environment with its own Docker engine
-- **Docker-out-of-Docker (DooD)**: Uses the host's Docker daemon for better performance
-
-For these options, clone the repository and use the provided `clab-api-manager.sh` script:
-
-```bash
-git clone https://github.com/srl-labs/clab-api-server.git
-cd clab-api-server
-cp docker/common/.env.example docker/common/.env  # Edit as needed
-./clab-api-manager.sh [dind|dood] start
-```
-
 ## 🔧 Post-Install Configuration
 
-1. **Edit the configuration**
-   - For binary install: `/etc/clab-api-server.env`
-   - For Docker install: `docker/common/.env`
+1. **Edit the configuration** (`/etc/clab-api-server.env` for binary install)
 
    At a minimum, change `JWT_SECRET` to a strong random string and set `API_SERVER_HOST` to your server's IP/hostname.
 
@@ -142,12 +124,7 @@ cp docker/common/.env.example docker/common/.env  # Edit as needed
 3. **Verify**
 
    ```bash
-   # For binary install
    sudo systemctl status clab-api-server
-
-   # For Docker install
-   ./clab-api-manager.sh [dind|dood] status
-   ./clab-api-manager.sh [dind|dood] logs
    ```
 
 ## 🗄️ Configuration Reference
@@ -190,19 +167,6 @@ docker restart clab-api-server  # Restart the service
 docker ps -f name=clab-api-server  # Check service status
 docker logs clab-api-server     # View logs
 docker logs -f clab-api-server  # Follow logs
-```
-
-For DinD/DooD deployments, use the provided management script:
-
-```bash
-# Basic commands
-./clab-api-manager.sh [dind|dood] start    # Start the service
-./clab-api-manager.sh [dind|dood] stop     # Stop the service
-./clab-api-manager.sh [dind|dood] logs     # View logs
-
-# Data persistence commands
-./clab-api-manager.sh [dind|dood] backup   # Create a backup
-./clab-api-manager.sh [dind|dood] restore <backup-file>  # Restore from backup
 ```
 
 ## 🛡️ Privilege Model & Security
