@@ -681,6 +681,54 @@ info:
   title: Containerlab API
   version: "1.0"
 paths:
+  /api/v1/events:
+    get:
+      description: Streams containerlab events. The response stays open until the
+        client disconnects.
+      parameters:
+      - description: Output format ('plain' or 'json'). Default is 'plain'.
+        in: query
+        name: format
+        type: string
+      - description: Include initial snapshot events when the stream starts.
+        in: query
+        name: initialState
+        type: boolean
+      - description: Include interface stats events.
+        in: query
+        name: interfaceStats
+        type: boolean
+      - description: Interval for interface stats collection (e.g., 10s). Requires
+          interfaceStats=true.
+        in: query
+        name: interfaceStatsInterval
+        type: string
+      produces:
+      - text/plain
+      - application/json
+      - application/octet-stream
+      responses:
+        "200":
+          description: Event stream (plain or JSON lines)
+          schema:
+            type: string
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stream Containerlab Events
+      tags:
+      - Events
   /api/v1/generate:
     post:
       consumes:

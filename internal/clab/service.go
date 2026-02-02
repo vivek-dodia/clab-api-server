@@ -30,7 +30,10 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/config"
 )
 
-const defaultTimeout = 5 * time.Minute
+const (
+	defaultTimeout         = 5 * time.Minute
+	gracefulDestroyTimeout = 2 * time.Minute
+)
 
 // Service provides an interface to containerlab operations using the library directly.
 type Service struct{}
@@ -218,8 +221,12 @@ func (s *Service) Destroy(ctx context.Context, opts DestroyOptions) error {
 	}()
 
 	// Build clab options - use topology path if available, otherwise use lab name
+	clabTimeout := defaultTimeout
+	if opts.Graceful {
+		clabTimeout = gracefulDestroyTimeout
+	}
 	var clabOpts []clabcore.ClabOption
-	clabOpts = append(clabOpts, clabcore.WithTimeout(defaultTimeout))
+	clabOpts = append(clabOpts, clabcore.WithTimeout(clabTimeout))
 
 	if opts.TopoPath != "" {
 		clabOpts = append(clabOpts, clabcore.WithTopoPath(opts.TopoPath, ""))
@@ -230,7 +237,7 @@ func (s *Service) Destroy(ctx context.Context, opts DestroyOptions) error {
 	}
 
 	clabOpts = append(clabOpts,
-		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
+		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: clabTimeout}),
 	)
 
 	if opts.KeepMgmtNet {

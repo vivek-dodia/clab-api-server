@@ -20,6 +20,77 @@
         "version": "1.0"
     },
     "paths": {
+        "/api/v1/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams containerlab events. The response stays open until the client disconnects.",
+                "produces": [
+                    "text/plain",
+                    "application/json",
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Stream Containerlab Events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Output format ('plain' or 'json'). Default is 'plain'.",
+                        "name": "format",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include initial snapshot events when the stream starts.",
+                        "name": "initialState",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include interface stats events.",
+                        "name": "interfaceStats",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Interval for interface stats collection (e.g., 10s). Requires interfaceStats=true.",
+                        "name": "interfaceStatsInterval",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Event stream (plain or JSON lines)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/generate": {
             "post": {
                 "security": [

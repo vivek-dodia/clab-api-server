@@ -37,6 +37,9 @@ func SetupRoutes(router *gin.Engine) {
 		// Health metrics endpoint (superuser only)
 		apiV1.GET("/health/metrics", SystemMetricsHandler)
 
+		// Events stream
+		apiV1.GET("/events", StreamEventsHandler)
+
 		// Lab management routes
 		labs := apiV1.Group("/labs")
 		{
