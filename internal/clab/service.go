@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/containernetworking/plugins/pkg/ns"
 	clabcert "github.com/srl-labs/containerlab/cert"
 	clabcore "github.com/srl-labs/containerlab/core"
 	clabexec "github.com/srl-labs/containerlab/exec"
@@ -643,9 +644,14 @@ func (s *Service) DisableTxOffload(ctx context.Context, opts DisableTxOffloadOpt
 		return fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
 
-	node, err := clab.GetNode(opts.ContainerName)
-	if err != nil {
-		return fmt.Errorf("failed to get node %s: %w", opts.ContainerName, err)
+	// Get the runtime - there should be exactly one configured
+	var runtime clabruntime.ContainerRuntime
+	for _, r := range clab.Runtimes {
+		runtime = r
+		break
+	}
+	if runtime == nil {
+		return fmt.Errorf("no container runtime configured")
 	}
 
 	ifaceName := opts.InterfaceName
@@ -658,7 +664,21 @@ func (s *Service) DisableTxOffload(ctx context.Context, opts DisableTxOffloadOpt
 		"interface", ifaceName,
 	)
 
-	err = node.ExecFunction(ctx, clabutils.NSEthtoolTXOff(opts.ContainerName, ifaceName))
+	// Get the container's network namespace path directly from the runtime
+	nsPath, err := runtime.GetNSPath(ctx, opts.ContainerName)
+	if err != nil {
+		return fmt.Errorf("failed to get namespace path for container %s: %w", opts.ContainerName, err)
+	}
+
+	// Get the namespace handle and execute the ethtool function
+	netns, err := ns.GetNS(nsPath)
+	if err != nil {
+		return fmt.Errorf("failed to open network namespace %s: %w", nsPath, err)
+	}
+	defer netns.Close()
+
+	// Execute the ethtool function in the container's namespace
+	err = netns.Do(clabutils.NSEthtoolTXOff(opts.ContainerName, ifaceName))
 	if err != nil {
 		return fmt.Errorf("failed to disable TX offload: %w", err)
 	}

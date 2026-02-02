@@ -11,6 +11,7 @@ replace (
 
 require (
 	github.com/charmbracelet/log v0.4.2
+	github.com/containernetworking/plugins v1.8.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/joho/godotenv v1.5.1
@@ -74,7 +75,6 @@ require (
 	github.com/containerd/ttrpc v1.2.5 // indirect
 	github.com/containerd/typeurl/v2 v2.2.3 // indirect
 	github.com/containernetworking/cni v1.3.0 // indirect
-	github.com/containernetworking/plugins v1.8.0 // indirect
 	github.com/containers/buildah v1.39.0 // indirect
 	github.com/containers/common v0.62.0 // indirect
 	github.com/containers/image v3.0.2+incompatible // indirect
