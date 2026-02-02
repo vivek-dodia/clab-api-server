@@ -53,7 +53,7 @@ COPY dist/clab-api-server-linux-${TARGETARCH} /usr/local/bin/clab-api-server
 RUN chmod +x /usr/local/bin/clab-api-server
 
 # Copy the example .env file to provide configuration
-COPY docker/common/.env.example /app/.env
+COPY .env.example /app/.env
 
 # Copy entrypoint script
 COPY docker/simple-container/entrypoint.sh /usr/local/bin/entrypoint.sh

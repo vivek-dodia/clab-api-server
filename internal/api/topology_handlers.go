@@ -2,13 +2,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
+	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/gin-gonic/gin"
@@ -36,8 +36,9 @@ import (
 // @Failure 500 {object} models.ErrorResponse "Internal server error or clab execution failed"
 // @Router /api/v1/generate [post]
 func GenerateTopologyHandler(c *gin.Context) {
-	username := c.GetString("username") // Needed for potential deploy logging/context
-	ctx := c.Request.Context()
+	username := c.GetString("username")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
 
 	var req models.GenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -47,7 +48,7 @@ func GenerateTopologyHandler(c *gin.Context) {
 	}
 
 	// --- Basic Input Validation ---
-	if !isValidLabName(req.Name) { // Validate the lab name itself
+	if !isValidLabName(req.Name) {
 		log.Warnf("GenerateTopology failed for user '%s': Invalid characters in lab name '%s'", username, req.Name)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid characters in lab name."})
 		return
@@ -56,7 +57,7 @@ func GenerateTopologyHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "At least one tier must be defined in 'tiers'."})
 		return
 	}
-	if len(req.Images) == 0 { // Already checked by binding:"required", but double-check
+	if len(req.Images) == 0 {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "'images' field is required."})
 		return
 	}
@@ -78,122 +79,116 @@ func GenerateTopologyHandler(c *gin.Context) {
 		}
 		log.Infof("GenerateTopology user '%s': Lab '%s' does not exist. Proceeding with generation and deployment.", username, req.Name)
 	}
-	// --- End Pre-Deployment Check ---
 
-	// --- Construct clab generate arguments ---
-	args := []string{"generate", "--name", req.Name}
-
-	// Build --nodes flag string(s)
+	// --- Convert tiers to service format ---
+	tiers := make([]clab.TierDefinition, len(req.Tiers))
 	for i, tier := range req.Tiers {
 		if tier.Count <= 0 {
 			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Tier %d has invalid count: %d", i+1, tier.Count)})
 			return
 		}
-		nodeStr := strconv.Itoa(tier.Count)
-		if tier.Kind != "" {
-			nodeStr += ":" + tier.Kind
-			if tier.Type != "" {
-				nodeStr += ":" + tier.Type
-			}
-		} else if tier.Type != "" {
-			defaultKind := req.DefaultKind
-			if defaultKind == "" {
-				defaultKind = "srl" // clab's default
-			}
-			nodeStr += ":" + defaultKind + ":" + tier.Type
+		tiers[i] = clab.TierDefinition{
+			Count: tier.Count,
+			Kind:  tier.Kind,
+			Type:  tier.Type,
 		}
-		args = append(args, "--nodes", nodeStr)
 	}
 
-	if req.DefaultKind != "" {
-		args = append(args, "--kind", req.DefaultKind)
-	}
-	if len(req.Images) > 0 { // Already checked mandatory, but keep structure
-		var imgArgs []string
-		for kind, img := range req.Images {
-			imgArgs = append(imgArgs, fmt.Sprintf("%s=%s", kind, img))
+	// --- Validate license paths ---
+	cleanLicenses := make(map[string]string)
+	for kind, lic := range req.Licenses {
+		cleanLic, licErr := clab.SanitizePath(lic)
+		if licErr != nil {
+			log.Warnf("GenerateTopology failed for user '%s': Invalid license path '%s': %v", username, lic, licErr)
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Invalid license path for kind '%s': %s", kind, licErr.Error())})
+			return
 		}
-		args = append(args, "--image", strings.Join(imgArgs, ","))
+		cleanLicenses[kind] = cleanLic
 	}
-	if len(req.Licenses) > 0 {
-		var licArgs []string
-		for kind, lic := range req.Licenses {
-			cleanLic, licErr := clab.SanitizePath(lic) // Apply basic sanitization
-			if licErr != nil {
-				log.Warnf("GenerateTopology failed for user '%s': Invalid license path '%s': %v", username, lic, licErr)
-				c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Invalid license path for kind '%s': %s", kind, licErr.Error())})
-				return
-			}
-			licArgs = append(licArgs, fmt.Sprintf("%s=%s", kind, cleanLic))
-		}
-		args = append(args, "--license", strings.Join(licArgs, ","))
+
+	// --- Generate topology using service ---
+	svc := GetClabService()
+	log.Infof("GenerateTopology user '%s': Generating topology '%s'...", username, req.Name)
+
+	topoYAML, err := svc.GenerateTopology(ctx, clab.GenerateTopologyOptions{
+		Name:              req.Name,
+		Tiers:             tiers,
+		DefaultKind:       req.DefaultKind,
+		Images:            req.Images,
+		Licenses:          cleanLicenses,
+		NodePrefix:        req.NodePrefix,
+		GroupPrefix:       req.GroupPrefix,
+		ManagementNetwork: req.ManagementNetwork,
+		IPv4Subnet:        req.IPv4Subnet,
+		IPv6Subnet:        req.IPv6Subnet,
+	})
+
+	if err != nil {
+		log.Errorf("GenerateTopology failed for user '%s': %v", username, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to generate topology '%s': %s", req.Name, err.Error())})
+		return
 	}
-	if req.NodePrefix != "" {
-		args = append(args, "--node-prefix", req.NodePrefix)
-	}
-	if req.GroupPrefix != "" {
-		args = append(args, "--group-prefix", req.GroupPrefix)
-	}
-	if req.ManagementNetwork != "" {
-		args = append(args, "--network", req.ManagementNetwork)
-	}
-	if req.IPv4Subnet != "" {
-		args = append(args, "--ipv4-subnet", req.IPv4Subnet)
-	}
-	if req.IPv6Subnet != "" {
-		args = append(args, "--ipv6-subnet", req.IPv6Subnet)
-	}
+
+	log.Infof("GenerateTopology user '%s': Topology '%s' generated successfully.", username, req.Name)
 
 	// --- Determine Output/Action and Target File Path ---
-	var targetFilePath string // Path used by clab generate --file and clab deploy -t
-	var err error
+	var targetFilePath string
 	var uid, gid int
 
 	if req.Deploy {
-		// --- Deploy=true: Save to shared or user's .clab directory ---
+		// --- Deploy=true: Save to user's .clab directory ---
 		if req.OutputFile != "" {
 			log.Warnf("GenerateTopology user '%s': 'outputFile' field provided but Deploy=true. Ignoring 'outputFile' and saving to appropriate lab directory.", username)
 		}
 
-		// --- Get Lab Directory and User UID/GID ---
-		targetDir, uid, gid, err := getLabDirectoryInfo(username, req.Name)
-		if err != nil {
-			log.Errorf("GenerateTopology failed for user '%s': %v", username, err)
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
+		// Get Lab Directory and User UID/GID
+		targetDir, uidVal, gidVal, dirErr := getLabDirectoryInfo(username, req.Name)
+		if dirErr != nil {
+			log.Errorf("GenerateTopology failed for user '%s': %v", username, dirErr)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: dirErr.Error()})
 			return
 		}
+		uid, gid = uidVal, gidVal
 
-		targetFilePath = filepath.Join(targetDir, req.Name+".clab.yml") // Use req.Name for the filename
+		targetFilePath = filepath.Join(targetDir, req.Name+".clab.yml")
 
-		err = os.MkdirAll(targetDir, 0750) // Create lab dir
-		if err != nil {
+		if err := os.MkdirAll(targetDir, 0750); err != nil {
 			log.Errorf("GenerateTopology failed for user '%s': Failed to create lab directory '%s': %v", username, targetDir, err)
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to create lab directory: %s.", err.Error())})
 			return
 		}
-		err = os.Chown(targetDir, uid, gid) // Set ownership of the directory
-		if err != nil {
-			// Log error but continue, maybe file write will succeed anyway if API user has perms
-			log.Warnf("GenerateTopology user '%s': Failed to set ownership on lab directory '%s': %v. Continuing...", username, targetDir, err)
+		if chErr := os.Chown(targetDir, uid, gid); chErr != nil {
+			log.Warnf("GenerateTopology user '%s': Failed to set ownership on lab directory '%s': %v. Continuing...", username, targetDir, chErr)
 		}
 		log.Infof("GenerateTopology user '%s': Ensured directory '%s' exists and attempted ownership set.", username, targetDir)
 
-		args = append(args, "--file", targetFilePath) // Tell clab generate where to save
+		// Write the generated topology to file
+		if err := os.WriteFile(targetFilePath, topoYAML, 0640); err != nil {
+			log.Errorf("GenerateTopology failed for user '%s': Failed to write topology file '%s': %v", username, targetFilePath, err)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to write topology file: %s", err.Error())})
+			return
+		}
+
+		// Set file ownership
+		if chErr := os.Chown(targetFilePath, uid, gid); chErr != nil {
+			log.Warnf("GenerateTopology user '%s': Failed to set ownership on generated topology file '%s': %v.", username, targetFilePath, chErr)
+		} else {
+			log.Infof("GenerateTopology user '%s': Set ownership on generated file '%s'", username, targetFilePath)
+		}
 
 	} else {
 		// --- Deploy=false: Save to OutputFile (server path) or return YAML ---
 		if req.OutputFile != "" {
-			// User specified output file on the server. Sanitize the path.
-			targetFilePath, err = clab.SanitizePath(req.OutputFile)
-			if err != nil {
-				log.Warnf("GenerateTopology failed for user '%s': Invalid OutputFile path '%s': %v", username, req.OutputFile, err)
-				c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid OutputFile path: " + err.Error()})
+			var sanitizeErr error
+			targetFilePath, sanitizeErr = clab.SanitizePath(req.OutputFile)
+			if sanitizeErr != nil {
+				log.Warnf("GenerateTopology failed for user '%s': Invalid OutputFile path '%s': %v", username, req.OutputFile, sanitizeErr)
+				c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid OutputFile path: " + sanitizeErr.Error()})
 				return
 			}
-			// Ensure directory exists? Let's check.
+			// Ensure directory exists
 			dir := filepath.Dir(targetFilePath)
 			if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
-				// Attempt to create the directory (API server user needs permission)
 				if mkdirErr := os.MkdirAll(dir, 0750); mkdirErr != nil {
 					log.Warnf("GenerateTopology failed for user '%s': OutputFile directory does not exist and could not be created: %s. Error: %v", username, dir, mkdirErr)
 					c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("OutputFile directory does not exist and could not be created: %s", dir)})
@@ -205,111 +200,72 @@ func GenerateTopologyHandler(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Error checking OutputFile directory: %s", dir)})
 				return
 			}
-			log.Infof("GenerateTopology user '%s': Will save generated topology to server file: %s", username, targetFilePath)
-			args = append(args, "--file", targetFilePath)
-		} else {
-			// Return YAML directly via stdout
-			targetFilePath = "-" // Special value for clab
-			args = append(args, "--file", targetFilePath)
-			log.Infof("GenerateTopology user '%s': Will output generated topology YAML to stdout.", username)
-		}
-	}
 
-	// --- Execute clab generate ---
-	log.Infof("GenerateTopology user '%s': Executing clab generate...", username)
-	genStdout, genStderr, genErr := clab.RunClabCommand(ctx, username, args...)
+			// Write the topology file
+			if err := os.WriteFile(targetFilePath, topoYAML, 0640); err != nil {
+				log.Errorf("GenerateTopology failed for user '%s': Failed to write topology file '%s': %v", username, targetFilePath, err)
+				c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to write topology file: %s", err.Error())})
+				return
+			}
 
-	if genStderr != "" {
-		log.Warnf("GenerateTopology user '%s': clab generate stderr: %s", username, genStderr)
-	}
-	if genErr != nil {
-		// Don't need temp file cleanup anymore
-		log.Errorf("GenerateTopology failed for user '%s': clab generate command error: %v", username, genErr)
-		errMsg := fmt.Sprintf("Failed to generate topology '%s': %s", req.Name, genErr.Error())
-		if genStderr != "" && (strings.Contains(genStderr, "level=error") || strings.Contains(genStderr, "failed")) {
-			errMsg += "\nstderr: " + genStderr
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
-		return
-	}
-
-	log.Infof("GenerateTopology user '%s': clab generate successful.", username)
-
-	// --- Set File Ownership (only if Deploy=true and file was created) ---
-	if req.Deploy {
-		err = os.Chown(targetFilePath, uid, gid)
-		if err != nil {
-			log.Warnf("GenerateTopology user '%s': Failed to set ownership on generated topology file '%s': %v. Deployment might fail if permissions are incorrect.", username, targetFilePath, err)
-			// Don't fail the whole operation here, let deploy try
-		} else {
-			log.Infof("GenerateTopology user '%s': Set ownership on generated file '%s'", username, targetFilePath)
+			log.Infof("GenerateTopology user '%s': Saved generated topology to server file: %s", username, targetFilePath)
 		}
 	}
 
 	// --- Handle Response based on Action ---
 	response := models.GenerateResponse{
-		Message: fmt.Sprintf("Topology '%s' generated successfully.", req.Name),
-		// Set SavedFilePath based on whether we saved to a real file
+		Message:       fmt.Sprintf("Topology '%s' generated successfully.", req.Name),
 		SavedFilePath: "",
 	}
-	if targetFilePath != "-" {
+	if targetFilePath != "" {
 		response.SavedFilePath = targetFilePath
 	}
 
 	if req.Deploy {
-		// --- Execute clab deploy ---
-		// No temp file cleanup needed
-
-		// Use --reconfigure because generate+deploy implies starting fresh for this specific generated topology
-		deployArgs := []string{"deploy", "--owner", username, "-t", targetFilePath, "--reconfigure", "--format", "json"}
-		if req.MaxWorkers > 0 {
-			deployArgs = append(deployArgs, "--max-workers", strconv.Itoa(req.MaxWorkers))
-		}
-
+		// --- Execute deployment ---
 		log.Infof("GenerateTopology user '%s': Deploying generated topology '%s' from '%s'...", username, req.Name, targetFilePath)
-		deployStdout, deployStderr, deployErr := clab.RunClabCommand(ctx, username, deployArgs...)
 
-		if deployStderr != "" {
-			log.Warnf("GenerateTopology (deploy step) user '%s': clab deploy stderr: %s", username, deployStderr)
-		}
+		containers, deployErr := svc.Deploy(ctx, clab.DeployOptions{
+			TopoPath:    targetFilePath,
+			Username:    username,
+			Reconfigure: true,
+			MaxWorkers:  uint(req.MaxWorkers),
+		})
+
 		if deployErr != nil {
-			// Deploy failed, but generation succeeded. Return failure but include context.
-			log.Errorf("GenerateTopology (deploy step) failed for user '%s': clab deploy command error: %v", username, deployErr)
-			errMsg := fmt.Sprintf("Topology '%s' generated to '%s', but deployment failed: %s", req.Name, targetFilePath, deployErr.Error())
-			if deployStderr != "" && (strings.Contains(deployStderr, "level=error") || strings.Contains(deployStderr, "failed")) {
-				errMsg += "\nstderr: " + deployStderr
-			}
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
+			log.Errorf("GenerateTopology (deploy step) failed for user '%s': %v", username, deployErr)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+				Error: fmt.Sprintf("Topology '%s' generated to '%s', but deployment failed: %s", req.Name, targetFilePath, deployErr.Error()),
+			})
 			return
 		}
 
 		log.Infof("GenerateTopology user '%s': Deployment of generated topology '%s' successful.", username, req.Name)
 		response.Message = fmt.Sprintf("Topology '%s' generated and deployed successfully.", req.Name)
-		// SavedFilePath is already set correctly
 
-		// Attempt to capture deploy output (try JSON first, even if wrapped in banners)
-		var deployResult json.RawMessage
-		cleanDeployOutput := extractJSONFromClabOutput(deployStdout)
-		if cleanDeployOutput == "" {
-			cleanDeployOutput = deployStdout
+		// Convert containers to response format (map by lab name for consistency)
+		deployResult := make(map[string][]models.ClabContainerInfo)
+		for _, container := range containers {
+			containerInfo := clab.ContainerToClabContainerInfo(container)
+			deployResult[containerInfo.LabName] = append(deployResult[containerInfo.LabName], containerInfo)
 		}
-		if err := json.Unmarshal([]byte(cleanDeployOutput), &deployResult); err == nil {
-			response.DeployOutput = deployResult
-		} else {
-			// If not JSON, store as plain text within the RawMessage (needs quoting and escaping)
-			response.DeployOutput = json.RawMessage(strconv.Quote(deployStdout))
-			log.Warnf("GenerateTopology user '%s': Deploy output was not valid JSON, returning as escaped string.", username)
+
+		// Marshal the result to JSON
+		deployJSON, err := json.Marshal(deployResult)
+		if err != nil {
+			log.Warnf("GenerateTopology user '%s': Failed to marshal deploy result: %v", username, err)
+			deployJSON = []byte("{}")
 		}
+		response.DeployOutput = json.RawMessage(deployJSON)
+
 		c.JSON(http.StatusOK, response)
 
 	} else {
 		// Not deploying
-		if targetFilePath == "-" {
-			// Returned YAML via stdout
-			response.TopologyYAML = genStdout
-			response.SavedFilePath = "" // Explicitly clear path
+		if targetFilePath == "" {
+			// Return YAML directly
+			response.TopologyYAML = string(topoYAML)
 		}
-		// If OutputFile was set, SavedFilePath is already populated.
 		c.JSON(http.StatusOK, response)
 	}
 }
@@ -317,8 +273,20 @@ func GenerateTopologyHandler(c *gin.Context) {
 // extractJSONFromClabOutput attempts to isolate the JSON block from clab CLI output
 // that may include banners, warnings, or ANSI art before/after the JSON payload.
 func extractJSONFromClabOutput(output string) string {
-	start := strings.Index(output, "{")
-	end := strings.LastIndex(output, "}")
+	start := -1
+	end := -1
+	for i := 0; i < len(output); i++ {
+		if output[i] == '{' {
+			start = i
+			break
+		}
+	}
+	for i := len(output) - 1; i >= 0; i-- {
+		if output[i] == '}' {
+			end = i
+			break
+		}
+	}
 	if start == -1 || end == -1 || end <= start {
 		return ""
 	}

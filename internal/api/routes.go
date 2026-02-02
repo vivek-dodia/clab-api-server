@@ -76,20 +76,8 @@ func SetupRoutes(router *gin.Engine) {
 					// Request SSH Access to a specific node
 					nodeSpecific.POST("/ssh", RequestSSHAccessHandler) // POST /api/v1/labs/{labName}/nodes/{nodeName}/ssh
 
-					// Show netem for all interfaces on node
-					nodeSpecific.GET("/netem", ShowNetemHandler) // GET /api/v1/labs/{labName}/nodes/{nodeName}/netem
-
 					// Logs
 					nodeSpecific.GET("/logs", GetNodeLogsHandler) // GET /api/v1/labs/{labName}/nodes/{nodeName}/logs
-
-					// Interface Specific Routes (nested under node)
-					interfaceSpecific := nodeSpecific.Group("/interfaces/:interfaceName")
-					{
-						// Set netem for specific interface
-						interfaceSpecific.PUT("/netem", SetNetemHandler) // PUT /api/v1/labs/{labName}/nodes/{nodeName}/interfaces/{interfaceName}/netem
-						// Reset netem for specific interface
-						interfaceSpecific.DELETE("/netem", ResetNetemHandler) // DELETE /api/v1/labs/{labName}/nodes/{nodeName}/interfaces/{interfaceName}/netem
-					}
 				}
 			}
 		}

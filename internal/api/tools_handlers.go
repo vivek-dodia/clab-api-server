@@ -2,7 +2,7 @@
 package api
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/gin-gonic/gin"
@@ -55,33 +56,36 @@ func DisableTxOffloadHandler(c *gin.Context) {
 		return
 	}
 
-	_, err := verifyContainerOwnership(c, username, req.ContainerName) // We check ownership even for superuser to ensure container exists
+	_, err := verifyContainerOwnership(c, username, req.ContainerName)
 	if err != nil {
 		// verifyContainerOwnership already sent the response (404 or 500)
 		return
 	}
 
-	// --- Execute clab command ---
-	args := []string{"tools", "disable-tx-offload", "-c", req.ContainerName}
+	// --- Execute using service ---
+	svc := GetClabService()
 	log.Infof("Superuser '%s' executing disable-tx-offload for container '%s'", username, req.ContainerName)
 
-	_, stderr, err := clab.RunClabCommand(c.Request.Context(), username, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
-	if stderr != "" {
-		log.Warnf("DisableTxOffload stderr for container '%s' (user '%s'): %s", req.ContainerName, username, stderr)
-	}
+	err = svc.DisableTxOffload(ctx, clab.DisableTxOffloadOptions{
+		ContainerName: req.ContainerName,
+		InterfaceName: "eth0",
+	})
+
 	if err != nil {
 		log.Errorf("DisableTxOffload failed for container '%s' (user '%s'): %v", req.ContainerName, username, err)
-		errMsg := fmt.Sprintf("Failed to disable TX offload for container '%s': %s", req.ContainerName, err.Error())
-		if stderr != "" {
-			errMsg += "\nstderr: " + stderr
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error: fmt.Sprintf("Failed to disable TX offload for container '%s': %s", req.ContainerName, err.Error()),
+		})
 		return
 	}
 
 	log.Infof("Successfully disabled TX offload for container '%s' (triggered by superuser '%s')", req.ContainerName, username)
-	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("TX checksum offload disabled successfully for eth0 on container '%s'", req.ContainerName)})
+	c.JSON(http.StatusOK, models.GenericSuccessResponse{
+		Message: fmt.Sprintf("TX checksum offload disabled successfully for eth0 on container '%s'", req.ContainerName),
+	})
 }
 
 // --- Certificate Handlers ---
@@ -134,16 +138,15 @@ func CreateCAHandler(c *gin.Context) {
 	}
 
 	// --- Path Handling & Ownership Setup ---
-	basePath, err := getUserCertBasePath(username) // Get ~/.clab/certs path
+	basePath, err := getUserCertBasePath(username)
 	if err != nil {
-		// Error already logged in helper
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	// Get user UID/GID again for Chown operations below
+	// Get user UID/GID for Chown operations
 	usr, lookupErr := user.Lookup(username)
-	uid, uidErr := -1, fmt.Errorf("user lookup failed") // Initialize with error state
+	uid, uidErr := -1, fmt.Errorf("user lookup failed")
 	gid, gidErr := -1, fmt.Errorf("user lookup failed")
 	if lookupErr == nil {
 		uid, uidErr = strconv.Atoi(usr.Uid)
@@ -154,16 +157,15 @@ func CreateCAHandler(c *gin.Context) {
 		log.Warnf("CreateCA: Cannot reliably get UID/GID for user '%s'. Ownership of generated files might be incorrect.", username)
 	}
 
-	// Create the specific subdirectory for this CA within the user's cert base path
+	// Create the specific subdirectory for this CA
 	caDir := filepath.Join(basePath, caName)
-	// Use 0750 or 0700 permissions for the CA directory itself
 	if err := os.MkdirAll(caDir, 0750); err != nil {
 		log.Errorf("Failed to create CA subdirectory '%s': %v", caDir, err)
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create CA directory"})
 		return
 	}
 
-	// Attempt to set ownership of the specific CA directory
+	// Set ownership of the CA directory
 	if canChown {
 		if err := os.Chown(caDir, uid, gid); err != nil {
 			log.Warnf("Failed to set ownership of CA directory '%s' to user '%s': %v. Continuing...", caDir, username, err)
@@ -172,44 +174,36 @@ func CreateCAHandler(c *gin.Context) {
 		}
 	}
 
-	// --- Build clab args ---
-	args := []string{"tools", "cert", "ca", "create"}
-	args = append(args, "--path", caDir) // Use the specific CA directory path
-	args = append(args, "--name", caName)
-	args = append(args, "--expiry", expiry) // Use the validated expiry
-
-	if req.CommonName != "" {
-		args = append(args, "--cn", req.CommonName)
-	}
-	if req.Country != "" {
-		args = append(args, "--country", req.Country)
-	}
-	if req.Locality != "" {
-		args = append(args, "--locality", req.Locality)
-	}
-	if req.Organization != "" {
-		args = append(args, "--organization", req.Organization)
-	}
-	if req.OrgUnit != "" {
-		args = append(args, "--ou", req.OrgUnit)
+	// Parse expiry duration
+	expiryDuration, err := parseExpiryDuration(expiry)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid expiry duration: " + err.Error()})
+		return
 	}
 
+	// --- Execute using service ---
+	svc := GetClabService()
 	log.Infof("Superuser '%s' creating CA '%s' in user's path '%s'", username, caName, caDir)
 
-	// --- Execute clab command ---
-	_, stderr, err := clab.RunClabCommand(c.Request.Context(), username, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
-	if stderr != "" {
-		log.Warnf("CreateCA stderr for CA '%s' (user '%s'): %s", caName, username, stderr)
-	}
+	_, err = svc.CreateCA(ctx, clab.CACreateOptions{
+		Name:         caName,
+		Expiry:       expiryDuration,
+		CommonName:   req.CommonName,
+		Country:      req.Country,
+		Locality:     req.Locality,
+		Organization: req.Organization,
+		OrgUnit:      req.OrgUnit,
+		OutputPath:   caDir,
+	})
+
 	if err != nil {
 		log.Errorf("CreateCA failed for CA '%s' (user '%s'): %v", caName, username, err)
-		errMsg := fmt.Sprintf("Failed to create CA '%s': %s", caName, err.Error())
-		if stderr != "" {
-			errMsg += "\nstderr: " + stderr
-		}
-		// Attempt cleanup of directory? Maybe not, could contain partial results.
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error: fmt.Sprintf("Failed to create CA '%s': %s", caName, err.Error()),
+		})
 		return
 	}
 
@@ -217,31 +211,29 @@ func CreateCAHandler(c *gin.Context) {
 	if canChown {
 		certFilePath := filepath.Join(caDir, caName+".pem")
 		keyFilePath := filepath.Join(caDir, caName+".key")
-		csrFilePath := filepath.Join(caDir, caName+".csr") // clab creates this too
+		csrFilePath := filepath.Join(caDir, caName+".csr")
 
 		for _, fPath := range []string{certFilePath, keyFilePath, csrFilePath} {
-			if _, statErr := os.Stat(fPath); statErr == nil { // Check if file exists before chown
+			if _, statErr := os.Stat(fPath); statErr == nil {
 				if chownErr := os.Chown(fPath, uid, gid); chownErr != nil {
 					log.Warnf("Failed to set ownership of generated file '%s' to user '%s': %v", fPath, username, chownErr)
 				} else {
 					log.Debugf("Set ownership of generated file '%s' to user '%s'", fPath, username)
 				}
-			} else if !os.IsNotExist(statErr) {
-				log.Warnf("Error checking status of generated file '%s' before chown: %v", fPath, statErr)
 			}
 		}
 	}
 
 	log.Infof("Successfully created CA '%s' for superuser '%s' in user directory", caName, username)
 
-	// Construct relative paths for response (relative to the user's cert base dir)
+	// Construct relative paths for response
 	certRelPath := filepath.Join(caName, caName+".pem")
 	keyRelPath := filepath.Join(caName, caName+".key")
 	csrRelPath := filepath.Join(caName, caName+".csr")
 
 	c.JSON(http.StatusOK, models.CertResponse{
 		Message:  fmt.Sprintf("CA '%s' created successfully in user's cert directory.", caName),
-		CertPath: certRelPath, // These relative paths are correct
+		CertPath: certRelPath,
 		KeyPath:  keyRelPath,
 		CSRPath:  csrRelPath,
 	})
@@ -289,39 +281,38 @@ func SignCertHandler(c *gin.Context) {
 	}
 	if len(req.Hosts) == 0 {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "At least one host (SAN) is required."})
-		return // Added return
+		return
 	}
-	// Basic validation for hosts - prevent obvious issues
+	// Basic validation for hosts
 	for _, h := range req.Hosts {
-		if strings.ContainsAny(h, " ,;\"'()") { // Avoid spaces, commas, quotes etc. within a host entry
+		if strings.ContainsAny(h, " ,;\"'()") {
 			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Invalid character in host entry: '%s'", h)})
 			return
 		}
 	}
-	hostsStr := strings.Join(req.Hosts, ",") // Join for clab command
 
 	keySize := req.KeySize
 	if keySize == 0 {
-		keySize = 2048 // Default key size
-	} else if keySize < 2048 { // Enforce minimum reasonable size
+		keySize = 2048
+	} else if keySize < 2048 {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Key size must be 2048 or greater."})
 		return
 	}
 
 	commonName := strings.TrimSpace(req.CommonName)
 	if commonName == "" {
-		commonName = certName // Default CN to cert name
+		commonName = certName
 	}
 
 	// --- Path Handling & Ownership Info ---
-	basePath, err := getUserCertBasePath(username) // Get ~/.clab/certs path
+	basePath, err := getUserCertBasePath(username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
 	usr, lookupErr := user.Lookup(username)
-	uid, uidErr := -1, fmt.Errorf("user lookup failed") // Initialize with error state
+	uid, uidErr := -1, fmt.Errorf("user lookup failed")
 	gid, gidErr := -1, fmt.Errorf("user lookup failed")
 	if lookupErr == nil {
 		uid, uidErr = strconv.Atoi(usr.Uid)
@@ -332,12 +323,12 @@ func SignCertHandler(c *gin.Context) {
 		log.Warnf("SignCert: Cannot reliably get UID/GID for user '%s'. Ownership of generated files might be incorrect.", username)
 	}
 
-	// Certs are stored *within* the specified CA's subdirectory in the user's home
+	// Certs are stored within the CA's subdirectory
 	caDir := filepath.Join(basePath, caName)
 	caCertPath := filepath.Join(caDir, caName+".pem")
 	caKeyPath := filepath.Join(caDir, caName+".key")
 
-	// Check if CA files exist before proceeding
+	// Check if CA files exist
 	if _, err := os.Stat(caCertPath); os.IsNotExist(err) {
 		log.Warnf("SignCert failed for user '%s': CA certificate not found at '%s'", username, caCertPath)
 		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: fmt.Sprintf("CA '%s' certificate not found in user's cert directory.", caName)})
@@ -349,332 +340,65 @@ func SignCertHandler(c *gin.Context) {
 		return
 	}
 
-	// Output path for the new cert/key is the CA directory
-	outputPath := caDir // clab will write the new cert/key/csr into this directory
+	// --- Execute using service ---
+	svc := GetClabService()
+	log.Infof("Superuser '%s' signing certificate '%s' using CA '%s' in user's path '%s'", username, certName, caName, caDir)
 
-	// --- Build clab args ---
-	args := []string{"tools", "cert", "sign"}
-	args = append(args, "--path", outputPath)    // Directory where new cert/key/csr are created
-	args = append(args, "--name", certName)      // Base name for new files
-	args = append(args, "--ca-cert", caCertPath) // Path to existing CA cert
-	args = append(args, "--ca-key", caKeyPath)   // Path to existing CA key
-	args = append(args, "--hosts", hostsStr)
-	args = append(args, "--cn", commonName)
-	args = append(args, "--key-size", strconv.Itoa(keySize))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
-	if req.Country != "" {
-		args = append(args, "--country", req.Country)
-	}
-	if req.Locality != "" {
-		args = append(args, "--locality", req.Locality)
-	}
-	if req.Organization != "" {
-		args = append(args, "--organization", req.Organization)
-	}
-	if req.OrgUnit != "" {
-		args = append(args, "--ou", req.OrgUnit)
-	}
+	_, err = svc.SignCert(ctx, clab.CertSignOptions{
+		Name:         certName,
+		Hosts:        req.Hosts,
+		CommonName:   commonName,
+		Country:      req.Country,
+		Locality:     req.Locality,
+		Organization: req.Organization,
+		OrgUnit:      req.OrgUnit,
+		KeySize:      keySize,
+		CACertPath:   caCertPath,
+		CAKeyPath:    caKeyPath,
+		OutputPath:   caDir,
+	})
 
-	log.Infof("Superuser '%s' signing certificate '%s' using CA '%s' in user's path '%s'", username, certName, caName, outputPath)
-
-	// --- Execute clab command ---
-	_, stderr, err := clab.RunClabCommand(c.Request.Context(), username, args...)
-
-	if stderr != "" {
-		log.Warnf("SignCert stderr for cert '%s' using CA '%s' (user '%s'): %s", certName, caName, username, stderr)
-	}
 	if err != nil {
 		log.Errorf("SignCert failed for cert '%s' using CA '%s' (user '%s'): %v", certName, caName, username, err)
-		errMsg := fmt.Sprintf("Failed to sign certificate '%s' using CA '%s': %s", certName, caName, err.Error())
-		if stderr != "" {
-			errMsg += "\nstderr: " + stderr
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error: fmt.Sprintf("Failed to sign certificate '%s' using CA '%s': %s", certName, caName, err.Error()),
+		})
 		return
 	}
 
-	// --- Attempt to set ownership of newly generated files ---
+	// --- Attempt to set ownership of generated files ---
 	if canChown {
-		certFilePath := filepath.Join(outputPath, certName+".pem")
-		keyFilePath := filepath.Join(outputPath, certName+".key")
-		csrFilePath := filepath.Join(outputPath, certName+".csr")
+		certFilePath := filepath.Join(caDir, certName+".pem")
+		keyFilePath := filepath.Join(caDir, certName+".key")
+		csrFilePath := filepath.Join(caDir, certName+".csr")
 
 		for _, fPath := range []string{certFilePath, keyFilePath, csrFilePath} {
-			if _, statErr := os.Stat(fPath); statErr == nil { // Check if file exists
+			if _, statErr := os.Stat(fPath); statErr == nil {
 				if chownErr := os.Chown(fPath, uid, gid); chownErr != nil {
 					log.Warnf("Failed to set ownership of generated file '%s' to user '%s': %v", fPath, username, chownErr)
 				} else {
 					log.Debugf("Set ownership of generated file '%s' to user '%s'", fPath, username)
 				}
-			} else if !os.IsNotExist(statErr) {
-				log.Warnf("Error checking status of generated file '%s' before chown: %v", fPath, statErr)
 			}
 		}
 	}
 
 	log.Infof("Successfully signed certificate '%s' using CA '%s' for superuser '%s' in user directory", certName, caName, username)
 
-	// Construct relative paths for response (relative to user's cert base dir)
+	// Construct relative paths for response
 	certRelPath := filepath.Join(caName, certName+".pem")
 	keyRelPath := filepath.Join(caName, certName+".key")
 	csrRelPath := filepath.Join(caName, certName+".csr")
 
 	c.JSON(http.StatusOK, models.CertResponse{
 		Message:  fmt.Sprintf("Certificate '%s' signed successfully by CA '%s' in user's cert directory.", certName, caName),
-		CertPath: certRelPath, // These relative paths are correct
+		CertPath: certRelPath,
 		KeyPath:  keyRelPath,
 		CSRPath:  csrRelPath,
 	})
-}
-
-// --- Netem Handlers ---
-
-// @Summary Set Network Emulation
-// @Description Sets network impairments (delay, jitter, loss, rate, corruption) on a specific interface of a node (container) within a lab. Checks container ownership.
-// @Tags Tools - Netem
-// @Security BearerAuth
-// @Accept json
-// @Produce json
-// @Param labName path string true "Name of the lab" example="my-lab"
-// @Param nodeName path string true "Full name of the container (node)" example="clab-my-lab-srl1" // CLARIFIED example/description
-// @Param interfaceName path string true "Name of the interface within the container" example="eth1"
-// @Param netem_params body models.NetemSetRequest true "Network Emulation Parameters"
-// @Success 200 {object} models.GenericSuccessResponse "Impairments set successfully"
-// @Failure 400 {object} models.ErrorResponse "Invalid input (lab/container/interface name, netem params)"
-// @Failure 401 {object} models.ErrorResponse "Unauthorized (JWT)"
-// @Failure 404 {object} models.ErrorResponse "Lab, container (node), or interface not found / not owned"
-// @Failure 500 {object} models.ErrorResponse "Internal server error or clab execution failed"
-// @Router /api/v1/labs/{labName}/nodes/{nodeName}/interfaces/{interfaceName}/netem [put] // KEEP /nodes/{nodeName}
-func SetNetemHandler(c *gin.Context) {
-	username := c.GetString("username")
-	labName := c.Param("labName")
-	// Read the parameter named "nodeName", but treat its value as the container name
-	containerNameFromParam := c.Param("nodeName")
-	interfaceName := c.Param("interfaceName")
-
-	// --- Validate Path Params ---
-	if !isValidLabName(labName) {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid lab name format."})
-		return
-	}
-	// Validate the value from nodeName parameter *as a container name*
-	if !isValidContainerName(containerNameFromParam) {
-		log.Warnf("SetNetem failed for user '%s': Invalid container name format provided for nodeName parameter '%s'", username, containerNameFromParam)
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid container name format provided for 'nodeName' parameter."})
-		return
-	}
-	if !isValidInterfaceName(interfaceName) {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid interface name format."})
-		return
-	}
-
-	// --- Bind and Validate Body ---
-	var req models.NetemSetRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Warnf("SetNetem failed for user '%s', lab '%s', node (container) '%s': Invalid request body: %v", username, labName, containerNameFromParam, err)
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body: " + err.Error()})
-		return
-	}
-
-	// Validate netem parameters (no changes needed here)
-	if !isValidDurationString(req.Delay) { /* ... */
-	}
-	if req.Jitter != "" && !isValidDurationString(req.Jitter) { /* ... */
-	}
-	if req.Jitter != "" && req.Delay == "" { /* ... */
-	}
-
-	// --- Verify Container Ownership ---
-	// Use the container name from the parameter directly for ownership check
-	_, ownerCheckErr := verifyContainerOwnership(c, username, containerNameFromParam)
-	if ownerCheckErr != nil {
-		// verifyContainerOwnership already sent response (404 or 500)
-		// Log message inside verifyContainerOwnership is sufficient
-		return
-	}
-
-	// --- Build clab args ---
-	// Use containerNameFromParam directly for the -n flag
-	args := []string{"tools", "netem", "set", "-n", containerNameFromParam, "-i", interfaceName}
-	if req.Delay != "" {
-		args = append(args, "--delay", req.Delay)
-		if req.Jitter != "" {
-			args = append(args, "--jitter", req.Jitter)
-		}
-	}
-	if req.Loss > 0 {
-		args = append(args, "--loss", strconv.FormatFloat(req.Loss, 'f', -1, 64))
-	}
-	if req.Rate > 0 {
-		args = append(args, "--rate", strconv.FormatUint(uint64(req.Rate), 10))
-	}
-	if req.Corruption > 0 {
-		args = append(args, "--corruption", strconv.FormatFloat(req.Corruption, 'f', -1, 64))
-	}
-
-	log.Infof("User '%s' setting netem on lab '%s', node (container) '%s', interface '%s'", username, labName, containerNameFromParam, interfaceName)
-
-	// --- Execute clab command ---
-	_, stderr, err := clab.RunClabCommand(c.Request.Context(), username, args...)
-
-	if stderr != "" {
-		log.Infof("SetNetem stderr for lab '%s', node (container) '%s', interface '%s' (user '%s'): %s", labName, containerNameFromParam, interfaceName, username, stderr)
-	}
-	if err != nil {
-		if strings.Contains(stderr, "Cannot find device") || strings.Contains(err.Error(), "Cannot find device") {
-			log.Warnf("SetNetem failed for user '%s': Interface '%s' not found on node (container) '%s'", username, interfaceName, containerNameFromParam)
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: fmt.Sprintf("Interface '%s' not found on node (container) '%s'", interfaceName, containerNameFromParam)})
-			return
-		}
-		log.Errorf("SetNetem failed for lab '%s', node (container) '%s', interface '%s' (user '%s'): %v", labName, containerNameFromParam, interfaceName, username, err)
-		errMsg := fmt.Sprintf("Failed to set netem on node (container) '%s', interface '%s': %s", containerNameFromParam, interfaceName, err.Error())
-		if stderr != "" {
-			errMsg += "\nstderr: " + stderr
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
-		return
-	}
-
-	log.Infof("Successfully set netem for lab '%s', node (container) '%s', interface '%s' (user '%s')", labName, containerNameFromParam, interfaceName, username)
-	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("Network emulation parameters set for node (container) '%s', interface '%s'", containerNameFromParam, interfaceName)})
-}
-
-// @Summary Reset Network Emulation
-// @Description Removes all network impairments from a specific interface of a node (container) within a lab. Checks container ownership.
-// @Tags Tools - Netem
-// @Security BearerAuth
-// @Produce json
-// @Param labName path string true "Name of the lab" example="my-lab"
-// @Param nodeName path string true "Full name of the container (node)" example="clab-my-lab-srl1" // CLARIFIED
-// @Param interfaceName path string true "Name of the interface within the container" example="eth1"
-// @Success 200 {object} models.GenericSuccessResponse "Impairments reset successfully"
-// @Failure 400 {object} models.ErrorResponse "Invalid input (lab/container/interface name)"
-// @Failure 401 {object} models.ErrorResponse "Unauthorized (JWT)"
-// @Failure 404 {object} models.ErrorResponse "Lab, container (node), or interface not found / not owned"
-// @Failure 500 {object} models.ErrorResponse "Internal server error or clab execution failed"
-// @Router /api/v1/labs/{labName}/nodes/{nodeName}/interfaces/{interfaceName}/netem [delete] // KEEP /nodes/{nodeName}
-func ResetNetemHandler(c *gin.Context) {
-	username := c.GetString("username")
-	labName := c.Param("labName")
-	containerNameFromParam := c.Param("nodeName") // Read "nodeName" param
-	interfaceName := c.Param("interfaceName")
-
-	// --- Validate Path Params ---
-	if !isValidLabName(labName) { /* ... */
-	}
-	if !isValidContainerName(containerNameFromParam) { // Validate as container name
-		log.Warnf("ResetNetem failed for user '%s': Invalid container name format provided for nodeName parameter '%s'", username, containerNameFromParam)
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid container name format provided for 'nodeName' parameter."})
-		return
-	}
-	if !isValidInterfaceName(interfaceName) { /* ... */
-	}
-
-	// --- Verify Container Ownership ---
-	_, ownerCheckErr := verifyContainerOwnership(c, username, containerNameFromParam) // Use value directly
-	if ownerCheckErr != nil {
-		return
-	}
-
-	// --- Build clab args ---
-	args := []string{"tools", "netem", "reset", "-n", containerNameFromParam, "-i", interfaceName} // Use value directly
-
-	log.Infof("User '%s' resetting netem on lab '%s', node (container) '%s', interface '%s'", username, labName, containerNameFromParam, interfaceName)
-
-	// --- Execute clab command ---
-	_, stderr, err := clab.RunClabCommand(c.Request.Context(), username, args...)
-
-	if stderr != "" {
-		log.Infof("ResetNetem stderr for lab '%s', node (container) '%s', interface '%s' (user '%s'): %s", labName, containerNameFromParam, interfaceName, username, stderr)
-	}
-	if err != nil {
-		if strings.Contains(stderr, "Cannot find device") || strings.Contains(err.Error(), "Cannot find device") {
-			log.Warnf("ResetNetem failed for user '%s': Interface '%s' not found on node (container) '%s'", username, interfaceName, containerNameFromParam)
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: fmt.Sprintf("Interface '%s' not found on node (container) '%s'", interfaceName, containerNameFromParam)})
-			return
-		}
-		log.Errorf("ResetNetem failed for lab '%s', node (container) '%s', interface '%s' (user '%s'): %v", labName, containerNameFromParam, interfaceName, username, err)
-		errMsg := fmt.Sprintf("Failed to reset netem on node (container) '%s', interface '%s': %s", containerNameFromParam, interfaceName, err.Error())
-		if stderr != "" {
-			errMsg += "\nstderr: " + stderr
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
-		return
-	}
-
-	log.Infof("Successfully reset netem for lab '%s', node (container) '%s', interface '%s' (user '%s')", labName, containerNameFromParam, interfaceName, username)
-	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("Network emulation parameters reset for node (container) '%s', interface '%s'", containerNameFromParam, interfaceName)})
-}
-
-// @Summary Show Network Emulation
-// @Description Shows network impairments for all interfaces on a specific node (container) within a lab. Checks container ownership.
-// @Tags Tools - Netem
-// @Security BearerAuth
-// @Produce json
-// @Param labName path string true "Name of the lab" example="my-lab"
-// @Param nodeName path string true "Full name of the container (node)" example="clab-my-lab-srl1" // CLARIFIED
-// @Success 200 {object} models.NetemShowResponse "Current network emulation parameters"
-// @Failure 400 {object} models.ErrorResponse "Invalid input (lab/container name)"
-// @Failure 401 {object} models.ErrorResponse "Unauthorized (JWT)"
-// @Failure 404 {object} models.ErrorResponse "Lab or container (node) not found / not owned"
-// @Failure 500 {object} models.ErrorResponse "Internal server error or clab execution failed"
-// @Router /api/v1/labs/{labName}/nodes/{nodeName}/netem [get] // KEEP /nodes/{nodeName}
-func ShowNetemHandler(c *gin.Context) {
-	username := c.GetString("username")
-	labName := c.Param("labName")
-	containerNameFromParam := c.Param("nodeName") // Read "nodeName" param
-
-	// --- Validate Path Params ---
-	if !isValidLabName(labName) { /* ... */
-	}
-	if !isValidContainerName(containerNameFromParam) { // Validate as container name
-		log.Warnf("ShowNetem failed for user '%s': Invalid container name format provided for nodeName parameter '%s'", username, containerNameFromParam)
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid container name format provided for 'nodeName' parameter."})
-		return
-	}
-
-	// --- Verify Container Ownership ---
-	_, ownerCheckErr := verifyContainerOwnership(c, username, containerNameFromParam) // Use value directly
-	if ownerCheckErr != nil {
-		return
-	}
-
-	// --- Build clab args ---
-	args := []string{"tools", "netem", "show", "-n", containerNameFromParam, "--format", "json"} // Use value directly
-
-	log.Infof("User '%s' showing netem on lab '%s', node (container) '%s'", username, labName, containerNameFromParam)
-
-	// --- Execute clab command ---
-	stdout, stderr, err := clab.RunClabCommand(c.Request.Context(), username, args...)
-
-	if stderr != "" {
-		log.Warnf("ShowNetem stderr for lab '%s', node (container) '%s' (user '%s'): %s", labName, containerNameFromParam, username, stderr)
-	}
-	if err != nil {
-		if strings.Contains(stderr, "container not found") || strings.Contains(err.Error(), "container not found") {
-			log.Warnf("ShowNetem failed for user '%s': Node (container) '%s' not found in lab '%s'", username, containerNameFromParam, labName)
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: fmt.Sprintf("Node (container) '%s' not found in lab '%s'", containerNameFromParam, labName)})
-			return
-		}
-		log.Errorf("ShowNetem failed for lab '%s', node (container) '%s' (user '%s'): %v", labName, containerNameFromParam, username, err)
-		errMsg := fmt.Sprintf("Failed to show netem for node (container) '%s': %s", containerNameFromParam, err.Error())
-		if stderr != "" {
-			errMsg += "\nstderr: " + stderr
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
-		return
-	}
-
-	// --- Parse JSON Output ---
-	var result models.NetemShowResponse
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		log.Errorf("ShowNetem failed for user '%s': Failed to parse JSON output for node (container) '%s': %v. Output: %s", username, containerNameFromParam, err, stdout)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to parse command output."})
-		return
-	}
-
-	log.Infof("Successfully retrieved netem info for lab '%s', node (container) '%s' (user '%s')", labName, containerNameFromParam, username)
-	c.JSON(http.StatusOK, result)
 }
 
 // @Summary Create vEth Pair
@@ -716,42 +440,37 @@ func CreateVethHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Invalid format for bEndpoint: %s", req.BEndpoint)})
 		return
 	}
-	if req.Mtu < 0 { // Allow 0 to mean default, but not negative
+	if req.Mtu < 0 {
 		log.Warnf("CreateVeth failed for superuser '%s': Invalid MTU value '%d'", username, req.Mtu)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid MTU value. Must be non-negative."})
 		return
 	}
 
-	// --- Build clab args ---
-	args := []string{"tools", "veth", "create", "-a", req.AEndpoint, "-b", req.BEndpoint}
-	if req.Mtu > 0 { // Only add MTU flag if explicitly set > 0
-		args = append(args, "-m", strconv.Itoa(req.Mtu))
-	}
-
+	// --- Execute using service ---
+	svc := GetClabService()
 	log.Infof("Superuser '%s' creating vEth pair: %s <--> %s (MTU: %d)", username, req.AEndpoint, req.BEndpoint, req.Mtu)
 
-	// --- Execute clab command ---
-	_, stderr, err := clab.RunClabCommand(c.Request.Context(), username, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
-	if stderr != "" {
-		// veth create might output info to stderr on success
-		log.Infof("CreateVeth stderr for superuser '%s': %s", username, stderr)
-	}
+	err := svc.CreateVeth(ctx, clab.VethCreateOptions{
+		AEndpoint: req.AEndpoint,
+		BEndpoint: req.BEndpoint,
+		MTU:       req.Mtu,
+	})
+
 	if err != nil {
 		log.Errorf("CreateVeth failed for superuser '%s': %v", username, err)
-		errMsg := fmt.Sprintf("Failed to create vEth pair (%s <--> %s): %s", req.AEndpoint, req.BEndpoint, err.Error())
-		// Append stderr if it seems like a real error message
-		if stderr != "" && (strings.Contains(stderr, "level=error") || strings.Contains(stderr, "failed") || strings.Contains(stderr, "exist")) {
-			errMsg += "\nstderr: " + stderr
-		} else if stderr != "" { // Include stderr even if not obviously an error, as context
-			errMsg += "\nOutput:\n" + stderr
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error: fmt.Sprintf("Failed to create vEth pair (%s <--> %s): %s", req.AEndpoint, req.BEndpoint, err.Error()),
+		})
 		return
 	}
 
 	log.Infof("Successfully created vEth pair for superuser '%s': %s <--> %s", username, req.AEndpoint, req.BEndpoint)
-	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("vEth pair created successfully between %s and %s", req.AEndpoint, req.BEndpoint)})
+	c.JSON(http.StatusOK, models.GenericSuccessResponse{
+		Message: fmt.Sprintf("vEth pair created successfully between %s and %s", req.AEndpoint, req.BEndpoint),
+	})
 }
 
 // --- VxLAN Handlers ---
@@ -785,12 +504,12 @@ func CreateVxlanHandler(c *gin.Context) {
 	}
 
 	// --- Validate Inputs ---
-	if !isValidIPAddress(req.Remote) { // Use helper if added, otherwise basic check
+	if !isValidIPAddress(req.Remote) {
 		log.Warnf("CreateVxlan failed for superuser '%s': Invalid remote IP address format '%s'", username, req.Remote)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid remote IP address format."})
 		return
 	}
-	if !isValidInterfaceName(req.Link) { // Check the link interface name
+	if !isValidInterfaceName(req.Link) {
 		log.Warnf("CreateVxlan failed for superuser '%s': Invalid link interface name format '%s'", username, req.Link)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid link interface name format."})
 		return
@@ -812,44 +531,34 @@ func CreateVxlanHandler(c *gin.Context) {
 		return
 	}
 
-	// --- Build clab args ---
-	args := []string{"tools", "vxlan", "create", "--remote", req.Remote, "-l", req.Link}
-	if req.ID > 0 { // clab default is 10, only add if different or explicitly set
-		args = append(args, "-i", strconv.Itoa(req.ID))
-	}
-	if req.Port > 0 { // clab default is 4789, only add if different or explicitly set
-		args = append(args, "-p", strconv.Itoa(req.Port))
-	}
-	if req.Dev != "" {
-		args = append(args, "--dev", req.Dev)
-	}
-	if req.Mtu > 0 {
-		args = append(args, "-m", strconv.Itoa(req.Mtu))
-	}
-
+	// --- Execute using service ---
+	svc := GetClabService()
 	log.Infof("Superuser '%s' creating VxLAN tunnel: remote=%s, link=%s, id=%d, port=%d", username, req.Remote, req.Link, req.ID, req.Port)
 
-	// --- Execute clab command ---
-	_, stderr, err := clab.RunClabCommand(c.Request.Context(), username, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
-	if stderr != "" {
-		// vxlan create outputs info to stderr on success
-		log.Infof("CreateVxlan stderr for superuser '%s': %s", username, stderr)
-	}
+	err := svc.CreateVxlan(ctx, clab.VxlanCreateOptions{
+		Remote:       req.Remote,
+		Link:         req.Link,
+		ID:           req.ID,
+		DstPort:      req.Port,
+		ParentDevice: req.Dev,
+		MTU:          req.Mtu,
+	})
+
 	if err != nil {
 		log.Errorf("CreateVxlan failed for superuser '%s': %v", username, err)
-		errMsg := fmt.Sprintf("Failed to create VxLAN tunnel (remote: %s, link: %s): %s", req.Remote, req.Link, err.Error())
-		if stderr != "" && (strings.Contains(stderr, "level=error") || strings.Contains(stderr, "failed")) {
-			errMsg += "\nstderr: " + stderr
-		} else if stderr != "" {
-			errMsg += "\nOutput:\n" + stderr
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error: fmt.Sprintf("Failed to create VxLAN tunnel (remote: %s, link: %s): %s", req.Remote, req.Link, err.Error()),
+		})
 		return
 	}
 
 	log.Infof("Successfully created VxLAN tunnel for superuser '%s': remote=%s, link=%s", username, req.Remote, req.Link)
-	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("VxLAN tunnel created successfully for link %s to remote %s", req.Link, req.Remote)})
+	c.JSON(http.StatusOK, models.GenericSuccessResponse{
+		Message: fmt.Sprintf("VxLAN tunnel created successfully for link %s to remote %s", req.Link, req.Remote),
+	})
 }
 
 // @Summary Delete VxLAN Tunnels by Prefix
@@ -873,65 +582,39 @@ func DeleteVxlanHandler(c *gin.Context) {
 	}
 
 	// --- Get and Validate Query Param ---
-	prefix := c.DefaultQuery("prefix", "vx-") // Default prefix used by clab create
-	if !isValidPrefix(prefix) {               // Use helper if added
+	prefix := c.DefaultQuery("prefix", "vx-")
+	if !isValidPrefix(prefix) {
 		log.Warnf("DeleteVxlan failed for superuser '%s': Invalid prefix format '%s'", username, prefix)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid prefix format."})
 		return
 	}
 
-	// --- Build clab args ---
-	args := []string{"tools", "vxlan", "delete", "-p", prefix}
-
+	// --- Execute using service ---
+	svc := GetClabService()
 	log.Infof("Superuser '%s' deleting VxLAN tunnels with prefix '%s'", username, prefix)
 
-	// --- Execute clab command ---
-	_, stderr, err := clab.RunClabCommand(c.Request.Context(), username, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
-	if stderr != "" {
-		// vxlan delete outputs info to stderr on success
-		log.Infof("DeleteVxlan stderr for superuser '%s' (prefix '%s'): %s", username, prefix, stderr)
-	}
+	deleted, err := svc.DeleteVxlan(ctx, prefix)
 	if err != nil {
-		// Check if the error is just "no interfaces found" which isn't really a failure
-		if strings.Contains(stderr, "no links found") || strings.Contains(err.Error(), "no links found") {
-			log.Infof("DeleteVxlan for superuser '%s': No VxLAN interfaces found with prefix '%s' to delete.", username, prefix)
-			c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("No VxLAN interfaces found with prefix '%s' to delete.", prefix)})
-			return
-		}
-
 		log.Errorf("DeleteVxlan failed for superuser '%s' (prefix '%s'): %v", username, prefix, err)
-		errMsg := fmt.Sprintf("Failed to delete VxLAN tunnels with prefix '%s': %s", prefix, err.Error())
-		if stderr != "" && (strings.Contains(stderr, "level=error") || strings.Contains(stderr, "failed")) {
-			errMsg += "\nstderr: " + stderr
-		} else if stderr != "" {
-			errMsg += "\nOutput:\n" + stderr
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: errMsg})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error: fmt.Sprintf("Failed to delete VxLAN tunnels with prefix '%s': %s", prefix, err.Error()),
+		})
 		return
 	}
 
-	log.Infof("Successfully deleted VxLAN tunnels with prefix '%s' for superuser '%s'", prefix, username)
-	// Construct message based on stderr which lists deleted interfaces
-	deletedMsg := fmt.Sprintf("VxLAN tunnels with prefix '%s' deleted successfully.", prefix)
-	if stderr != "" {
-		// Try to extract deleted interface names if possible, otherwise just include stderr
-		lines := strings.Split(strings.TrimSpace(stderr), "\n")
-		deletedInterfaces := []string{}
-		for _, line := range lines {
-			if strings.Contains(line, "Deleting VxLAN link") {
-				parts := strings.Fields(line)
-				if len(parts) >= 5 { // Look for the interface name, usually 5th word
-					deletedInterfaces = append(deletedInterfaces, parts[4])
-				}
-			}
-		}
-		if len(deletedInterfaces) > 0 {
-			deletedMsg = fmt.Sprintf("Successfully deleted VxLAN interface(s): %s", strings.Join(deletedInterfaces, ", "))
-		} else {
-			deletedMsg += fmt.Sprintf(" Output:\n%s", stderr) // Fallback if parsing fails
-		}
+	if len(deleted) == 0 {
+		log.Infof("DeleteVxlan for superuser '%s': No VxLAN interfaces found with prefix '%s' to delete.", username, prefix)
+		c.JSON(http.StatusOK, models.GenericSuccessResponse{
+			Message: fmt.Sprintf("No VxLAN interfaces found with prefix '%s' to delete.", prefix),
+		})
+		return
 	}
 
-	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: deletedMsg})
+	log.Infof("Successfully deleted VxLAN tunnels with prefix '%s' for superuser '%s': %v", prefix, username, deleted)
+	c.JSON(http.StatusOK, models.GenericSuccessResponse{
+		Message: fmt.Sprintf("Successfully deleted VxLAN interface(s): %s", strings.Join(deleted, ", ")),
+	})
 }
