@@ -31,26 +31,15 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Streams containerlab events in real-time. The response stays open until the client disconnects.\n\n**JSON format example** (default, returns NDJSON - one JSON object per line):\n` + "`" + `` + "`" + `` + "`" + `json\n{\"time\":1706918400,\"type\":\"container\",\"action\":\"start\",\"attributes\":{\"name\":\"clab-mylab-srl1\",\"lab\":\"mylab\",\"clab-node-name\":\"srl1\",\"clab-node-kind\":\"nokia_srlinux\"}}\n{\"time\":1706918405,\"type\":\"container\",\"action\":\"start\",\"attributes\":{\"name\":\"clab-mylab-srl2\",\"lab\":\"mylab\",\"clab-node-name\":\"srl2\",\"clab-node-kind\":\"nokia_srlinux\"}}\n` + "`" + `` + "`" + `` + "`" + `\n\n**Interface stats example** (interfaceStats=true):\n` + "`" + `` + "`" + `` + "`" + `json\n{\"time\":1706918410,\"type\":\"interface-stats\",\"action\":\"stats\",\"attributes\":{\"name\":\"clab-mylab-srl1\",\"lab\":\"mylab\",\"interface\":\"e1-1\",\"rx_bytes\":123456,\"tx_bytes\":654321}}\n` + "`" + `` + "`" + `` + "`" + `\n\n**Plain format example** (format=plain):\n` + "`" + `` + "`" + `` + "`" + `\n2024-02-03T10:30:00Z container start (name=clab-mylab-srl1, lab=mylab, kind=nokia_srlinux)\n2024-02-03T10:30:05Z container start (name=clab-mylab-srl2, lab=mylab, kind=nokia_srlinux)\n` + "`" + `` + "`" + `` + "`" + `",
+                "description": "Streams containerlab events in real time as NDJSON (one JSON object per line).\n\n**Notes**\n- The response stays open until the client disconnects.\n\n**Examples**\nNDJSON (one JSON object per line):\n` + "`" + `` + "`" + `` + "`" + `json\n{\"time\":1706918400,\"type\":\"container\",\"action\":\"start\",\"attributes\":{\"name\":\"clab-mylab-srl1\",\"lab\":\"mylab\",\"clab-node-name\":\"srl1\",\"clab-node-kind\":\"nokia_srlinux\"}}\n{\"time\":1706918405,\"type\":\"container\",\"action\":\"start\",\"attributes\":{\"name\":\"clab-mylab-srl2\",\"lab\":\"mylab\",\"clab-node-name\":\"srl2\",\"clab-node-kind\":\"nokia_srlinux\"}}\n` + "`" + `` + "`" + `` + "`" + `\n\n\nInterface stats (interfaceStats=true):\n` + "`" + `` + "`" + `` + "`" + `json\n{\"time\":1706918410,\"type\":\"interface-stats\",\"action\":\"stats\",\"attributes\":{\"name\":\"clab-mylab-srl1\",\"lab\":\"mylab\",\"interface\":\"e1-1\",\"rx_bytes\":123456,\"tx_bytes\":654321}}\n` + "`" + `` + "`" + `` + "`" + `",
                 "produces": [
-                    "application/json"
+                    "application/x-ndjson"
                 ],
                 "tags": [
                     "Events"
                 ],
-                "summary": "Stream Containerlab Events",
+                "summary": "Stream containerlab events",
                 "parameters": [
-                    {
-                        "enum": [
-                            "json",
-                            "plain"
-                        ],
-                        "type": "string",
-                        "default": "json",
-                        "description": "Output format ('json' or 'plain'). Default is 'json'.",
-                        "name": "format",
-                        "in": "query"
-                    },
                     {
                         "type": "boolean",
                         "default": false,
@@ -75,7 +64,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Event stream - returns newline-delimited events (plain text or NDJSON)",
+                        "description": "Event stream - NDJSON (one JSON object per line)",
                         "schema": {
                             "$ref": "#/definitions/models.EventResponse"
                         }
@@ -108,7 +97,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Generates a containerlab topology file based on CLOS definitions. Optionally deploys it, setting the owner to the authenticated user.\nDeployment is DENIED if a lab with the target name already exists.\nThe 'images' and 'licenses' fields expect a map where the key is the node 'kind' and the value is the corresponding image or license path (e.g., {\"nokia_srlinux\": \"ghcr.io/...\"}).\nIf Deploy=true, the topology is saved to the user's ~/.clab/\u003clabName\u003e/ directory before deployment, and the 'outputFile' field is ignored.\nIf Deploy=false and 'outputFile' is empty, YAML is returned directly.\nIf Deploy=false and 'outputFile' is set, the file is saved to that path on the server (requires API server write permissions).",
+                "description": "Generates a containerlab topology from CLOS definitions and can optionally deploy it for the authenticated user.\n\n**Notes**\n- Deployment is denied if a lab with the target name already exists.\n- The ` + "`" + `images` + "`" + ` and ` + "`" + `licenses` + "`" + ` fields map node kind to image or license path (e.g., {\"nokia_srlinux\":\"ghcr.io/...\"}).\n- When ` + "`" + `deploy=true` + "`" + `, the topology is saved to the user's ` + "`" + `~/.clab/\u003clabName\u003e/` + "`" + ` directory and ` + "`" + `outputFile` + "`" + ` is ignored.\n- When ` + "`" + `deploy=false` + "`" + ` and ` + "`" + `outputFile` + "`" + ` is empty, YAML is returned in the response.\n- When ` + "`" + `deploy=false` + "`" + ` and ` + "`" + `outputFile` + "`" + ` is set, the file is saved to that path on the server (requires API server write permissions).",
                 "consumes": [
                     "application/json"
                 ],
@@ -118,7 +107,7 @@ const docTemplate = `{
                 "tags": [
                     "Topology Generation"
                 ],
-                "summary": "Generate Topology",
+                "summary": "Generate containerlab topology",
                 "parameters": [
                     {
                         "description": "Topology generation parameters. The 'images' field maps kind to image path.",
@@ -171,14 +160,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns detailed CPU, memory, and disk metrics for the API server. Requires SUPERUSER privileges.",
+                "description": "Returns detailed CPU, memory, and disk metrics for the API server. Requires superuser privileges.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Health"
                 ],
-                "summary": "Get Detailed System Metrics",
+                "summary": "Get system metrics",
                 "responses": {
                     "200": {
                         "description": "System metrics",
@@ -214,14 +203,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get details about all running labs (filtered by owner unless superuser).",
+                "description": "Returns details for all running labs.\n\n**Notes**\n- Results are filtered by owner unless the caller is a superuser.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Labs"
                 ],
-                "summary": "List All Labs",
+                "summary": "List labs",
                 "responses": {
                     "200": {
                         "description": "All labs",
@@ -249,7 +238,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deploys a containerlab topology. Requires EITHER 'topologyContent' OR 'topologySourceUrl' in the request body, but not both.",
+                "description": "Deploys a containerlab topology.\n\n**Notes**\n- The request body must include either ` + "`" + `topologyContent` + "`" + ` or ` + "`" + `topologySourceUrl` + "`" + ` (not both).",
                 "consumes": [
                     "application/json"
                 ],
@@ -259,7 +248,7 @@ const docTemplate = `{
                 "tags": [
                     "Labs"
                 ],
-                "summary": "Deploy Lab",
+                "summary": "Deploy lab",
                 "parameters": [
                     {
                         "description": "Deployment Source",
@@ -269,6 +258,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/models.DeployRequest"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Override lab name when deploying from a URL (optional)",
+                        "name": "labNameOverride",
+                        "in": "query"
                     },
                     {
                         "type": "boolean",
@@ -364,7 +359,7 @@ const docTemplate = `{
                 "tags": [
                     "Labs"
                 ],
-                "summary": "Deploy Lab from Archive",
+                "summary": "Deploy lab from archive",
                 "parameters": [
                     {
                         "type": "file",
@@ -384,6 +379,36 @@ const docTemplate = `{
                         "type": "boolean",
                         "description": "Allow overwriting an existing lab",
                         "name": "reconfigure",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit concurrent workers",
+                        "name": "maxWorkers",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Custom Go template file for topology data export",
+                        "name": "exportTemplate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated list of node names to deploy",
+                        "name": "nodeFilter",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Skip post-deploy actions",
+                        "name": "skipPostDeploy",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Skip setting extended ACLs on lab directory",
+                        "name": "skipLabdirAcl",
                         "in": "query"
                     }
                 ],
@@ -434,14 +459,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get details about a specific running lab.",
+                "description": "Returns details for a specific running lab.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Labs"
                 ],
-                "summary": "Inspect Lab",
+                "summary": "Inspect lab",
                 "parameters": [
                     {
                         "type": "string",
@@ -449,12 +474,6 @@ const docTemplate = `{
                         "name": "labName",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Include full container details",
-                        "name": "details",
-                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -499,14 +518,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Redeploys a lab by name (destroy + deploy).",
+                "description": "Redeploys a lab by name.\n\n**Notes**\n- This operation destroys the lab and then deploys it again.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Labs"
                 ],
-                "summary": "Redeploy Lab",
+                "summary": "Redeploy lab",
                 "parameters": [
                     {
                         "type": "string",
@@ -514,6 +533,48 @@ const docTemplate = `{
                         "name": "labName",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Remove lab directory after destroy",
+                        "name": "cleanup",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Attempt graceful shutdown",
+                        "name": "graceful",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Keep the management network",
+                        "name": "keepMgmtNet",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit concurrent workers",
+                        "name": "maxWorkers",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Custom Go template file for topology data export",
+                        "name": "exportTemplate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Skip post-deploy actions",
+                        "name": "skipPostDeploy",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Skip setting extended ACLs on lab directory",
+                        "name": "skipLabdirAcl",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -555,14 +616,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Destroys a lab by name, checking ownership.",
+                "description": "Destroys a lab by name after verifying ownership.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Labs"
                 ],
-                "summary": "Destroy Lab",
+                "summary": "Destroy lab",
                 "parameters": [
                     {
                         "type": "string",
@@ -598,7 +659,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Lab destroyed successfully",
                         "schema": {
                             "$ref": "#/definitions/models.GenericSuccessResponse"
                         }
@@ -637,7 +698,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Executes a command on nodes within a specific lab.",
+                "description": "Executes a command on nodes within a lab.",
                 "consumes": [
                     "application/json"
                 ],
@@ -647,7 +708,7 @@ const docTemplate = `{
                 "tags": [
                     "Labs"
                 ],
-                "summary": "Execute Command in Lab",
+                "summary": "Execute command in lab",
                 "parameters": [
                     {
                         "type": "string",
@@ -660,12 +721,6 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Execute only on this specific node",
                         "name": "nodeFilter",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Output format ('plain' or 'json')",
-                        "name": "format",
                         "in": "query"
                     },
                     {
@@ -719,14 +774,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get network interface details for nodes in a specific lab.",
+                "description": "Returns interface details for nodes in a lab.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Labs"
                 ],
-                "summary": "List Lab Interfaces",
+                "summary": "List lab interfaces",
                 "parameters": [
                     {
                         "type": "string",
@@ -786,16 +841,15 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get logs from a specific lab node (container). When follow=true, logs will stream until client disconnects or 30-minute timeout.",
+                "description": "Returns logs for a lab node.\n\n**Notes**\n- When ` + "`" + `follow=true` + "`" + `, the response streams as NDJSON (one JSON object per line) until the client disconnects or the 30-minute timeout.",
                 "produces": [
-                    "text/plain",
                     "application/json",
-                    "application/octet-stream"
+                    "application/x-ndjson"
                 ],
                 "tags": [
                     "Logs"
                 ],
-                "summary": "Get Node Logs",
+                "summary": "Get node logs",
                 "parameters": [
                     {
                         "type": "string",
@@ -812,27 +866,22 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Number of lines to show from the end of logs (default all)",
+                        "type": "string",
+                        "default": "all",
+                        "description": "Number of lines to show from the end of logs (default all). Use an integer or 'all'.",
                         "name": "tail",
                         "in": "query"
                     },
                     {
                         "type": "boolean",
-                        "description": "Follow log output (stream logs). Note: In Swagger UI, streaming may not display correctly.",
+                        "description": "Follow log output (stream logs as NDJSON). Note: In Swagger UI, streaming may not display correctly.",
                         "name": "follow",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Output format ('plain' or 'json'). Default is 'plain'. When follow=true, only 'plain' format is supported.",
-                        "name": "format",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Container logs (when format=json)",
+                        "description": "Container logs (follow=false). When follow=true, response is NDJSON stream of LogLine objects.",
                         "schema": {
                             "$ref": "#/definitions/models.LogsResponse"
                         }
@@ -877,7 +926,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates temporary SSH access to a specific lab node, returning connection details",
+                "description": "Creates temporary SSH access to a lab node and returns connection details.",
                 "consumes": [
                     "application/json"
                 ],
@@ -887,7 +936,7 @@ const docTemplate = `{
                 "tags": [
                     "SSH Access"
                 ],
-                "summary": "Request SSH Access to Lab Node",
+                "summary": "Request SSH access to lab node",
                 "parameters": [
                     {
                         "type": "string",
@@ -966,7 +1015,7 @@ const docTemplate = `{
                 "tags": [
                     "Labs"
                 ],
-                "summary": "Save Lab Configuration",
+                "summary": "Save lab configuration",
                 "parameters": [
                     {
                         "type": "string",
@@ -1023,14 +1072,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Lists active SSH sessions. For regular users, shows only their sessions. Superusers can see all sessions by using the 'all' query parameter.",
+                "description": "Returns active SSH sessions.\n\n**Notes**\n- Regular users see only their sessions.\n- Superusers can include all sessions via the ` + "`" + `all` + "`" + ` query parameter.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "SSH Access"
                 ],
-                "summary": "List SSH Sessions",
+                "summary": "List SSH sessions",
                 "parameters": [
                     {
                         "type": "boolean",
@@ -1071,14 +1120,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Terminates a specific SSH session by port",
+                "description": "Terminates a specific SSH session by port.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "SSH Access"
                 ],
-                "summary": "Terminate SSH Session",
+                "summary": "Terminate SSH session",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1135,7 +1184,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a CA certificate and private key. Requires SUPERUSER privileges. Files are stored in the user's ~/.clab/certs/\u003cca_name\u003e/ directory on the server.",
+                "description": "Creates a CA certificate and private key. Requires superuser privileges.\n\n**Notes**\n- Files are stored in the user's ` + "`" + `~/.clab/certs/\u003cca_name\u003e/` + "`" + ` directory on the server.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1145,7 +1194,7 @@ const docTemplate = `{
                 "tags": [
                     "Tools - Certificates"
                 ],
-                "summary": "Create Certificate Authority (CA)",
+                "summary": "Create certificate authority (CA)",
                 "parameters": [
                     {
                         "description": "CA Generation Parameters",
@@ -1198,7 +1247,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a certificate/key and signs it with a previously generated CA. Requires SUPERUSER privileges. Files are stored in the user's ~/.clab/certs/\u003cca_name\u003e/ directory.",
+                "description": "Creates a certificate/key and signs it with a previously generated CA. Requires superuser privileges.\n\n**Notes**\n- Files are stored in the user's ` + "`" + `~/.clab/certs/\u003cca_name\u003e/` + "`" + ` directory.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1208,7 +1257,7 @@ const docTemplate = `{
                 "tags": [
                     "Tools - Certificates"
                 ],
-                "summary": "Sign Certificate",
+                "summary": "Sign certificate",
                 "parameters": [
                     {
                         "description": "Certificate Signing Parameters",
@@ -1267,7 +1316,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Disables TX checksum offload for the eth0 interface of a specific container. Requires SUPERUSER privileges.",
+                "description": "Disables TX checksum offload on the eth0 interface of a container. Requires superuser privileges.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1277,7 +1326,7 @@ const docTemplate = `{
                 "tags": [
                     "Tools"
                 ],
-                "summary": "Disable TX Checksum Offload",
+                "summary": "Disable TX checksum offload",
                 "parameters": [
                     {
                         "description": "Container Name",
@@ -1336,7 +1385,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a virtual Ethernet (vEth) pair between two specified endpoints (container, host, bridge, ovs-bridge). Requires SUPERUSER privileges.",
+                "description": "Creates a virtual Ethernet (vEth) pair between two endpoints (container, host, bridge, or ovs-bridge). Requires superuser privileges.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1346,7 +1395,7 @@ const docTemplate = `{
                 "tags": [
                     "Tools - vEth"
                 ],
-                "summary": "Create vEth Pair",
+                "summary": "Create vEth pair",
                 "parameters": [
                     {
                         "description": "vEth Creation Parameters",
@@ -1399,7 +1448,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a VxLAN tunnel interface and sets up tc rules for traffic redirection. Requires SUPERUSER privileges.",
+                "description": "Creates a VxLAN tunnel interface and sets up tc rules for traffic redirection. Requires superuser privileges.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1409,7 +1458,7 @@ const docTemplate = `{
                 "tags": [
                     "Tools - VxLAN"
                 ],
-                "summary": "Create VxLAN Tunnel",
+                "summary": "Create VxLAN tunnel",
                 "parameters": [
                     {
                         "description": "VxLAN Creation Parameters",
@@ -1460,14 +1509,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deletes VxLAN tunnel interfaces matching a given prefix (default: 'vx-'). Requires SUPERUSER privileges.",
+                "description": "Deletes VxLAN tunnel interfaces that match the provided prefix (default: ` + "`" + `vx-` + "`" + `). Requires superuser privileges.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Tools - VxLAN"
                 ],
-                "summary": "Delete VxLAN Tunnels by Prefix",
+                "summary": "Delete VxLAN tunnels by prefix",
                 "parameters": [
                     {
                         "type": "string",
@@ -1518,14 +1567,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a list of all users in the system. Requires superuser privileges.",
+                "description": "Returns a list of system users. Requires superuser privileges.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Users"
                 ],
-                "summary": "List All Users",
+                "summary": "List users",
                 "responses": {
                     "200": {
                         "description": "List of user details",
@@ -1562,7 +1611,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new system user. Requires superuser privileges.",
+                "description": "Creates a new system user. Requires superuser privileges.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1572,7 +1621,7 @@ const docTemplate = `{
                 "tags": [
                     "Users"
                 ],
-                "summary": "Create User",
+                "summary": "Create user",
                 "parameters": [
                     {
                         "description": "User creation details",
@@ -1631,14 +1680,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get detailed information about a specific user. Requires superuser privileges or the user's own account.",
+                "description": "Returns details for a specific user. Requires superuser privileges or the user's own account.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Users"
                 ],
-                "summary": "Get User Details",
+                "summary": "Get user details",
                 "parameters": [
                     {
                         "type": "string",
@@ -1687,7 +1736,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update information for an existing user. Requires superuser privileges or the user's own account.",
+                "description": "Updates an existing user. Requires superuser privileges or the user's own account.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1697,7 +1746,7 @@ const docTemplate = `{
                 "tags": [
                     "Users"
                 ],
-                "summary": "Update User",
+                "summary": "Update user",
                 "parameters": [
                     {
                         "type": "string",
@@ -1761,14 +1810,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Delete a user from the system. Requires superuser privileges.",
+                "description": "Deletes a user from the system. Requires superuser privileges.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Users"
                 ],
-                "summary": "Delete User",
+                "summary": "Delete user",
                 "parameters": [
                     {
                         "type": "string",
@@ -1819,7 +1868,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Change password for a user. Requires superuser privileges or the user's own account.",
+                "description": "Changes a user's password. Requires superuser privileges or the user's own account.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1829,7 +1878,7 @@ const docTemplate = `{
                 "tags": [
                     "Users"
                 ],
-                "summary": "Change User Password",
+                "summary": "Change user password",
                 "parameters": [
                     {
                         "type": "string",
@@ -1895,14 +1944,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Retrieves version information about the containerlab library in use.",
+                "description": "Returns version information for the containerlab library in use.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Version"
                 ],
-                "summary": "Get Containerlab Version",
+                "summary": "Get containerlab version",
                 "responses": {
                     "200": {
                         "description": "Containerlab version details",
@@ -1932,14 +1981,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "This endpoint has been deprecated. Version checks are no longer supported when using containerlab as a library.",
+                "description": "**Deprecated**\nVersion checks are not supported when containerlab runs as a library.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Version"
                 ],
-                "summary": "Check for Containerlab Updates",
+                "summary": "Check containerlab updates",
                 "responses": {
                     "200": {
                         "description": "Result of the version check",
@@ -1958,14 +2007,14 @@ const docTemplate = `{
         },
         "/health": {
             "get": {
-                "description": "Returns basic health status of the API server.",
+                "description": "Returns basic health status for the API server.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Health"
                 ],
-                "summary": "Get API Server Basic Health",
+                "summary": "Get API server health",
                 "responses": {
                     "200": {
                         "description": "Basic health information",
@@ -1978,7 +2027,7 @@ const docTemplate = `{
         },
         "/login": {
             "post": {
-                "description": "Authenticate user and return JWT token",
+                "description": "Authenticates a user and returns a JWT token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1988,7 +2037,7 @@ const docTemplate = `{
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Login",
+                "summary": "Log in",
                 "parameters": [
                     {
                         "description": "User Credentials",
@@ -2002,7 +2051,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "JWT token",
                         "schema": {
                             "$ref": "#/definitions/models.LoginResponse"
                         }
@@ -2521,7 +2570,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "deployOutput": {
-                    "description": "The output from the deploy command (only if Deploy=true). Can be JSON or plain text.\nUse swaggertype:\"object\" to represent json.RawMessage in Swagger.",
+                    "description": "The output from the deploy command (only if Deploy=true). JSON object keyed by lab name.\nUse swaggertype:\"object\" to represent json.RawMessage in Swagger.",
                     "type": "object"
                 },
                 "message": {

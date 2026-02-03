@@ -371,7 +371,7 @@ definitions:
     properties:
       deployOutput:
         description: |-
-          The output from the deploy command (only if Deploy=true). Can be JSON or plain text.
+          The output from the deploy command (only if Deploy=true). JSON object keyed by lab name.
           Use swaggertype:"object" to represent json.RawMessage in Swagger.
         type: object
       message:
@@ -740,33 +740,24 @@ paths:
   /api/v1/events:
     get:
       description: |-
-        Streams containerlab events in real-time. The response stays open until the client disconnects.
+        Streams containerlab events in real time as NDJSON (one JSON object per line).
 
-        **JSON format example** (default, returns NDJSON - one JSON object per line):
+        **Notes**
+        - The response stays open until the client disconnects.
+
+        **Examples**
+        NDJSON (one JSON object per line):
         ```json
         {"time":1706918400,"type":"container","action":"start","attributes":{"name":"clab-mylab-srl1","lab":"mylab","clab-node-name":"srl1","clab-node-kind":"nokia_srlinux"}}
         {"time":1706918405,"type":"container","action":"start","attributes":{"name":"clab-mylab-srl2","lab":"mylab","clab-node-name":"srl2","clab-node-kind":"nokia_srlinux"}}
         ```
 
-        **Interface stats example** (interfaceStats=true):
+
+        Interface stats (interfaceStats=true):
         ```json
         {"time":1706918410,"type":"interface-stats","action":"stats","attributes":{"name":"clab-mylab-srl1","lab":"mylab","interface":"e1-1","rx_bytes":123456,"tx_bytes":654321}}
         ```
-
-        **Plain format example** (format=plain):
-        ```
-        2024-02-03T10:30:00Z container start (name=clab-mylab-srl1, lab=mylab, kind=nokia_srlinux)
-        2024-02-03T10:30:05Z container start (name=clab-mylab-srl2, lab=mylab, kind=nokia_srlinux)
-        ```
       parameters:
-      - default: json
-        description: Output format ('json' or 'plain'). Default is 'json'.
-        enum:
-        - json
-        - plain
-        in: query
-        name: format
-        type: string
       - default: false
         description: Include initial snapshot events when the stream starts.
         in: query
@@ -784,11 +775,10 @@ paths:
         name: interfaceStatsInterval
         type: string
       produces:
-      - application/json
+      - application/x-ndjson
       responses:
         "200":
-          description: Event stream - returns newline-delimited events (plain text
-            or NDJSON)
+          description: Event stream - NDJSON (one JSON object per line)
           schema:
             $ref: '#/definitions/models.EventResponse'
         "400":
@@ -805,7 +795,7 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Stream Containerlab Events
+      summary: Stream containerlab events
       tags:
       - Events
   /api/v1/generate:
@@ -813,12 +803,14 @@ paths:
       consumes:
       - application/json
       description: |-
-        Generates a containerlab topology file based on CLOS definitions. Optionally deploys it, setting the owner to the authenticated user.
-        Deployment is DENIED if a lab with the target name already exists.
-        The 'images' and 'licenses' fields expect a map where the key is the node 'kind' and the value is the corresponding image or license path (e.g., {"nokia_srlinux": "ghcr.io/..."}).
-        If Deploy=true, the topology is saved to the user's ~/.clab/<labName>/ directory before deployment, and the 'outputFile' field is ignored.
-        If Deploy=false and 'outputFile' is empty, YAML is returned directly.
-        If Deploy=false and 'outputFile' is set, the file is saved to that path on the server (requires API server write permissions).
+        Generates a containerlab topology from CLOS definitions and can optionally deploy it for the authenticated user.
+
+        **Notes**
+        - Deployment is denied if a lab with the target name already exists.
+        - The `images` and `licenses` fields map node kind to image or license path (e.g., {"nokia_srlinux":"ghcr.io/..."}).
+        - When `deploy=true`, the topology is saved to the user's `~/.clab/<labName>/` directory and `outputFile` is ignored.
+        - When `deploy=false` and `outputFile` is empty, YAML is returned in the response.
+        - When `deploy=false` and `outputFile` is set, the file is saved to that path on the server (requires API server write permissions).
       parameters:
       - description: Topology generation parameters. The 'images' field maps kind
           to image path.
@@ -852,13 +844,13 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Generate Topology
+      summary: Generate containerlab topology
       tags:
       - Topology Generation
   /api/v1/health/metrics:
     get:
       description: Returns detailed CPU, memory, and disk metrics for the API server.
-        Requires SUPERUSER privileges.
+        Requires superuser privileges.
       produces:
       - application/json
       responses:
@@ -880,12 +872,16 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Get Detailed System Metrics
+      summary: Get system metrics
       tags:
       - Health
   /api/v1/labs:
     get:
-      description: Get details about all running labs (filtered by owner unless superuser).
+      description: |-
+        Returns details for all running labs.
+
+        **Notes**
+        - Results are filtered by owner unless the caller is a superuser.
       produces:
       - application/json
       responses:
@@ -903,14 +899,17 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List All Labs
+      summary: List labs
       tags:
       - Labs
     post:
       consumes:
       - application/json
-      description: Deploys a containerlab topology. Requires EITHER 'topologyContent'
-        OR 'topologySourceUrl' in the request body, but not both.
+      description: |-
+        Deploys a containerlab topology.
+
+        **Notes**
+        - The request body must include either `topologyContent` or `topologySourceUrl` (not both).
       parameters:
       - description: Deployment Source
         in: body
@@ -918,6 +917,10 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/models.DeployRequest'
+      - description: Override lab name when deploying from a URL (optional)
+        in: query
+        name: labNameOverride
+        type: string
       - description: Allow overwriting an existing lab IF owned by the user
         in: query
         name: reconfigure
@@ -971,12 +974,12 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Deploy Lab
+      summary: Deploy lab
       tags:
       - Labs
   /api/v1/labs/{labName}:
     delete:
-      description: Destroys a lab by name, checking ownership.
+      description: Destroys a lab by name after verifying ownership.
       parameters:
       - description: Name of the lab to destroy
         in: path
@@ -1003,7 +1006,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Lab destroyed successfully
           schema:
             $ref: '#/definitions/models.GenericSuccessResponse'
         "400":
@@ -1024,21 +1027,17 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Destroy Lab
+      summary: Destroy lab
       tags:
       - Labs
     get:
-      description: Get details about a specific running lab.
+      description: Returns details for a specific running lab.
       parameters:
       - description: Name of the lab to inspect
         in: path
         name: labName
         required: true
         type: string
-      - description: Include full container details
-        in: query
-        name: details
-        type: boolean
       produces:
       - application/json
       responses:
@@ -1066,17 +1065,49 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Inspect Lab
+      summary: Inspect lab
       tags:
       - Labs
     put:
-      description: Redeploys a lab by name (destroy + deploy).
+      description: |-
+        Redeploys a lab by name.
+
+        **Notes**
+        - This operation destroys the lab and then deploys it again.
       parameters:
       - description: Name of the lab to redeploy
         in: path
         name: labName
         required: true
         type: string
+      - description: Remove lab directory after destroy
+        in: query
+        name: cleanup
+        type: boolean
+      - description: Attempt graceful shutdown
+        in: query
+        name: graceful
+        type: boolean
+      - description: Keep the management network
+        in: query
+        name: keepMgmtNet
+        type: boolean
+      - description: Limit concurrent workers
+        in: query
+        name: maxWorkers
+        type: integer
+      - description: Custom Go template file for topology data export
+        in: query
+        name: exportTemplate
+        type: string
+      - description: Skip post-deploy actions
+        in: query
+        name: skipPostDeploy
+        type: boolean
+      - description: Skip setting extended ACLs on lab directory
+        in: query
+        name: skipLabdirAcl
+        type: boolean
       produces:
       - application/json
       responses:
@@ -1102,14 +1133,14 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Redeploy Lab
+      summary: Redeploy lab
       tags:
       - Labs
   /api/v1/labs/{labName}/exec:
     post:
       consumes:
       - application/json
-      description: Executes a command on nodes within a specific lab.
+      description: Executes a command on nodes within a lab.
       parameters:
       - description: Name of the lab
         in: path
@@ -1119,10 +1150,6 @@ paths:
       - description: Execute only on this specific node
         in: query
         name: nodeFilter
-        type: string
-      - description: Output format ('plain' or 'json')
-        in: query
-        name: format
         type: string
       - description: Command to execute
         in: body
@@ -1155,12 +1182,12 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Execute Command in Lab
+      summary: Execute command in lab
       tags:
       - Labs
   /api/v1/labs/{labName}/interfaces:
     get:
-      description: Get network interface details for nodes in a specific lab.
+      description: Returns interface details for nodes in a lab.
       parameters:
       - description: Name of the lab
         in: path
@@ -1198,13 +1225,16 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List Lab Interfaces
+      summary: List lab interfaces
       tags:
       - Labs
   /api/v1/labs/{labName}/nodes/{nodeName}/logs:
     get:
-      description: Get logs from a specific lab node (container). When follow=true,
-        logs will stream until client disconnects or 30-minute timeout.
+      description: |-
+        Returns logs for a lab node.
+
+        **Notes**
+        - When `follow=true`, the response streams as NDJSON (one JSON object per line) until the client disconnects or the 30-minute timeout.
       parameters:
       - description: Name of the lab
         in: path
@@ -1216,27 +1246,24 @@ paths:
         name: nodeName
         required: true
         type: string
-      - description: Number of lines to show from the end of logs (default all)
+      - default: all
+        description: Number of lines to show from the end of logs (default all). Use
+          an integer or 'all'.
         in: query
         name: tail
-        type: integer
-      - description: 'Follow log output (stream logs). Note: In Swagger UI, streaming
-          may not display correctly.'
+        type: string
+      - description: 'Follow log output (stream logs as NDJSON). Note: In Swagger
+          UI, streaming may not display correctly.'
         in: query
         name: follow
         type: boolean
-      - description: Output format ('plain' or 'json'). Default is 'plain'. When follow=true,
-          only 'plain' format is supported.
-        in: query
-        name: format
-        type: string
       produces:
-      - text/plain
       - application/json
-      - application/octet-stream
+      - application/x-ndjson
       responses:
         "200":
-          description: Container logs (when format=json)
+          description: Container logs (follow=false). When follow=true, response is
+            NDJSON stream of LogLine objects.
           schema:
             $ref: '#/definitions/models.LogsResponse'
         "400":
@@ -1261,15 +1288,15 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Get Node Logs
+      summary: Get node logs
       tags:
       - Logs
   /api/v1/labs/{labName}/nodes/{nodeName}/ssh:
     post:
       consumes:
       - application/json
-      description: Creates temporary SSH access to a specific lab node, returning
-        connection details
+      description: Creates temporary SSH access to a lab node and returns connection
+        details.
       parameters:
       - description: Lab name
         in: path
@@ -1315,7 +1342,7 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Request SSH Access to Lab Node
+      summary: Request SSH access to lab node
       tags:
       - SSH Access
   /api/v1/labs/{labName}/save:
@@ -1356,7 +1383,7 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Save Lab Configuration
+      summary: Save lab configuration
       tags:
       - Labs
   /api/v1/labs/archive:
@@ -1378,6 +1405,26 @@ paths:
       - description: Allow overwriting an existing lab
         in: query
         name: reconfigure
+        type: boolean
+      - description: Limit concurrent workers
+        in: query
+        name: maxWorkers
+        type: integer
+      - description: Custom Go template file for topology data export
+        in: query
+        name: exportTemplate
+        type: string
+      - description: Comma-separated list of node names to deploy
+        in: query
+        name: nodeFilter
+        type: string
+      - description: Skip post-deploy actions
+        in: query
+        name: skipPostDeploy
+        type: boolean
+      - description: Skip setting extended ACLs on lab directory
+        in: query
+        name: skipLabdirAcl
         type: boolean
       produces:
       - application/json
@@ -1408,13 +1455,17 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Deploy Lab from Archive
+      summary: Deploy lab from archive
       tags:
       - Labs
   /api/v1/ssh/sessions:
     get:
-      description: Lists active SSH sessions. For regular users, shows only their
-        sessions. Superusers can see all sessions by using the 'all' query parameter.
+      description: |-
+        Returns active SSH sessions.
+
+        **Notes**
+        - Regular users see only their sessions.
+        - Superusers can include all sessions via the `all` query parameter.
       parameters:
       - description: 'If true and user is superuser, shows sessions for all users
           (default: false)'
@@ -1440,12 +1491,12 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List SSH Sessions
+      summary: List SSH sessions
       tags:
       - SSH Access
   /api/v1/ssh/sessions/{port}:
     delete:
-      description: Terminates a specific SSH session by port
+      description: Terminates a specific SSH session by port.
       parameters:
       - description: SSH session port to terminate
         in: path
@@ -1481,15 +1532,18 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Terminate SSH Session
+      summary: Terminate SSH session
       tags:
       - SSH Access
   /api/v1/tools/certs/ca:
     post:
       consumes:
       - application/json
-      description: Creates a CA certificate and private key. Requires SUPERUSER privileges.
-        Files are stored in the user's ~/.clab/certs/<ca_name>/ directory on the server.
+      description: |-
+        Creates a CA certificate and private key. Requires superuser privileges.
+
+        **Notes**
+        - Files are stored in the user's `~/.clab/certs/<ca_name>/` directory on the server.
       parameters:
       - description: CA Generation Parameters
         in: body
@@ -1522,16 +1576,18 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Create Certificate Authority (CA)
+      summary: Create certificate authority (CA)
       tags:
       - Tools - Certificates
   /api/v1/tools/certs/sign:
     post:
       consumes:
       - application/json
-      description: Creates a certificate/key and signs it with a previously generated
-        CA. Requires SUPERUSER privileges. Files are stored in the user's ~/.clab/certs/<ca_name>/
-        directory.
+      description: |-
+        Creates a certificate/key and signs it with a previously generated CA. Requires superuser privileges.
+
+        **Notes**
+        - Files are stored in the user's `~/.clab/certs/<ca_name>/` directory.
       parameters:
       - description: Certificate Signing Parameters
         in: body
@@ -1568,15 +1624,15 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Sign Certificate
+      summary: Sign certificate
       tags:
       - Tools - Certificates
   /api/v1/tools/disable-tx-offload:
     post:
       consumes:
       - application/json
-      description: Disables TX checksum offload for the eth0 interface of a specific
-        container. Requires SUPERUSER privileges.
+      description: Disables TX checksum offload on the eth0 interface of a container.
+        Requires superuser privileges.
       parameters:
       - description: Container Name
         in: body
@@ -1613,15 +1669,15 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Disable TX Checksum Offload
+      summary: Disable TX checksum offload
       tags:
       - Tools
   /api/v1/tools/veth:
     post:
       consumes:
       - application/json
-      description: Creates a virtual Ethernet (vEth) pair between two specified endpoints
-        (container, host, bridge, ovs-bridge). Requires SUPERUSER privileges.
+      description: Creates a virtual Ethernet (vEth) pair between two endpoints (container,
+        host, bridge, or ovs-bridge). Requires superuser privileges.
       parameters:
       - description: vEth Creation Parameters
         in: body
@@ -1654,13 +1710,13 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Create vEth Pair
+      summary: Create vEth pair
       tags:
       - Tools - vEth
   /api/v1/tools/vxlan:
     delete:
-      description: 'Deletes VxLAN tunnel interfaces matching a given prefix (default:
-        ''vx-''). Requires SUPERUSER privileges.'
+      description: 'Deletes VxLAN tunnel interfaces that match the provided prefix
+        (default: `vx-`). Requires superuser privileges.'
       parameters:
       - default: vx-
         description: Prefix of VxLAN interfaces to delete
@@ -1692,14 +1748,14 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Delete VxLAN Tunnels by Prefix
+      summary: Delete VxLAN tunnels by prefix
       tags:
       - Tools - VxLAN
     post:
       consumes:
       - application/json
       description: Creates a VxLAN tunnel interface and sets up tc rules for traffic
-        redirection. Requires SUPERUSER privileges.
+        redirection. Requires superuser privileges.
       parameters:
       - description: VxLAN Creation Parameters
         in: body
@@ -1732,12 +1788,12 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Create VxLAN Tunnel
+      summary: Create VxLAN tunnel
       tags:
       - Tools - VxLAN
   /api/v1/users:
     get:
-      description: Get a list of all users in the system. Requires superuser privileges.
+      description: Returns a list of system users. Requires superuser privileges.
       produces:
       - application/json
       responses:
@@ -1761,13 +1817,13 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List All Users
+      summary: List users
       tags:
       - Users
     post:
       consumes:
       - application/json
-      description: Create a new system user. Requires superuser privileges.
+      description: Creates a new system user. Requires superuser privileges.
       parameters:
       - description: User creation details
         in: body
@@ -1804,12 +1860,12 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Create User
+      summary: Create user
       tags:
       - Users
   /api/v1/users/{username}:
     delete:
-      description: Delete a user from the system. Requires superuser privileges.
+      description: Deletes a user from the system. Requires superuser privileges.
       parameters:
       - description: Username to delete
         in: path
@@ -1841,12 +1897,12 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Delete User
+      summary: Delete user
       tags:
       - Users
     get:
-      description: Get detailed information about a specific user. Requires superuser
-        privileges or the user's own account.
+      description: Returns details for a specific user. Requires superuser privileges
+        or the user's own account.
       parameters:
       - description: Username to get details for
         in: path
@@ -1878,14 +1934,14 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Get User Details
+      summary: Get user details
       tags:
       - Users
     put:
       consumes:
       - application/json
-      description: Update information for an existing user. Requires superuser privileges
-        or the user's own account.
+      description: Updates an existing user. Requires superuser privileges or the
+        user's own account.
       parameters:
       - description: Username to update
         in: path
@@ -1927,14 +1983,14 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Update User
+      summary: Update user
       tags:
       - Users
   /api/v1/users/{username}/password:
     put:
       consumes:
       - application/json
-      description: Change password for a user. Requires superuser privileges or the
+      description: Changes a user's password. Requires superuser privileges or the
         user's own account.
       parameters:
       - description: Username to change password for
@@ -1977,13 +2033,12 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Change User Password
+      summary: Change user password
       tags:
       - Users
   /api/v1/version:
     get:
-      description: Retrieves version information about the containerlab library in
-        use.
+      description: Returns version information for the containerlab library in use.
       produces:
       - application/json
       responses:
@@ -2001,13 +2056,14 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Get Containerlab Version
+      summary: Get containerlab version
       tags:
       - Version
   /api/v1/version/check:
     get:
-      description: This endpoint has been deprecated. Version checks are no longer
-        supported when using containerlab as a library.
+      description: |-
+        **Deprecated**
+        Version checks are not supported when containerlab runs as a library.
       produces:
       - application/json
       responses:
@@ -2021,12 +2077,12 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Check for Containerlab Updates
+      summary: Check containerlab updates
       tags:
       - Version
   /health:
     get:
-      description: Returns basic health status of the API server.
+      description: Returns basic health status for the API server.
       produces:
       - application/json
       responses:
@@ -2034,14 +2090,14 @@ paths:
           description: Basic health information
           schema:
             $ref: '#/definitions/models.HealthResponse'
-      summary: Get API Server Basic Health
+      summary: Get API server health
       tags:
       - Health
   /login:
     post:
       consumes:
       - application/json
-      description: Authenticate user and return JWT token
+      description: Authenticates a user and returns a JWT token.
       parameters:
       - description: User Credentials
         in: body
@@ -2053,7 +2109,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: JWT token
           schema:
             $ref: '#/definitions/models.LoginResponse'
         "400":
@@ -2068,7 +2124,7 @@ paths:
           description: Internal server error (PAM config?)
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-      summary: Login
+      summary: Log in
       tags:
       - Auth
 schemes:

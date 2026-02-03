@@ -10,8 +10,8 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
 
-// @Summary Get Containerlab Version
-// @Description Retrieves version information about the containerlab library in use.
+// @Summary Get containerlab version
+// @Description Returns version information for the containerlab library in use.
 // @Tags Version
 // @Security BearerAuth
 // @Produce json
@@ -31,8 +31,9 @@ func GetVersionHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, models.VersionResponse{VersionInfo: versionInfo})
 }
 
-// @Summary Check for Containerlab Updates
-// @Description This endpoint has been deprecated. Version checks are no longer supported when using containerlab as a library.
+// @Summary Check containerlab updates
+// @Description **Deprecated**
+// @Description Version checks are not supported when containerlab runs as a library.
 // @Tags Version
 // @Security BearerAuth
 // @Produce json

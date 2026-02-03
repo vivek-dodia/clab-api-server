@@ -37,33 +37,31 @@ type clabEventJSON struct {
 	Attributes map[string]string `json:"attributes"`
 }
 
-// @Summary Stream Containerlab Events
-// @Description Streams containerlab events in real-time. The response stays open until the client disconnects.
+// @Summary Stream containerlab events
+// @Description Streams containerlab events in real time as NDJSON (one JSON object per line).
 // @Description
-// @Description **JSON format example** (default, returns NDJSON - one JSON object per line):
+// @Description **Notes**
+// @Description - The response stays open until the client disconnects.
+// @Description
+// @Description **Examples**
+// @Description NDJSON (one JSON object per line):
 // @Description ```json
 // @Description {"time":1706918400,"type":"container","action":"start","attributes":{"name":"clab-mylab-srl1","lab":"mylab","clab-node-name":"srl1","clab-node-kind":"nokia_srlinux"}}
 // @Description {"time":1706918405,"type":"container","action":"start","attributes":{"name":"clab-mylab-srl2","lab":"mylab","clab-node-name":"srl2","clab-node-kind":"nokia_srlinux"}}
 // @Description ```
 // @Description
-// @Description **Interface stats example** (interfaceStats=true):
+// @Description
+// @Description Interface stats (interfaceStats=true):
 // @Description ```json
 // @Description {"time":1706918410,"type":"interface-stats","action":"stats","attributes":{"name":"clab-mylab-srl1","lab":"mylab","interface":"e1-1","rx_bytes":123456,"tx_bytes":654321}}
 // @Description ```
-// @Description
-// @Description **Plain format example** (format=plain):
-// @Description ```
-// @Description 2024-02-03T10:30:00Z container start (name=clab-mylab-srl1, lab=mylab, kind=nokia_srlinux)
-// @Description 2024-02-03T10:30:05Z container start (name=clab-mylab-srl2, lab=mylab, kind=nokia_srlinux)
-// @Description ```
 // @Tags Events
 // @Security BearerAuth
-// @Produce json
-// @Param format query string false "Output format ('json' or 'plain'). Default is 'json'." Enums(json, plain) default(json)
+// @Produce application/x-ndjson
 // @Param initialState query boolean false "Include initial snapshot events when the stream starts." default(false)
 // @Param interfaceStats query boolean false "Include interface stats events." default(false)
 // @Param interfaceStatsInterval query string false "Interval for interface stats collection (e.g., 10s). Requires interfaceStats=true." default(10s)
-// @Success 200 {object} models.EventResponse "Event stream - returns newline-delimited events (plain text or NDJSON)"
+// @Success 200 {object} models.EventResponse "Event stream - NDJSON (one JSON object per line)"
 // @Failure 400 {object} models.ErrorResponse "Invalid input"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
 // @Failure 500 {object} models.ErrorResponse "Internal server error"
@@ -71,12 +69,6 @@ type clabEventJSON struct {
 func StreamEventsHandler(c *gin.Context) {
 	username := c.GetString("username")
 	isSuperuserUser := isSuperuser(username)
-
-	format := strings.ToLower(c.DefaultQuery("format", "json"))
-	if format != "plain" && format != "json" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid format parameter. Use 'plain' or 'json'."})
-		return
-	}
 
 	initialState, err := parseBoolQuery(c, "initialState", false)
 	if err != nil {
@@ -114,14 +106,10 @@ func StreamEventsHandler(c *gin.Context) {
 		runtime = "docker"
 	}
 
-	log.Infof("StreamEvents user '%s': Starting containerlab events stream (format=%s, initialState=%v, interfaceStats=%v, interval=%s)",
-		username, format, initialState, interfaceStats, interfaceStatsInterval)
+	log.Infof("StreamEvents user '%s': Starting containerlab events stream (initialState=%v, interfaceStats=%v, interval=%s)",
+		username, initialState, interfaceStats, interfaceStatsInterval)
 
-	if format == "json" {
-		c.Writer.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
-	} else {
-		c.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	}
+	c.Writer.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
 	c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 
@@ -137,7 +125,7 @@ func StreamEventsHandler(c *gin.Context) {
 
 	streamReader, streamWriter := io.Pipe()
 	eventsOpts := clabevents.Options{
-		Format:                format,
+		Format:                "json",
 		Runtime:               runtime,
 		IncludeInitialState:   initialState,
 		IncludeInterfaceStats: interfaceStats,
@@ -208,7 +196,7 @@ func StreamEventsHandler(c *gin.Context) {
 		for scanner.Scan() {
 			line := scanner.Text()
 			if !isSuperuserUser {
-				labName, ok := extractLabFromEventLine(line, format)
+				labName, ok := extractLabFromEventLine(line)
 				if !ok || !allowedLab(labName) {
 					continue
 				}
@@ -238,11 +226,8 @@ func parseBoolQuery(c *gin.Context, name string, defaultValue bool) (bool, error
 	return strconv.ParseBool(raw)
 }
 
-func extractLabFromEventLine(line, format string) (string, bool) {
-	if format == "json" {
-		return extractLabFromJSONLine(line)
-	}
-	return extractLabFromPlainLine(line)
+func extractLabFromEventLine(line string) (string, bool) {
+	return extractLabFromJSONLine(line)
 }
 
 func extractLabFromJSONLine(line string) (string, bool) {
@@ -262,24 +247,4 @@ func extractLabFromJSONLine(line string) (string, bool) {
 	return "", false
 }
 
-func extractLabFromPlainLine(line string) (string, bool) {
-	start := strings.LastIndex(line, "(")
-	end := strings.LastIndex(line, ")")
-	if start == -1 || end == -1 || end <= start {
-		return "", false
-	}
-	attrs := line[start+1 : end]
-	parts := strings.Split(attrs, ", ")
-	for _, part := range parts {
-		kv := strings.SplitN(part, "=", 2)
-		if len(kv) != 2 {
-			continue
-		}
-		key := kv[0]
-		value := kv[1]
-		if key == "lab" || key == "containerlab" {
-			return value, true
-		}
-	}
-	return "", false
-}
+// Plain-text event parsing removed; NDJSON-only output is supported.

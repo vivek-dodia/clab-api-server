@@ -185,7 +185,7 @@ type GenerateResponse struct {
 	Message string `json:"message"`
 	// The generated topology YAML (only if Deploy=false and OutputFile is empty).
 	TopologyYAML string `json:"topologyYaml,omitempty"`
-	// The output from the deploy command (only if Deploy=true). Can be JSON or plain text.
+	// The output from the deploy command (only if Deploy=true). JSON object keyed by lab name.
 	// Use swaggertype:"object" to represent json.RawMessage in Swagger.
 	DeployOutput json.RawMessage `json:"deployOutput,omitempty" swaggertype:"object"`
 	// Path where the file was saved (if Deploy=true, it's the path in the user's ~/.clab dir; if Deploy=false, it's the OutputFile path if provided).

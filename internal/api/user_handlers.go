@@ -13,8 +13,8 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
 
-// @Summary List All Users
-// @Description Get a list of all users in the system. Requires superuser privileges.
+// @Summary List users
+// @Description Returns a list of system users. Requires superuser privileges.
 // @Tags Users
 // @Security BearerAuth
 // @Produce json
@@ -41,8 +41,8 @@ func ListUsersHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
-// @Summary Get User Details
-// @Description Get detailed information about a specific user. Requires superuser privileges or the user's own account.
+// @Summary Get user details
+// @Description Returns details for a specific user. Requires superuser privileges or the user's own account.
 // @Tags Users
 // @Security BearerAuth
 // @Produce json
@@ -81,8 +81,8 @@ func GetUserDetailsHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, userDetails)
 }
 
-// @Summary Create User
-// @Description Create a new system user. Requires superuser privileges.
+// @Summary Create user
+// @Description Creates a new system user. Requires superuser privileges.
 // @Tags Users
 // @Security BearerAuth
 // @Accept json
@@ -129,8 +129,8 @@ func CreateUserHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, models.GenericSuccessResponse{Message: fmt.Sprintf("User '%s' created successfully", req.Username)})
 }
 
-// @Summary Update User
-// @Description Update information for an existing user. Requires superuser privileges or the user's own account.
+// @Summary Update user
+// @Description Updates an existing user. Requires superuser privileges or the user's own account.
 // @Tags Users
 // @Security BearerAuth
 // @Accept json
@@ -193,8 +193,8 @@ func UpdateUserHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("User '%s' updated successfully", targetUser)})
 }
 
-// @Summary Delete User
-// @Description Delete a user from the system. Requires superuser privileges.
+// @Summary Delete user
+// @Description Deletes a user from the system. Requires superuser privileges.
 // @Tags Users
 // @Security BearerAuth
 // @Produce json
@@ -240,8 +240,8 @@ func DeleteUserHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("User '%s' deleted successfully", targetUser)})
 }
 
-// @Summary Change User Password
-// @Description Change password for a user. Requires superuser privileges or the user's own account.
+// @Summary Change user password
+// @Description Changes a user's password. Requires superuser privileges or the user's own account.
 // @Tags Users
 // @Security BearerAuth
 // @Accept json

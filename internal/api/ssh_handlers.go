@@ -37,8 +37,8 @@ func ShutdownSSHManager() {
 	}
 }
 
-// @Summary Request SSH Access to Lab Node
-// @Description Creates temporary SSH access to a specific lab node, returning connection details
+// @Summary Request SSH access to lab node
+// @Description Creates temporary SSH access to a lab node and returns connection details.
 // @Tags SSH Access
 // @Security BearerAuth
 // @Accept json
@@ -177,8 +177,12 @@ func RequestSSHAccessHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// @Summary List SSH Sessions
-// @Description Lists active SSH sessions. For regular users, shows only their sessions. Superusers can see all sessions by using the 'all' query parameter.
+// @Summary List SSH sessions
+// @Description Returns active SSH sessions.
+// @Description
+// @Description **Notes**
+// @Description - Regular users see only their sessions.
+// @Description - Superusers can include all sessions via the `all` query parameter.
 // @Tags SSH Access
 // @Security BearerAuth
 // @Produce json
@@ -209,8 +213,8 @@ func ListSSHSessionsHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, sessions)
 }
 
-// @Summary Terminate SSH Session
-// @Description Terminates a specific SSH session by port
+// @Summary Terminate SSH session
+// @Description Terminates a specific SSH session by port.
 // @Tags SSH Access
 // @Security BearerAuth
 // @Produce json
