@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
 )
 
-// VersionSuite tests unauthenticated endpoints like version and health.
+// VersionSuite tests version and health endpoints.
 type VersionSuite struct {
 	BaseSuite
 }
@@ -45,9 +46,22 @@ func (s *VersionSuite) TestVersionInfoEndpoint() {
 	// Verify version info field is not empty
 	s.Assert().NotEmpty(versionResp.VersionInfo, "VersionInfo field is empty in response")
 
-	// Basic sanity check - containerlab version output should contain "containerlab"
-	s.Assert().Contains(strings.ToLower(versionResp.VersionInfo), "containerlab",
-		"VersionInfo doesn't appear to contain containerlab version information")
+	versionInfoLower := strings.ToLower(versionResp.VersionInfo)
+	s.Assert().Contains(versionInfoLower, "version:", "VersionInfo missing version line")
+	s.Assert().Contains(versionInfoLower, "commit:", "VersionInfo missing commit line")
+	s.Assert().Contains(versionInfoLower, "date:", "VersionInfo missing date line")
+	s.Assert().Contains(versionInfoLower, "github: https://github.com/srl-labs/containerlab",
+		"VersionInfo missing containerlab repo link")
+	s.Assert().Contains(versionInfoLower, "release notes: https://containerlab.dev/rn/",
+		"VersionInfo missing release notes link")
+
+	versionValue, ok := extractInfoValue(versionResp.VersionInfo, "version:")
+	s.Require().True(ok, "VersionInfo missing version value")
+	s.Require().NotEmpty(versionValue, "VersionInfo version value is empty")
+	if versionValue != "devel" {
+		s.Assert().True(isSemverLike(versionValue),
+			"VersionInfo version value does not look like a semver: %s", versionValue)
+	}
 
 	if !s.T().Failed() {
 		s.logSuccess("Successfully retrieved version information: %s", versionResp.VersionInfo)
@@ -75,13 +89,46 @@ func (s *VersionSuite) TestCheckVersionEndpoint() {
 	err = json.Unmarshal(bodyBytes, &checkResp)
 	s.Require().NoError(err, "Failed to unmarshal version check response. Body: %s", string(bodyBytes))
 
-	// Note: checkResult may be empty if containerlab is already up-to-date.
-	// The 'clab version check' command only outputs when a newer version is available.
-	// We just verify the endpoint responds successfully with a valid JSON structure.
+	checkResult := strings.TrimSpace(checkResp.CheckResult)
+	s.Require().NotEmpty(checkResult, "Version check result is empty")
+	s.Require().NotContains(checkResult, "Version check is not available when using containerlab as a library",
+		"Version check returned deprecated message")
+
+	allowedPrefixes := []string{
+		"You are on the latest version",
+		"A newer containerlab version",
+		"You are on a newer version",
+		"Latest containerlab version:",
+		"Version check disabled via CLAB_VERSION_CHECK",
+		"Failed fetching latest version information",
+	}
+	matched := false
+	for _, prefix := range allowedPrefixes {
+		if strings.HasPrefix(checkResult, prefix) {
+			matched = true
+			break
+		}
+	}
+	s.Require().True(matched, "Unexpected version check result: %s", checkResult)
 
 	if checkResp.CheckResult != "" {
 		s.logSuccess("Version check found update info: %s", checkResp.CheckResult)
 	} else {
 		s.logSuccess("Version check completed - containerlab appears to be up-to-date")
 	}
+}
+
+var semverLikeRe = regexp.MustCompile(`^\d+\.\d+(\.\d+)?([\-+].+)?$`)
+
+func isSemverLike(version string) bool {
+	return semverLikeRe.MatchString(version)
+}
+
+func extractInfoValue(info, prefix string) (string, bool) {
+	for _, line := range strings.Split(info, "\n") {
+		if strings.HasPrefix(strings.ToLower(line), strings.ToLower(prefix)) {
+			return strings.TrimSpace(strings.TrimPrefix(line, prefix)), true
+		}
+	}
+	return "", false
 }

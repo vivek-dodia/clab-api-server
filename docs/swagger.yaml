@@ -2061,9 +2061,7 @@ paths:
       - Version
   /api/v1/version/check:
     get:
-      description: |-
-        **Deprecated**
-        Version checks are not supported when containerlab runs as a library.
+      description: Checks whether a newer containerlab release is available.
       produces:
       - application/json
       responses:
