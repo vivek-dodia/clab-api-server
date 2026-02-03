@@ -4,6 +4,7 @@ package api
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,18 +20,19 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
 
-// @Summary Get Node Logs
-// @Description Get logs from a specific lab node (container). When follow=true, logs will stream until client disconnects or 30-minute timeout.
+// @Summary Get node logs
+// @Description Returns logs for a lab node.
+// @Description
+// @Description **Notes**
+// @Description - When `follow=true`, the response streams as NDJSON (one JSON object per line) until the client disconnects or the 30-minute timeout.
 // @Tags Logs
 // @Security BearerAuth
-// @Produce plain,json,octet-stream
+// @Produce json,application/x-ndjson
 // @Param labName path string true "Name of the lab" example="my-lab"
 // @Param nodeName path string true "Full name of the container (node)" example="clab-my-lab-srl1"
-// @Param tail query int false "Number of lines to show from the end of logs (default all)" example="100"
-// @Param follow query boolean false "Follow log output (stream logs). Note: In Swagger UI, streaming may not display correctly." example="false"
-// @Param format query string false "Output format ('plain' or 'json'). Default is 'plain'. When follow=true, only 'plain' format is supported." example="plain"
-// @Success 200 {string} string "Container logs (when format=plain)"
-// @Success 200 {object} models.LogsResponse "Container logs (when format=json)"
+// @Param tail query string false "Number of lines to show from the end of logs (default all). Use an integer or 'all'." example="100" default(all)
+// @Param follow query boolean false "Follow log output (stream logs as NDJSON). Note: In Swagger UI, streaming may not display correctly." example="false"
+// @Success 200 {object} models.LogsResponse "Container logs (follow=false). When follow=true, response is NDJSON stream of LogLine objects."
 // @Failure 400 {object} models.ErrorResponse "Invalid input (lab name, node filter, etc.)"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
 // @Failure 403 {object} models.ErrorResponse "Forbidden (not owner of the lab)"
@@ -41,7 +43,6 @@ func GetNodeLogsHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
 	containerName := c.Param("nodeName")
-	outputFormat := c.DefaultQuery("format", "plain")
 	tailQuery := c.DefaultQuery("tail", "all")
 	follow := c.Query("follow") == "true"
 
@@ -55,12 +56,6 @@ func GetNodeLogsHandler(c *gin.Context) {
 	if !isValidContainerName(containerName) {
 		log.Warnf("GetNodeLogs failed for user '%s': Invalid container name '%s'", username, containerName)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid container name format."})
-		return
-	}
-
-	if outputFormat != "plain" && outputFormat != "json" {
-		log.Warnf("GetNodeLogs failed for user '%s': Invalid format '%s'", username, outputFormat)
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid format parameter. Use 'plain' or 'json'."})
 		return
 	}
 
@@ -138,7 +133,7 @@ func GetNodeLogsHandler(c *gin.Context) {
 	// Determine if we should stream logs or fetch once
 	if follow {
 		// --- Stream Logs ---
-		c.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		c.Writer.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
 		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
 
 		// Set up a context with timeout for streaming logs (30 minutes)
@@ -197,14 +192,22 @@ func GetNodeLogsHandler(c *gin.Context) {
 			}
 		}()
 
-		// Stream the logs line by line
+		// Stream the logs line by line as NDJSON
 		scanner := bufio.NewScanner(stdout)
 		c.Stream(func(w io.Writer) bool {
 			if !scanner.Scan() {
 				return false
 			}
-			line := scanner.Text() + "\n"
-			w.Write([]byte(line))
+			line := scanner.Text()
+			payload, err := json.Marshal(models.LogLine{
+				ContainerName: containerName,
+				Line:          line,
+			})
+			if err != nil {
+				log.Errorf("GetNodeLogs failed to marshal log line for user '%s': %v", username, err)
+				return false
+			}
+			_, _ = w.Write(append(payload, '\n'))
 			return true
 		})
 
@@ -261,19 +264,12 @@ func GetNodeLogsHandler(c *gin.Context) {
 
 		log.Infof("GetNodeLogs success for user '%s', container '%s'", username, containerName)
 
-		// Return logs based on requested format
-		if outputFormat == "json" {
-			// Format as JSON
-			response := models.LogsResponse{
-				ContainerName: containerName,
-				Logs:          stdout,
-			}
-			c.JSON(http.StatusOK, response)
-		} else {
-			// Plain text output
-			c.Header("Content-Type", "text/plain; charset=utf-8")
-			c.String(http.StatusOK, stdout)
+		// Return logs as JSON
+		response := models.LogsResponse{
+			ContainerName: containerName,
+			Logs:          stdout,
 		}
+		c.JSON(http.StatusOK, response)
 	}
 }
 

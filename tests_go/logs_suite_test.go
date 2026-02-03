@@ -143,7 +143,7 @@ func (s *LogsSuite) TearDownTest() {
 	s.BaseSuite.TearDownTest()
 }
 
-// TestBasicLogsRetrieval tests basic logs retrieval in plain format
+// TestBasicLogsRetrieval tests basic logs retrieval in JSON format (default)
 func (s *LogsSuite) TestBasicLogsRetrieval() {
 	s.logTest("Retrieving logs for node '%s' in lab '%s'", s.sharedNodeName, s.sharedLabName)
 	logsURL := fmt.Sprintf("%s/api/v1/labs/%s/nodes/%s/logs", s.cfg.APIURL, s.sharedLabName, s.sharedNodeName)
@@ -152,15 +152,23 @@ func (s *LogsSuite) TestBasicLogsRetrieval() {
 	s.Require().NoError(err, "Failed to execute logs request")
 	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 for logs request. Body: %s", string(bodyBytes))
 
-	// For plain text logs, the response should have Content-Type: text/plain
+	// Verify we can parse the response as JSON
+	var logsResp struct {
+		ContainerName string `json:"containerName"`
+		Logs          string `json:"logs"`
+	}
+	err = json.Unmarshal(bodyBytes, &logsResp)
+	s.Require().NoError(err, "Failed to unmarshal JSON logs response")
+	s.Assert().Equal(s.sharedNodeName, logsResp.ContainerName, "Container name in response should match requested node")
+
 	s.logSuccess("Successfully retrieved logs for node '%s'", s.sharedNodeName)
 }
 
 // TestLogsRetrievalJSON tests logs retrieval in JSON format
 func (s *LogsSuite) TestLogsRetrievalJSON() {
-	s.logTest("Retrieving JSON format logs for node '%s' in lab '%s'", s.sharedNodeName, s.sharedLabName)
+	s.logTest("Retrieving logs for node '%s' in lab '%s'", s.sharedNodeName, s.sharedLabName)
 
-	logsURL := fmt.Sprintf("%s/api/v1/labs/%s/nodes/%s/logs?format=json", s.cfg.APIURL, s.sharedLabName, s.sharedNodeName)
+	logsURL := fmt.Sprintf("%s/api/v1/labs/%s/nodes/%s/logs", s.cfg.APIURL, s.sharedLabName, s.sharedNodeName)
 	bodyBytes, statusCode, err := s.doRequest("GET", logsURL, s.apiUserHeaders, nil, s.cfg.RequestTimeout)
 	s.Require().NoError(err, "Failed to execute JSON logs request")
 	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 for JSON logs request. Body: %s", string(bodyBytes))
@@ -189,26 +197,6 @@ func (s *LogsSuite) TestLogsRetrievalWithTail() {
 	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 for tail logs request. Body: %s", string(bodyBytes))
 
 	s.logSuccess("Successfully retrieved logs with tail=10 for node '%s'", s.sharedNodeName)
-}
-
-// TestInvalidFormat tests error handling for an invalid format parameter
-func (s *LogsSuite) TestInvalidFormat() {
-	s.logTest("Testing logs endpoint with invalid format parameter (expecting 400 Bad Request)")
-
-	logsURL := fmt.Sprintf("%s/api/v1/labs/%s/nodes/%s/logs?format=invalid", s.cfg.APIURL, s.sharedLabName, s.sharedNodeName)
-	bodyBytes, statusCode, err := s.doRequest("GET", logsURL, s.apiUserHeaders, nil, s.cfg.RequestTimeout)
-	s.Require().NoError(err, "Failed to execute invalid format logs request")
-
-	s.Assert().Equal(http.StatusBadRequest, statusCode, "Expected status 400 for invalid format. Body: %s", string(bodyBytes))
-
-	var errResp struct {
-		Error string `json:"error"`
-	}
-	err = json.Unmarshal(bodyBytes, &errResp)
-	s.Require().NoError(err, "Failed to unmarshal error response")
-	s.Assert().Contains(errResp.Error, "Invalid format", "Error message should mention invalid format")
-
-	s.logSuccess("Correctly received status 400 for invalid format parameter")
 }
 
 // TestInvalidTail tests error handling for an invalid tail parameter

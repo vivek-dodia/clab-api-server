@@ -30,8 +30,8 @@ func InitHealth(version string) {
 	apiServerVersion = version
 }
 
-// @Summary Get API Server Basic Health
-// @Description Returns basic health status of the API server.
+// @Summary Get API server health
+// @Description Returns basic health status for the API server.
 // @Tags Health
 // @Produce json
 // @Success 200 {object} models.HealthResponse "Basic health information"
@@ -52,8 +52,8 @@ func HealthCheckHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// @Summary Get Detailed System Metrics
-// @Description Returns detailed CPU, memory, and disk metrics for the API server. Requires SUPERUSER privileges.
+// @Summary Get system metrics
+// @Description Returns detailed CPU, memory, and disk metrics for the API server. Requires superuser privileges.
 // @Tags Health
 // @Security BearerAuth
 // @Produce json

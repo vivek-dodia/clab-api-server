@@ -23,13 +23,17 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
 
-// @Summary Deploy Lab
-// @Description Deploys a containerlab topology. Requires EITHER 'topologyContent' OR 'topologySourceUrl' in the request body, but not both.
+// @Summary Deploy lab
+// @Description Deploys a containerlab topology.
+// @Description
+// @Description **Notes**
+// @Description - The request body must include either `topologyContent` or `topologySourceUrl` (not both).
 // @Tags Labs
 // @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param deploy_request body models.DeployRequest true "Deployment Source"
+// @Param labNameOverride query string false "Override lab name when deploying from a URL (optional)"
 // @Param reconfigure query boolean false "Allow overwriting an existing lab IF owned by the user"
 // @Param maxWorkers query int false "Limit concurrent workers"
 // @Param exportTemplate query string false "Custom Go template file for topology data export"
@@ -245,7 +249,7 @@ func DeployLabHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// @Summary Deploy Lab from Archive
+// @Summary Deploy lab from archive
 // @Description Deploys a containerlab topology provided as a .zip or .tar.gz archive.
 // @Tags Labs
 // @Security BearerAuth
@@ -254,6 +258,11 @@ func DeployLabHandler(c *gin.Context) {
 // @Param labArchive formData file true "Lab archive (.zip or .tar.gz)"
 // @Param labName query string true "Name for the lab"
 // @Param reconfigure query boolean false "Allow overwriting an existing lab"
+// @Param maxWorkers query int false "Limit concurrent workers"
+// @Param exportTemplate query string false "Custom Go template file for topology data export"
+// @Param nodeFilter query string false "Comma-separated list of node names to deploy"
+// @Param skipPostDeploy query boolean false "Skip post-deploy actions"
+// @Param skipLabdirAcl query boolean false "Skip setting extended ACLs on lab directory"
 // @Success 200 {object} models.ClabInspectOutput "Deployed lab details"
 // @Failure 400 {object} models.ErrorResponse "Invalid input"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
@@ -431,8 +440,8 @@ func DeployLabArchiveHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// @Summary Destroy Lab
-// @Description Destroys a lab by name, checking ownership.
+// @Summary Destroy lab
+// @Description Destroys a lab by name after verifying ownership.
 // @Tags Labs
 // @Security BearerAuth
 // @Produce json
@@ -441,7 +450,7 @@ func DeployLabArchiveHandler(c *gin.Context) {
 // @Param graceful query boolean false "Attempt graceful shutdown"
 // @Param keepMgmtNet query boolean false "Keep the management network"
 // @Param nodeFilter query string false "Destroy only specific nodes"
-// @Success 200 {object} models.GenericSuccessResponse
+// @Success 200 {object} models.GenericSuccessResponse "Lab destroyed successfully"
 // @Failure 400 {object} models.ErrorResponse "Invalid lab name"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
 // @Failure 404 {object} models.ErrorResponse "Lab not found"
@@ -530,12 +539,22 @@ func DestroyLabHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("Lab '%s' destroyed successfully", labName)})
 }
 
-// @Summary Redeploy Lab
-// @Description Redeploys a lab by name (destroy + deploy).
+// @Summary Redeploy lab
+// @Description Redeploys a lab by name.
+// @Description
+// @Description **Notes**
+// @Description - This operation destroys the lab and then deploys it again.
 // @Tags Labs
 // @Security BearerAuth
 // @Produce json
 // @Param labName path string true "Name of the lab to redeploy"
+// @Param cleanup query boolean false "Remove lab directory after destroy"
+// @Param graceful query boolean false "Attempt graceful shutdown"
+// @Param keepMgmtNet query boolean false "Keep the management network"
+// @Param maxWorkers query int false "Limit concurrent workers"
+// @Param exportTemplate query string false "Custom Go template file for topology data export"
+// @Param skipPostDeploy query boolean false "Skip post-deploy actions"
+// @Param skipLabdirAcl query boolean false "Skip setting extended ACLs on lab directory"
 // @Success 200 {object} models.ClabInspectOutput "Redeployed lab details"
 // @Failure 400 {object} models.ErrorResponse "Invalid lab name"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
@@ -632,13 +651,12 @@ func RedeployLabHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// @Summary Inspect Lab
-// @Description Get details about a specific running lab.
+// @Summary Inspect lab
+// @Description Returns details for a specific running lab.
 // @Tags Labs
 // @Security BearerAuth
 // @Produce json
 // @Param labName path string true "Name of the lab to inspect"
-// @Param details query boolean false "Include full container details"
 // @Success 200 {object} []models.ClabContainerInfo "Lab containers"
 // @Failure 400 {object} models.ErrorResponse "Invalid lab name"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
@@ -691,8 +709,8 @@ func InspectLabHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, labContainers)
 }
 
-// @Summary List Lab Interfaces
-// @Description Get network interface details for nodes in a specific lab.
+// @Summary List lab interfaces
+// @Description Returns interface details for nodes in a lab.
 // @Tags Labs
 // @Security BearerAuth
 // @Produce json
@@ -767,8 +785,11 @@ func InspectInterfacesHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// @Summary List All Labs
-// @Description Get details about all running labs (filtered by owner unless superuser).
+// @Summary List labs
+// @Description Returns details for all running labs.
+// @Description
+// @Description **Notes**
+// @Description - Results are filtered by owner unless the caller is a superuser.
 // @Tags Labs
 // @Security BearerAuth
 // @Produce json
@@ -824,7 +845,7 @@ func ListLabsHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, finalResult)
 }
 
-// @Summary Save Lab Configuration
+// @Summary Save lab configuration
 // @Description Saves the running configuration for nodes in a lab.
 // @Tags Labs
 // @Security BearerAuth
@@ -893,15 +914,14 @@ func SaveLabConfigHandler(c *gin.Context) {
 	})
 }
 
-// @Summary Execute Command in Lab
-// @Description Executes a command on nodes within a specific lab.
+// @Summary Execute command in lab
+// @Description Executes a command on nodes within a lab.
 // @Tags Labs
 // @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param labName path string true "Name of the lab"
 // @Param nodeFilter query string false "Execute only on this specific node"
-// @Param format query string false "Output format ('plain' or 'json')"
 // @Param exec_request body models.ExecRequest true "Command to execute"
 // @Success 200 {object} models.ExecResponse "Execution result"
 // @Failure 400 {object} models.ErrorResponse "Invalid input"
@@ -922,7 +942,6 @@ func ExecCommandHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid characters in nodeFilter."})
 		return
 	}
-
 	var req models.ExecRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body: " + err.Error()})

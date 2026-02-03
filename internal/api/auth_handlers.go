@@ -12,13 +12,13 @@ import (
 )
 
 // LoginHandler - Handles user authentication
-// @Summary Login
-// @Description Authenticate user and return JWT token
+// @Summary Log in
+// @Description Authenticates a user and returns a JWT token.
 // @Tags Auth
 // @Accept json
 // @Produce json
 // @Param credentials body models.LoginRequest true "User Credentials"
-// @Success 200 {object} models.LoginResponse
+// @Success 200 {object} models.LoginResponse "JWT token"
 // @Failure 400 {object} models.ErrorResponse "Invalid input"
 // @Failure 401 {object} models.ErrorResponse "Invalid credentials"
 // @Failure 500 {object} models.ErrorResponse "Internal server error (PAM config?)"

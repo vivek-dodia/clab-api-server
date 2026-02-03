@@ -68,32 +68,6 @@ func (s *LabExecSuite) TestExecCommandInLab() {
 	}
 }
 
-func (s *LabExecSuite) TestPlainFormatExecCommandInLab() {
-	labName, userHeaders := s.setupEphemeralLab()
-	defer s.cleanupLab(labName, true)
-
-	// Simple Linux command
-	command := "echo 'plain format test'"
-	payload := map[string]string{"command": command}
-	jsonPayload := s.mustMarshal(payload)
-
-	s.logTest("Executing command '%s' in lab '%s' with plain format", command, labName)
-
-	execURL := fmt.Sprintf("%s/api/v1/labs/%s/exec?format=plain", s.cfg.APIURL, labName)
-	bodyBytes, statusCode, err := s.doRequest("POST", execURL, userHeaders, bytes.NewBuffer(jsonPayload), s.cfg.RequestTimeout)
-	s.Require().NoError(err, "Failed to execute plain format command request")
-	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 executing plain format command in lab '%s'. Body: %s", labName, string(bodyBytes))
-
-	// Response should be plain text
-	responseText := string(bodyBytes)
-	s.Assert().NotEmpty(responseText, "Plain format exec command in lab '%s' returned empty output", labName)
-	s.Assert().Contains(responseText, "plain format test", "Plain format exec command output does not contain expected string.")
-
-	if !s.T().Failed() {
-		s.logSuccess("Successfully executed plain format command in lab '%s'", labName)
-	}
-}
-
 func (s *LabExecSuite) TestNodeFilteredExec() {
 	labName, userHeaders := s.setupEphemeralLab()
 	defer s.cleanupLab(labName, true)

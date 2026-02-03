@@ -21,8 +21,8 @@ import (
 
 // --- TX Offload Handler ---
 
-// @Summary Disable TX Checksum Offload
-// @Description Disables TX checksum offload for the eth0 interface of a specific container. Requires SUPERUSER privileges.
+// @Summary Disable TX checksum offload
+// @Description Disables TX checksum offload on the eth0 interface of a container. Requires superuser privileges.
 // @Tags Tools
 // @Security BearerAuth
 // @Accept json
@@ -90,8 +90,11 @@ func DisableTxOffloadHandler(c *gin.Context) {
 
 // --- Certificate Handlers ---
 
-// @Summary Create Certificate Authority (CA)
-// @Description Creates a CA certificate and private key. Requires SUPERUSER privileges. Files are stored in the user's ~/.clab/certs/<ca_name>/ directory on the server.
+// @Summary Create certificate authority (CA)
+// @Description Creates a CA certificate and private key. Requires superuser privileges.
+// @Description
+// @Description **Notes**
+// @Description - Files are stored in the user's `~/.clab/certs/<ca_name>/` directory on the server.
 // @Tags Tools - Certificates
 // @Security BearerAuth
 // @Accept json
@@ -239,8 +242,11 @@ func CreateCAHandler(c *gin.Context) {
 	})
 }
 
-// @Summary Sign Certificate
-// @Description Creates a certificate/key and signs it with a previously generated CA. Requires SUPERUSER privileges. Files are stored in the user's ~/.clab/certs/<ca_name>/ directory.
+// @Summary Sign certificate
+// @Description Creates a certificate/key and signs it with a previously generated CA. Requires superuser privileges.
+// @Description
+// @Description **Notes**
+// @Description - Files are stored in the user's `~/.clab/certs/<ca_name>/` directory.
 // @Tags Tools - Certificates
 // @Security BearerAuth
 // @Accept json
@@ -401,8 +407,8 @@ func SignCertHandler(c *gin.Context) {
 	})
 }
 
-// @Summary Create vEth Pair
-// @Description Creates a virtual Ethernet (vEth) pair between two specified endpoints (container, host, bridge, ovs-bridge). Requires SUPERUSER privileges.
+// @Summary Create vEth pair
+// @Description Creates a virtual Ethernet (vEth) pair between two endpoints (container, host, bridge, or ovs-bridge). Requires superuser privileges.
 // @Tags Tools - vEth
 // @Security BearerAuth
 // @Accept json
@@ -475,8 +481,8 @@ func CreateVethHandler(c *gin.Context) {
 
 // --- VxLAN Handlers ---
 
-// @Summary Create VxLAN Tunnel
-// @Description Creates a VxLAN tunnel interface and sets up tc rules for traffic redirection. Requires SUPERUSER privileges.
+// @Summary Create VxLAN tunnel
+// @Description Creates a VxLAN tunnel interface and sets up tc rules for traffic redirection. Requires superuser privileges.
 // @Tags Tools - VxLAN
 // @Security BearerAuth
 // @Accept json
@@ -561,8 +567,8 @@ func CreateVxlanHandler(c *gin.Context) {
 	})
 }
 
-// @Summary Delete VxLAN Tunnels by Prefix
-// @Description Deletes VxLAN tunnel interfaces matching a given prefix (default: 'vx-'). Requires SUPERUSER privileges.
+// @Summary Delete VxLAN tunnels by prefix
+// @Description Deletes VxLAN tunnel interfaces that match the provided prefix (default: `vx-`). Requires superuser privileges.
 // @Tags Tools - VxLAN
 // @Security BearerAuth
 // @Produce json

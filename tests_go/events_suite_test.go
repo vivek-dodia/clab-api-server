@@ -100,7 +100,7 @@ func (s *EventsSuite) TestEventsStreamJSONFiltersByLab() {
 	_, expectedLabPresent := allowedLabs[s.apiLabName]
 	s.Require().True(expectedLabPresent, "Expected API user lab '%s' to be visible in /api/v1/labs", s.apiLabName)
 
-	eventsURL := fmt.Sprintf("%s/api/v1/events?format=json&initialState=true", s.cfg.APIURL)
+	eventsURL := fmt.Sprintf("%s/api/v1/events?initialState=true", s.cfg.APIURL)
 	lines, statusCode, err := s.collectEventLines(eventsURL, s.apiUserHeaders, s.streamTimeout(), 20)
 	s.Require().NoError(err, "Failed to stream events")
 	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 for events stream")
@@ -123,7 +123,7 @@ func (s *EventsSuite) TestEventsStreamJSONFiltersByLab() {
 func (s *EventsSuite) TestEventsStreamJSONSuperuserSeesBothLabs() {
 	s.logTest("Streaming JSON events as superuser (expecting labs '%s' and '%s')", s.apiLabName, s.suLabName)
 
-	eventsURL := fmt.Sprintf("%s/api/v1/events?format=json&initialState=true", s.cfg.APIURL)
+	eventsURL := fmt.Sprintf("%s/api/v1/events?initialState=true", s.cfg.APIURL)
 	lines, statusCode, err := s.collectEventLines(eventsURL, s.superuserHeaders, s.streamTimeout(), 40)
 	s.Require().NoError(err, "Failed to stream events")
 	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 for events stream")
@@ -162,7 +162,7 @@ func (s *EventsSuite) TestEventsStreamJSONLifecycleMessages() {
 
 	labName := fmt.Sprintf("%s-events-life-%s", s.cfg.LabNamePrefix, s.randomSuffix(5))
 	topology := strings.ReplaceAll(s.cfg.SimpleTopologyContent, "{lab_name}", labName)
-	eventsURL := fmt.Sprintf("%s/api/v1/events?format=json", s.cfg.APIURL)
+	eventsURL := fmt.Sprintf("%s/api/v1/events", s.cfg.APIURL)
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.lifecycleTimeout())
 	defer cancel()
@@ -233,19 +233,6 @@ func (s *EventsSuite) TestEventsStreamJSONLifecycleMessages() {
 
 	if !s.T().Failed() {
 		s.logSuccess("Lifecycle event stream captured container and interface events for lab '%s'", labName)
-	}
-}
-
-func (s *EventsSuite) TestEventsInvalidFormat() {
-	s.logTest("Testing events endpoint with invalid format parameter (expecting 400 Bad Request)")
-
-	eventsURL := fmt.Sprintf("%s/api/v1/events?format=invalid", s.cfg.APIURL)
-	bodyBytes, statusCode, err := s.doRequest("GET", eventsURL, s.apiUserHeaders, nil, s.cfg.RequestTimeout)
-	s.Require().NoError(err, "Failed to execute invalid format request")
-	s.Assert().Equal(http.StatusBadRequest, statusCode, "Expected status 400 for invalid format. Body: %s", string(bodyBytes))
-
-	if statusCode == http.StatusBadRequest && !s.T().Failed() {
-		s.logSuccess("Correctly received status 400 for invalid format parameter")
 	}
 }
 

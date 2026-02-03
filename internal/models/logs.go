@@ -11,3 +11,9 @@ type LogsResponse struct {
 	ContainerName string `json:"containerName"`
 	Logs          string `json:"logs"`
 }
+
+// LogLine represents a single streamed log line in NDJSON format
+type LogLine struct {
+	ContainerName string `json:"containerName"`
+	Line          string `json:"line"`
+}

@@ -17,13 +17,15 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
 
-// @Summary Generate Topology
-// @Description Generates a containerlab topology file based on CLOS definitions. Optionally deploys it, setting the owner to the authenticated user.
-// @Description Deployment is DENIED if a lab with the target name already exists.
-// @Description The 'images' and 'licenses' fields expect a map where the key is the node 'kind' and the value is the corresponding image or license path (e.g., {"nokia_srlinux": "ghcr.io/..."}).
-// @Description If Deploy=true, the topology is saved to the user's ~/.clab/<labName>/ directory before deployment, and the 'outputFile' field is ignored.
-// @Description If Deploy=false and 'outputFile' is empty, YAML is returned directly.
-// @Description If Deploy=false and 'outputFile' is set, the file is saved to that path on the server (requires API server write permissions).
+// @Summary Generate containerlab topology
+// @Description Generates a containerlab topology from CLOS definitions and can optionally deploy it for the authenticated user.
+// @Description
+// @Description **Notes**
+// @Description - Deployment is denied if a lab with the target name already exists.
+// @Description - The `images` and `licenses` fields map node kind to image or license path (e.g., {"nokia_srlinux":"ghcr.io/..."}).
+// @Description - When `deploy=true`, the topology is saved to the user's `~/.clab/<labName>/` directory and `outputFile` is ignored.
+// @Description - When `deploy=false` and `outputFile` is empty, YAML is returned in the response.
+// @Description - When `deploy=false` and `outputFile` is set, the file is saved to that path on the server (requires API server write permissions).
 // @Tags Topology Generation
 // @Security BearerAuth
 // @Accept json
