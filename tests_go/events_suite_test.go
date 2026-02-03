@@ -81,7 +81,24 @@ func (s *EventsSuite) TearDownSuite() {
 }
 
 func (s *EventsSuite) TestEventsStreamJSONFiltersByLab() {
-	s.logTest("Streaming JSON events as API user (expecting only lab '%s')", s.apiLabName)
+	s.logTest("Streaming JSON events as API user (expecting only labs owned by the API user)")
+
+	// Build the set of labs visible to the API user.
+	listURL := fmt.Sprintf("%s/api/v1/labs", s.cfg.APIURL)
+	listBytes, listStatus, listErr := s.doRequest("GET", listURL, s.apiUserHeaders, nil, s.cfg.RequestTimeout)
+	s.Require().NoError(listErr, "Failed to list labs for API user")
+	s.Require().Equal(http.StatusOK, listStatus, "Expected status 200 listing labs for API user")
+
+	var labsData ClabInspectOutput
+	listDecodeErr := json.Unmarshal(listBytes, &labsData)
+	s.Require().NoError(listDecodeErr, "Failed to decode labs list. Body: %s", string(listBytes))
+
+	allowedLabs := make(map[string]struct{}, len(labsData))
+	for lab := range labsData {
+		allowedLabs[lab] = struct{}{}
+	}
+	_, expectedLabPresent := allowedLabs[s.apiLabName]
+	s.Require().True(expectedLabPresent, "Expected API user lab '%s' to be visible in /api/v1/labs", s.apiLabName)
 
 	eventsURL := fmt.Sprintf("%s/api/v1/events?format=json&initialState=true", s.cfg.APIURL)
 	lines, statusCode, err := s.collectEventLines(eventsURL, s.apiUserHeaders, s.streamTimeout(), 20)
@@ -94,11 +111,12 @@ func (s *EventsSuite) TestEventsStreamJSONFiltersByLab() {
 		s.Require().NoError(parseErr, "Failed to parse JSON event line: %s", line)
 		lab := eventLabName(attrs)
 		s.Require().NotEmpty(lab, "Expected lab attribute on event line: %s", line)
-		s.Assert().Equal(s.apiLabName, lab, "API user should only see events for their lab")
+		_, ok := allowedLabs[lab]
+		s.Assert().True(ok, "API user should only see events for labs they own, got '%s'", lab)
 	}
 
 	if !s.T().Failed() {
-		s.logSuccess("API user event stream filtered correctly for lab '%s'", s.apiLabName)
+		s.logSuccess("API user event stream filtered correctly for owned labs")
 	}
 }
 

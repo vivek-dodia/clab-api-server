@@ -15,7 +15,7 @@ type LoginRequest struct {
 
 // LoginResponse represents the payload returned after successful login
 type LoginResponse struct {
-	Token string `json:"token"`
+	Token string `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwiZXhwIjoxNzA2OTIyMDAwfQ.abc123"`
 }
 
 // DeployRequest represents the payload for deploying a lab.
@@ -78,7 +78,7 @@ type RedeployRequest struct {
 
 // ErrorResponse represents a standard error message format
 type ErrorResponse struct {
-	Error string `json:"error"`
+	Error string `json:"error" example:"Invalid credentials or user not in allowed group"`
 }
 
 // GenericSuccessResponse for simple success messages
@@ -317,4 +317,77 @@ type VersionResponse struct {
 type VersionCheckResponse struct {
 	// Raw output string from 'clab version check'.
 	CheckResult string `json:"checkResult" example:"🎉 A newer containerlab version (0.62.2) is available!\nRelease notes: https://containerlab.dev/rn/0.62/#0622\nRun 'sudo clab version upgrade' or see https://containerlab.dev/install/ for installation options."`
+}
+
+// --- Structs for Events ---
+
+// EventResponse represents a single containerlab event in JSON format.
+// Events are streamed as newline-delimited JSON (NDJSON).
+type EventResponse struct {
+	// Unix timestamp when the event occurred
+	Time int64 `json:"time" example:"1706918400"`
+	// Type of event (e.g., "container", "interface-stats")
+	Type string `json:"type" example:"container"`
+	// Event action (e.g., "start", "stop", "die", "stats")
+	Action string `json:"action" example:"start"`
+	// Event attributes containing details about the event
+	Attributes EventAttributes `json:"attributes"`
+}
+
+// EventAttributes contains the details of a containerlab event.
+type EventAttributes struct {
+	// Container name
+	Name string `json:"name,omitempty" example:"clab-mylab-srl1"`
+	// Lab name this event belongs to
+	Lab string `json:"lab,omitempty" example:"mylab"`
+	// Alternative lab name field (containerlab label)
+	Containerlab string `json:"containerlab,omitempty" example:"mylab"`
+	// Node name within the lab
+	NodeName string `json:"clab-node-name,omitempty" example:"srl1"`
+	// Node kind (e.g., nokia_srlinux, linux)
+	NodeKind string `json:"clab-node-kind,omitempty" example:"nokia_srlinux"`
+	// Node type
+	NodeType string `json:"clab-node-type,omitempty" example:"ixrd3"`
+	// Container image
+	Image string `json:"image,omitempty" example:"ghcr.io/nokia/srlinux:latest"`
+	// Exit code (for stop/die events)
+	ExitCode string `json:"exitCode,omitempty" example:"0"`
+}
+
+// InterfaceStatsEvent represents interface statistics event in JSON format.
+type InterfaceStatsEvent struct {
+	// Unix timestamp when the stats were collected
+	Time int64 `json:"time" example:"1706918400"`
+	// Type is always "interface-stats" for this event
+	Type string `json:"type" example:"interface-stats"`
+	// Action is always "stats" for this event
+	Action string `json:"action" example:"stats"`
+	// Interface statistics attributes
+	Attributes InterfaceStatsAttributes `json:"attributes"`
+}
+
+// InterfaceStatsAttributes contains interface statistics details.
+type InterfaceStatsAttributes struct {
+	// Container name
+	Name string `json:"name" example:"clab-mylab-srl1"`
+	// Lab name
+	Lab string `json:"lab" example:"mylab"`
+	// Interface name
+	Interface string `json:"interface" example:"e1-1"`
+	// Bytes received
+	RxBytes uint64 `json:"rx_bytes" example:"123456"`
+	// Packets received
+	RxPackets uint64 `json:"rx_packets" example:"1000"`
+	// Receive errors
+	RxErrors uint64 `json:"rx_errors" example:"0"`
+	// Receive drops
+	RxDropped uint64 `json:"rx_dropped" example:"0"`
+	// Bytes transmitted
+	TxBytes uint64 `json:"tx_bytes" example:"654321"`
+	// Packets transmitted
+	TxPackets uint64 `json:"tx_packets" example:"900"`
+	// Transmit errors
+	TxErrors uint64 `json:"tx_errors" example:"0"`
+	// Transmit drops
+	TxDropped uint64 `json:"tx_dropped" example:"0"`
 }

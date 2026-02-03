@@ -45,14 +45,14 @@ func NewService() *Service {
 
 // DeployOptions contains options for deploying a lab.
 type DeployOptions struct {
-	TopoPath        string
-	Username        string
-	Reconfigure     bool
-	MaxWorkers      uint
-	ExportTemplate  string
-	NodeFilter      []string
-	SkipPostDeploy  bool
-	SkipLabDirACLs  bool
+	TopoPath       string
+	Username       string
+	Reconfigure    bool
+	MaxWorkers     uint
+	ExportTemplate string
+	NodeFilter     []string
+	SkipPostDeploy bool
+	SkipLabDirACLs bool
 }
 
 // DestroyOptions contains options for destroying a lab.
@@ -853,13 +853,13 @@ func (s *Service) createVethNodes(ctx context.Context, clab *clabcore.CLab, aEnd
 
 // VxlanCreateOptions contains options for creating a VxLAN tunnel.
 type VxlanCreateOptions struct {
-	Remote          string
-	Link            string
-	ID              int
-	DstPort         int
-	SrcPort         int
-	ParentDevice    string
-	MTU             int
+	Remote       string
+	Link         string
+	ID           int
+	DstPort      int
+	SrcPort      int
+	ParentDevice string
+	MTU          int
 }
 
 // CreateVxlan creates a VxLAN tunnel.
