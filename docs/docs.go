@@ -1981,7 +1981,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "**Deprecated**\nVersion checks are not supported when containerlab runs as a library.",
+                "description": "Checks whether a newer containerlab release is available.",
                 "produces": [
                     "application/json"
                 ],
