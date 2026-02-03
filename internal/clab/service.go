@@ -30,7 +30,10 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/config"
 )
 
-const defaultTimeout = 5 * time.Minute
+const (
+	defaultTimeout         = 5 * time.Minute
+	gracefulDestroyTimeout = 2 * time.Minute
+)
 
 // Service provides an interface to containerlab operations using the library directly.
 type Service struct{}
@@ -42,14 +45,14 @@ func NewService() *Service {
 
 // DeployOptions contains options for deploying a lab.
 type DeployOptions struct {
-	TopoPath        string
-	Username        string
-	Reconfigure     bool
-	MaxWorkers      uint
-	ExportTemplate  string
-	NodeFilter      []string
-	SkipPostDeploy  bool
-	SkipLabDirACLs  bool
+	TopoPath       string
+	Username       string
+	Reconfigure    bool
+	MaxWorkers     uint
+	ExportTemplate string
+	NodeFilter     []string
+	SkipPostDeploy bool
+	SkipLabDirACLs bool
 }
 
 // DestroyOptions contains options for destroying a lab.
@@ -218,8 +221,12 @@ func (s *Service) Destroy(ctx context.Context, opts DestroyOptions) error {
 	}()
 
 	// Build clab options - use topology path if available, otherwise use lab name
+	clabTimeout := defaultTimeout
+	if opts.Graceful {
+		clabTimeout = gracefulDestroyTimeout
+	}
 	var clabOpts []clabcore.ClabOption
-	clabOpts = append(clabOpts, clabcore.WithTimeout(defaultTimeout))
+	clabOpts = append(clabOpts, clabcore.WithTimeout(clabTimeout))
 
 	if opts.TopoPath != "" {
 		clabOpts = append(clabOpts, clabcore.WithTopoPath(opts.TopoPath, ""))
@@ -230,7 +237,7 @@ func (s *Service) Destroy(ctx context.Context, opts DestroyOptions) error {
 	}
 
 	clabOpts = append(clabOpts,
-		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
+		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: clabTimeout}),
 	)
 
 	if opts.KeepMgmtNet {
@@ -846,13 +853,13 @@ func (s *Service) createVethNodes(ctx context.Context, clab *clabcore.CLab, aEnd
 
 // VxlanCreateOptions contains options for creating a VxLAN tunnel.
 type VxlanCreateOptions struct {
-	Remote          string
-	Link            string
-	ID              int
-	DstPort         int
-	SrcPort         int
-	ParentDevice    string
-	MTU             int
+	Remote       string
+	Link         string
+	ID           int
+	DstPort      int
+	SrcPort      int
+	ParentDevice string
+	MTU          int
 }
 
 // CreateVxlan creates a VxLAN tunnel.

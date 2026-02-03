@@ -24,6 +24,83 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams containerlab events in real-time. The response stays open until the client disconnects.\n\n**JSON format example** (default, returns NDJSON - one JSON object per line):\n` + "`" + `` + "`" + `` + "`" + `json\n{\"time\":1706918400,\"type\":\"container\",\"action\":\"start\",\"attributes\":{\"name\":\"clab-mylab-srl1\",\"lab\":\"mylab\",\"clab-node-name\":\"srl1\",\"clab-node-kind\":\"nokia_srlinux\"}}\n{\"time\":1706918405,\"type\":\"container\",\"action\":\"start\",\"attributes\":{\"name\":\"clab-mylab-srl2\",\"lab\":\"mylab\",\"clab-node-name\":\"srl2\",\"clab-node-kind\":\"nokia_srlinux\"}}\n` + "`" + `` + "`" + `` + "`" + `\n\n**Interface stats example** (interfaceStats=true):\n` + "`" + `` + "`" + `` + "`" + `json\n{\"time\":1706918410,\"type\":\"interface-stats\",\"action\":\"stats\",\"attributes\":{\"name\":\"clab-mylab-srl1\",\"lab\":\"mylab\",\"interface\":\"e1-1\",\"rx_bytes\":123456,\"tx_bytes\":654321}}\n` + "`" + `` + "`" + `` + "`" + `\n\n**Plain format example** (format=plain):\n` + "`" + `` + "`" + `` + "`" + `\n2024-02-03T10:30:00Z container start (name=clab-mylab-srl1, lab=mylab, kind=nokia_srlinux)\n2024-02-03T10:30:05Z container start (name=clab-mylab-srl2, lab=mylab, kind=nokia_srlinux)\n` + "`" + `` + "`" + `` + "`" + `",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Stream Containerlab Events",
+                "parameters": [
+                    {
+                        "enum": [
+                            "json",
+                            "plain"
+                        ],
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format ('json' or 'plain'). Default is 'json'.",
+                        "name": "format",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Include initial snapshot events when the stream starts.",
+                        "name": "initialState",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Include interface stats events.",
+                        "name": "interfaceStats",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "10s",
+                        "description": "Interval for interface stats collection (e.g., 10s). Requires interfaceStats=true.",
+                        "name": "interfaceStatsInterval",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Event stream - returns newline-delimited events (plain text or NDJSON)",
+                        "schema": {
+                            "$ref": "#/definitions/models.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/generate": {
             "post": {
                 "security": [
@@ -2243,7 +2320,81 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "error": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Invalid credentials or user not in allowed group"
+                }
+            }
+        },
+        "models.EventAttributes": {
+            "type": "object",
+            "properties": {
+                "clab-node-kind": {
+                    "description": "Node kind (e.g., nokia_srlinux, linux)",
+                    "type": "string",
+                    "example": "nokia_srlinux"
+                },
+                "clab-node-name": {
+                    "description": "Node name within the lab",
+                    "type": "string",
+                    "example": "srl1"
+                },
+                "clab-node-type": {
+                    "description": "Node type",
+                    "type": "string",
+                    "example": "ixrd3"
+                },
+                "containerlab": {
+                    "description": "Alternative lab name field (containerlab label)",
+                    "type": "string",
+                    "example": "mylab"
+                },
+                "exitCode": {
+                    "description": "Exit code (for stop/die events)",
+                    "type": "string",
+                    "example": "0"
+                },
+                "image": {
+                    "description": "Container image",
+                    "type": "string",
+                    "example": "ghcr.io/nokia/srlinux:latest"
+                },
+                "lab": {
+                    "description": "Lab name this event belongs to",
+                    "type": "string",
+                    "example": "mylab"
+                },
+                "name": {
+                    "description": "Container name",
+                    "type": "string",
+                    "example": "clab-mylab-srl1"
+                }
+            }
+        },
+        "models.EventResponse": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "Event action (e.g., \"start\", \"stop\", \"die\", \"stats\")",
+                    "type": "string",
+                    "example": "start"
+                },
+                "attributes": {
+                    "description": "Event attributes containing details about the event",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.EventAttributes"
+                        }
+                    ]
+                },
+                "time": {
+                    "description": "Unix timestamp when the event occurred",
+                    "type": "integer",
+                    "example": 1706918400
+                },
+                "type": {
+                    "description": "Type of event (e.g., \"container\", \"interface-stats\")",
+                    "type": "string",
+                    "example": "container"
                 }
             }
         },
@@ -2468,7 +2619,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "token": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwiZXhwIjoxNzA2OTIyMDAwfQ.abc123"
                 }
             }
         },

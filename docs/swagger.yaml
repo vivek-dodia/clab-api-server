@@ -225,6 +225,61 @@ definitions:
   models.ErrorResponse:
     properties:
       error:
+        example: Invalid credentials or user not in allowed group
+        type: string
+    type: object
+  models.EventAttributes:
+    properties:
+      clab-node-kind:
+        description: Node kind (e.g., nokia_srlinux, linux)
+        example: nokia_srlinux
+        type: string
+      clab-node-name:
+        description: Node name within the lab
+        example: srl1
+        type: string
+      clab-node-type:
+        description: Node type
+        example: ixrd3
+        type: string
+      containerlab:
+        description: Alternative lab name field (containerlab label)
+        example: mylab
+        type: string
+      exitCode:
+        description: Exit code (for stop/die events)
+        example: "0"
+        type: string
+      image:
+        description: Container image
+        example: ghcr.io/nokia/srlinux:latest
+        type: string
+      lab:
+        description: Lab name this event belongs to
+        example: mylab
+        type: string
+      name:
+        description: Container name
+        example: clab-mylab-srl1
+        type: string
+    type: object
+  models.EventResponse:
+    properties:
+      action:
+        description: Event action (e.g., "start", "stop", "die", "stats")
+        example: start
+        type: string
+      attributes:
+        allOf:
+        - $ref: '#/definitions/models.EventAttributes'
+        description: Event attributes containing details about the event
+      time:
+        description: Unix timestamp when the event occurred
+        example: 1706918400
+        type: integer
+      type:
+        description: Type of event (e.g., "container", "interface-stats")
+        example: container
         type: string
     type: object
   models.ExecRequest:
@@ -389,6 +444,7 @@ definitions:
   models.LoginResponse:
     properties:
       token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwiZXhwIjoxNzA2OTIyMDAwfQ.abc123
         type: string
     type: object
   models.LogsResponse:
@@ -681,6 +737,77 @@ info:
   title: Containerlab API
   version: "1.0"
 paths:
+  /api/v1/events:
+    get:
+      description: |-
+        Streams containerlab events in real-time. The response stays open until the client disconnects.
+
+        **JSON format example** (default, returns NDJSON - one JSON object per line):
+        ```json
+        {"time":1706918400,"type":"container","action":"start","attributes":{"name":"clab-mylab-srl1","lab":"mylab","clab-node-name":"srl1","clab-node-kind":"nokia_srlinux"}}
+        {"time":1706918405,"type":"container","action":"start","attributes":{"name":"clab-mylab-srl2","lab":"mylab","clab-node-name":"srl2","clab-node-kind":"nokia_srlinux"}}
+        ```
+
+        **Interface stats example** (interfaceStats=true):
+        ```json
+        {"time":1706918410,"type":"interface-stats","action":"stats","attributes":{"name":"clab-mylab-srl1","lab":"mylab","interface":"e1-1","rx_bytes":123456,"tx_bytes":654321}}
+        ```
+
+        **Plain format example** (format=plain):
+        ```
+        2024-02-03T10:30:00Z container start (name=clab-mylab-srl1, lab=mylab, kind=nokia_srlinux)
+        2024-02-03T10:30:05Z container start (name=clab-mylab-srl2, lab=mylab, kind=nokia_srlinux)
+        ```
+      parameters:
+      - default: json
+        description: Output format ('json' or 'plain'). Default is 'json'.
+        enum:
+        - json
+        - plain
+        in: query
+        name: format
+        type: string
+      - default: false
+        description: Include initial snapshot events when the stream starts.
+        in: query
+        name: initialState
+        type: boolean
+      - default: false
+        description: Include interface stats events.
+        in: query
+        name: interfaceStats
+        type: boolean
+      - default: 10s
+        description: Interval for interface stats collection (e.g., 10s). Requires
+          interfaceStats=true.
+        in: query
+        name: interfaceStatsInterval
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Event stream - returns newline-delimited events (plain text
+            or NDJSON)
+          schema:
+            $ref: '#/definitions/models.EventResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stream Containerlab Events
+      tags:
+      - Events
   /api/v1/generate:
     post:
       consumes:
