@@ -1374,6 +1374,209 @@
                 }
             }
         },
+        "/api/v1/tools/netem/reset": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Resets (removes) netem impairments from a specific interface of a containerlab node. Requires superuser privileges.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tools - Netem"
+                ],
+                "summary": "Reset link impairments (netem)",
+                "parameters": [
+                    {
+                        "description": "Netem Reset Parameters",
+                        "name": "netem_reset_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.NetemResetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Impairments reset successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input parameters",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized (JWT)",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (User is not a superuser)",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Container or interface not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tools/netem/set": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets netem impairments (delay, jitter, loss, rate limiting, corruption) on a specific interface of a containerlab node. Requires superuser privileges.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tools - Netem"
+                ],
+                "summary": "Set link impairments (netem)",
+                "parameters": [
+                    {
+                        "description": "Netem Set Parameters",
+                        "name": "netem_set_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.NetemSetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Impairments set successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input parameters",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized (JWT)",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (User is not a superuser)",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Container or interface not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tools/netem/show": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lists netem impairments for a given containerlab node. Requires superuser privileges.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tools - Netem"
+                ],
+                "summary": "Show link impairments (netem)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "clab-my-lab-srl1",
+                        "description": "Container/node name",
+                        "name": "containerName",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Netem impairments",
+                        "schema": {
+                            "$ref": "#/definitions/models.NetemShowResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input parameters",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized (JWT)",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (User is not a superuser)",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Container not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tools/veth": {
             "post": {
                 "security": [
@@ -2652,10 +2855,10 @@
                 "username"
             ],
             "properties": {
-                "username": {
+                "password": {
                     "type": "string"
                 },
-                "password": {
+                "username": {
                     "type": "string"
                 }
             }
@@ -2756,6 +2959,107 @@
                             "$ref": "#/definitions/models.ServerInfo"
                         }
                     ]
+                }
+            }
+        },
+        "models.NetemInterfaceInfo": {
+            "type": "object",
+            "properties": {
+                "corruption": {
+                    "description": "Percentage (might be missing in older clab versions)",
+                    "type": "number"
+                },
+                "delay": {
+                    "description": "Duration string or empty",
+                    "type": "string"
+                },
+                "interface": {
+                    "description": "Interface name",
+                    "type": "string"
+                },
+                "jitter": {
+                    "description": "Duration string or empty",
+                    "type": "string"
+                },
+                "packet_loss": {
+                    "description": "Percentage",
+                    "type": "number"
+                },
+                "rate": {
+                    "description": "Kbit/s",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.NetemResetRequest": {
+            "type": "object",
+            "required": [
+                "containerName",
+                "interface"
+            ],
+            "properties": {
+                "containerName": {
+                    "description": "Container/node name to reset impairments on (e.g., \"clab-my-lab-srl1\").",
+                    "type": "string",
+                    "example": "clab-my-lab-srl1"
+                },
+                "interface": {
+                    "description": "Interface name or interface alias to reset impairments on (e.g., \"eth1\" or \"mgmt0\").",
+                    "type": "string",
+                    "example": "eth1"
+                }
+            }
+        },
+        "models.NetemSetRequest": {
+            "type": "object",
+            "required": [
+                "containerName",
+                "interface"
+            ],
+            "properties": {
+                "containerName": {
+                    "description": "Container/node name to apply impairments on (e.g., \"clab-my-lab-srl1\").",
+                    "type": "string",
+                    "example": "clab-my-lab-srl1"
+                },
+                "corruption": {
+                    "description": "Percentage (0.0 to 100.0)",
+                    "type": "number",
+                    "example": 0.1
+                },
+                "delay": {
+                    "description": "Duration string (e.g., \"100ms\", \"1s\")",
+                    "type": "string",
+                    "example": "50ms"
+                },
+                "interface": {
+                    "description": "Interface name or interface alias to apply impairments on (e.g., \"eth1\" or \"mgmt0\").",
+                    "type": "string",
+                    "example": "eth1"
+                },
+                "jitter": {
+                    "description": "Duration string, requires Delay",
+                    "type": "string",
+                    "example": "5ms"
+                },
+                "loss": {
+                    "description": "Percentage (0.0 to 100.0)",
+                    "type": "number",
+                    "example": 10.5
+                },
+                "rate": {
+                    "description": "Kbit/s (non-negative integer)",
+                    "type": "integer",
+                    "example": 1000
+                }
+            }
+        },
+        "models.NetemShowResponse": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/definitions/models.NetemInterfaceInfo"
                 }
             }
         },

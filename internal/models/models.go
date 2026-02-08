@@ -286,11 +286,26 @@ type VxlanCreateRequest struct {
 // Use pointers to distinguish between unset and zero values if necessary,
 // but clab defaults usually handle zero values correctly (meaning "unset").
 type NetemSetRequest struct {
+	// Container/node name to apply impairments on (e.g., "clab-my-lab-srl1").
+	ContainerName string `json:"containerName" binding:"required" example:"clab-my-lab-srl1"`
+
+	// Interface name or interface alias to apply impairments on (e.g., "eth1" or "mgmt0").
+	Interface string `json:"interface" binding:"required" example:"eth1"`
+
 	Delay      string  `json:"delay,omitempty" example:"50ms"`     // Duration string (e.g., "100ms", "1s")
 	Jitter     string  `json:"jitter,omitempty" example:"5ms"`     // Duration string, requires Delay
 	Loss       float64 `json:"loss,omitempty" example:"10.5"`      // Percentage (0.0 to 100.0)
 	Rate       uint    `json:"rate,omitempty" example:"1000"`      // Kbit/s (non-negative integer)
 	Corruption float64 `json:"corruption,omitempty" example:"0.1"` // Percentage (0.0 to 100.0)
+}
+
+// NetemResetRequest represents the parameters for resetting network emulation on an interface.
+type NetemResetRequest struct {
+	// Container/node name to reset impairments on (e.g., "clab-my-lab-srl1").
+	ContainerName string `json:"containerName" binding:"required" example:"clab-my-lab-srl1"`
+
+	// Interface name or interface alias to reset impairments on (e.g., "eth1" or "mgmt0").
+	Interface string `json:"interface" binding:"required" example:"eth1"`
 }
 
 // NetemInterfaceInfo holds the netem details for a single interface from `clab tools netem show --format json`
