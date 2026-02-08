@@ -531,6 +531,16 @@ func (s *Service) CreateCA(ctx context.Context, opts CACreateOptions) (*clabcert
 
 	ca := clabcert.NewCA()
 
+	// Go crypto/rsa rejects insecure key sizes; containerlab cert helpers
+	// accept 0 which used to imply a default. Enforce a safe default here.
+	keySize := opts.KeySize
+	if keySize == 0 {
+		keySize = 2048
+	}
+	if keySize < 2048 {
+		keySize = 2048
+	}
+
 	input := &clabcert.CACSRInput{
 		CommonName:       opts.CommonName,
 		Country:          opts.Country,
@@ -538,13 +548,14 @@ func (s *Service) CreateCA(ctx context.Context, opts CACreateOptions) (*clabcert
 		Organization:     opts.Organization,
 		OrganizationUnit: opts.OrgUnit,
 		Expiry:           opts.Expiry,
-		KeySize:          opts.KeySize,
+		KeySize:          keySize,
 	}
 
 	log.Info("Generating CA certificate",
 		"name", opts.Name,
 		"commonName", opts.CommonName,
 		"expiry", opts.Expiry,
+		"keySize", keySize,
 	)
 
 	cert, err := ca.GenerateCACert(input)
