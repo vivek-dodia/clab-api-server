@@ -433,9 +433,9 @@ definitions:
     type: object
   models.LoginRequest:
     properties:
-      password:
-        type: string
       username:
+        type: string
+      password:
         type: string
     required:
     - password
