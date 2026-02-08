@@ -433,9 +433,9 @@ definitions:
     type: object
   models.LoginRequest:
     properties:
-      username:
-        type: string
       password:
+        type: string
+      username:
         type: string
     required:
     - password
@@ -500,6 +500,83 @@ definitions:
         allOf:
         - $ref: '#/definitions/models.ServerInfo'
         description: Basic server information
+    type: object
+  models.NetemInterfaceInfo:
+    properties:
+      corruption:
+        description: Percentage (might be missing in older clab versions)
+        type: number
+      delay:
+        description: Duration string or empty
+        type: string
+      interface:
+        description: Interface name
+        type: string
+      jitter:
+        description: Duration string or empty
+        type: string
+      packet_loss:
+        description: Percentage
+        type: number
+      rate:
+        description: Kbit/s
+        type: integer
+    type: object
+  models.NetemResetRequest:
+    properties:
+      containerName:
+        description: Container/node name to reset impairments on (e.g., "clab-my-lab-srl1").
+        example: clab-my-lab-srl1
+        type: string
+      interface:
+        description: Interface name or interface alias to reset impairments on (e.g.,
+          "eth1" or "mgmt0").
+        example: eth1
+        type: string
+    required:
+    - containerName
+    - interface
+    type: object
+  models.NetemSetRequest:
+    properties:
+      containerName:
+        description: Container/node name to apply impairments on (e.g., "clab-my-lab-srl1").
+        example: clab-my-lab-srl1
+        type: string
+      corruption:
+        description: Percentage (0.0 to 100.0)
+        example: 0.1
+        type: number
+      delay:
+        description: Duration string (e.g., "100ms", "1s")
+        example: 50ms
+        type: string
+      interface:
+        description: Interface name or interface alias to apply impairments on (e.g.,
+          "eth1" or "mgmt0").
+        example: eth1
+        type: string
+      jitter:
+        description: Duration string, requires Delay
+        example: 5ms
+        type: string
+      loss:
+        description: Percentage (0.0 to 100.0)
+        example: 10.5
+        type: number
+      rate:
+        description: Kbit/s (non-negative integer)
+        example: 1000
+        type: integer
+    required:
+    - containerName
+    - interface
+    type: object
+  models.NetemShowResponse:
+    additionalProperties:
+      items:
+        $ref: '#/definitions/models.NetemInterfaceInfo'
+      type: array
     type: object
   models.NodeInterfaceInfo:
     properties:
@@ -1672,6 +1749,139 @@ paths:
       summary: Disable TX checksum offload
       tags:
       - Tools
+  /api/v1/tools/netem/reset:
+    post:
+      consumes:
+      - application/json
+      description: Resets (removes) netem impairments from a specific interface of
+        a containerlab node. Requires superuser privileges.
+      parameters:
+      - description: Netem Reset Parameters
+        in: body
+        name: netem_reset_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.NetemResetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Impairments reset successfully
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Invalid input parameters
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized (JWT)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden (User is not a superuser)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Container or interface not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Reset link impairments (netem)
+      tags:
+      - Tools - Netem
+  /api/v1/tools/netem/set:
+    post:
+      consumes:
+      - application/json
+      description: Sets netem impairments (delay, jitter, loss, rate limiting, corruption)
+        on a specific interface of a containerlab node. Requires superuser privileges.
+      parameters:
+      - description: Netem Set Parameters
+        in: body
+        name: netem_set_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.NetemSetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Impairments set successfully
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Invalid input parameters
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized (JWT)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden (User is not a superuser)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Container or interface not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set link impairments (netem)
+      tags:
+      - Tools - Netem
+  /api/v1/tools/netem/show:
+    get:
+      description: Lists netem impairments for a given containerlab node. Requires
+        superuser privileges.
+      parameters:
+      - description: Container/node name
+        example: clab-my-lab-srl1
+        in: query
+        name: containerName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Netem impairments
+          schema:
+            $ref: '#/definitions/models.NetemShowResponse'
+        "400":
+          description: Invalid input parameters
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized (JWT)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden (User is not a superuser)
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Container not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Show link impairments (netem)
+      tags:
+      - Tools - Netem
   /api/v1/tools/veth:
     post:
       consumes:

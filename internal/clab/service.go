@@ -3,9 +3,12 @@ package clab
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
 	"net"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strconv"
@@ -14,11 +17,13 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/containernetworking/plugins/pkg/ns"
+	gotc "github.com/florianl/go-tc"
 	clabcert "github.com/srl-labs/containerlab/cert"
 	clabcore "github.com/srl-labs/containerlab/core"
 	clabexec "github.com/srl-labs/containerlab/exec"
 	clabgit "github.com/srl-labs/containerlab/git"
 	clablinks "github.com/srl-labs/containerlab/links"
+	clabnetem "github.com/srl-labs/containerlab/netem"
 	clabnodes "github.com/srl-labs/containerlab/nodes"
 	clabnodesstate "github.com/srl-labs/containerlab/nodes/state"
 	clabruntime "github.com/srl-labs/containerlab/runtime"
@@ -34,6 +39,8 @@ const (
 	defaultTimeout         = 5 * time.Minute
 	gracefulDestroyTimeout = 2 * time.Minute
 )
+
+var ErrNetemInterfaceNotFound = errors.New("netem interface not found")
 
 // Service provides an interface to containerlab operations using the library directly.
 type Service struct{}
@@ -954,6 +961,283 @@ func (s *Service) DeleteVxlan(ctx context.Context, prefix string) ([]string, err
 	}
 
 	return deleted, nil
+}
+
+// --- Netem ---
+
+// NetemSetOptions contains options for setting link impairments using netem.
+type NetemSetOptions struct {
+	ContainerName string
+	Interface     string
+	Delay         time.Duration
+	Jitter        time.Duration
+	Loss          float64
+	Rate          uint64 // kbit/s
+	Corruption    float64
+}
+
+// SetNetem applies netem impairments to a specific interface in a container's network namespace.
+func (s *Service) SetNetem(ctx context.Context, opts NetemSetOptions) error {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	// Best-effort: ensure netem kernel module is loaded (helps on some distros).
+	if err := exec.CommandContext(ctx, "modprobe", "sch_netem").Run(); err != nil {
+		log.Warn("failed to load sch_netem kernel module", "err", err)
+	}
+
+	rt, err := s.getContainerRuntime()
+	if err != nil {
+		return err
+	}
+
+	nsPath, err := rt.GetNSPath(ctx, opts.ContainerName)
+	if err != nil {
+		return fmt.Errorf("failed to get namespace path for container %s: %w", opts.ContainerName, err)
+	}
+
+	nodeNS, err := ns.GetNS(nsPath)
+	if err != nil {
+		return fmt.Errorf("failed to open network namespace %s: %w", nsPath, err)
+	}
+	defer nodeNS.Close()
+
+	tcnl, err := clabnetem.NewTC(int(nodeNS.Fd()))
+	if err != nil {
+		return fmt.Errorf("failed to open rtnetlink socket: %w", err)
+	}
+	defer func() {
+		if closeErr := tcnl.Close(); closeErr != nil {
+			log.Warn("failed to close rtnetlink socket", "err", closeErr)
+		}
+	}()
+
+	err = nodeNS.Do(func(_ ns.NetNS) error {
+		netemIfLink, err := netlink.LinkByName(clablinks.SanitizeInterfaceName(opts.Interface))
+		if err != nil {
+			var lnf netlink.LinkNotFoundError
+			if errors.As(err, &lnf) {
+				return fmt.Errorf("%w: %s", ErrNetemInterfaceNotFound, opts.Interface)
+			}
+			return err
+		}
+
+		netemIfName := netemIfLink.Attrs().Name
+		iface, err := net.InterfaceByName(netemIfName)
+		if err != nil {
+			return fmt.Errorf("%w: %s", ErrNetemInterfaceNotFound, netemIfName)
+		}
+
+		_, err = clabnetem.SetImpairments(
+			tcnl,
+			opts.ContainerName,
+			iface,
+			opts.Delay,
+			opts.Jitter,
+			opts.Loss,
+			opts.Rate,
+			opts.Corruption,
+		)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	log.Info("netem impairments set",
+		"container", opts.ContainerName,
+		"interface", opts.Interface,
+		"delay", opts.Delay.String(),
+		"jitter", opts.Jitter.String(),
+		"loss", opts.Loss,
+		"rate_kbit", opts.Rate,
+		"corruption", opts.Corruption,
+	)
+
+	return nil
+}
+
+// ResetNetem removes netem impairments from a specific interface in a container's network namespace.
+func (s *Service) ResetNetem(ctx context.Context, containerName, iface string) error {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	rt, err := s.getContainerRuntime()
+	if err != nil {
+		return err
+	}
+
+	nsPath, err := rt.GetNSPath(ctx, containerName)
+	if err != nil {
+		return fmt.Errorf("failed to get namespace path for container %s: %w", containerName, err)
+	}
+
+	nodeNS, err := ns.GetNS(nsPath)
+	if err != nil {
+		return fmt.Errorf("failed to open network namespace %s: %w", nsPath, err)
+	}
+	defer nodeNS.Close()
+
+	tcnl, err := clabnetem.NewTC(int(nodeNS.Fd()))
+	if err != nil {
+		return fmt.Errorf("failed to open rtnetlink socket: %w", err)
+	}
+	defer func() {
+		if closeErr := tcnl.Close(); closeErr != nil {
+			log.Warn("failed to close rtnetlink socket", "err", closeErr)
+		}
+	}()
+
+	return nodeNS.Do(func(_ ns.NetNS) error {
+		netemIfLink, err := netlink.LinkByName(clablinks.SanitizeInterfaceName(iface))
+		if err != nil {
+			var lnf netlink.LinkNotFoundError
+			if errors.As(err, &lnf) {
+				return fmt.Errorf("%w: %s", ErrNetemInterfaceNotFound, iface)
+			}
+			return err
+		}
+
+		netemIfIface, err := net.InterfaceByName(netemIfLink.Attrs().Name)
+		if err != nil {
+			return fmt.Errorf("%w: %s", ErrNetemInterfaceNotFound, netemIfLink.Attrs().Name)
+		}
+
+		return clabnetem.DeleteImpairments(tcnl, netemIfIface)
+	})
+}
+
+// ShowNetem returns the current netem impairments for interfaces that have netem qdisc set.
+func (s *Service) ShowNetem(ctx context.Context, containerName string) ([]clabtypes.ImpairmentData, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	rt, err := s.getContainerRuntime()
+	if err != nil {
+		return nil, err
+	}
+
+	nsPath, err := rt.GetNSPath(ctx, containerName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get namespace path for container %s: %w", containerName, err)
+	}
+
+	nodeNS, err := ns.GetNS(nsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open network namespace %s: %w", nsPath, err)
+	}
+	defer nodeNS.Close()
+
+	tcnl, err := clabnetem.NewTC(int(nodeNS.Fd()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open rtnetlink socket: %w", err)
+	}
+	defer func() {
+		if closeErr := tcnl.Close(); closeErr != nil {
+			log.Warn("failed to close rtnetlink socket", "err", closeErr)
+		}
+	}()
+
+	var impairments []clabtypes.ImpairmentData
+	err = nodeNS.Do(func(_ ns.NetNS) error {
+		qdiscs, err := clabnetem.Impairments(tcnl)
+		if err != nil {
+			return err
+		}
+
+		for idx := range qdiscs {
+			if qdiscs[idx].Attribute.Kind != "netem" {
+				continue // skip clsact or other qdisc types
+			}
+			impairments = append(impairments, qdiscToImpairmentData(&qdiscs[idx]))
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return impairments, nil
+}
+
+func (s *Service) getContainerRuntime() (clabruntime.ContainerRuntime, error) {
+	clabOpts := []clabcore.ClabOption{
+		clabcore.WithTimeout(defaultTimeout),
+		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
+	}
+
+	clab, err := clabcore.NewContainerLab(clabOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create containerlab instance: %w", err)
+	}
+
+	// Prefer explicitly configured runtime if present.
+	if rt, ok := clab.Runtimes[config.AppConfig.ClabRuntime]; ok && rt != nil {
+		return rt, nil
+	}
+
+	// Fall back to first configured runtime.
+	for _, rt := range clab.Runtimes {
+		if rt != nil {
+			return rt, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no container runtime configured")
+}
+
+const msPerSec = 1000
+
+func qdiscToImpairmentData(qdisc *gotc.Object) clabtypes.ImpairmentData {
+	var ifDisplayName string
+
+	link, err := netlink.LinkByIndex(int(qdisc.Ifindex))
+	if err != nil || link == nil {
+		ifDisplayName = fmt.Sprintf("ifindex:%d", qdisc.Ifindex)
+	} else {
+		ifDisplayName = link.Attrs().Name
+		if link.Attrs().Alias != "" {
+			ifDisplayName += fmt.Sprintf(" (%s)", link.Attrs().Alias)
+		}
+	}
+
+	// Return empty values when netem is not set.
+	if qdisc.Netem == nil {
+		return clabtypes.ImpairmentData{
+			Interface: ifDisplayName,
+		}
+	}
+
+	data := clabtypes.ImpairmentData{
+		Interface: ifDisplayName,
+	}
+
+	if qdisc.Netem.Latency64 != nil && *qdisc.Netem.Latency64 != 0 {
+		data.Delay = (time.Duration(*qdisc.Netem.Latency64) * time.Nanosecond).String()
+	}
+
+	if qdisc.Netem.Jitter64 != nil && *qdisc.Netem.Jitter64 != 0 {
+		data.Jitter = (time.Duration(*qdisc.Netem.Jitter64) * time.Nanosecond).String()
+	}
+
+	if qdisc.Netem.Rate != nil && int(qdisc.Netem.Rate.Rate) != 0 {
+		data.Rate = int(uint64(qdisc.Netem.Rate.Rate) * 8 / msPerSec)
+	}
+
+	if qdisc.Netem.Corrupt != nil && qdisc.Netem.Corrupt.Probability != 0 {
+		// round to 2 decimal places
+		data.Corruption = math.Round((float64(qdisc.Netem.Corrupt.Probability)/
+			float64(math.MaxUint32)*100)*100) / 100 //nolint: mnd
+	}
+
+	if qdisc.Netem.Qopt.Loss != 0 {
+		// round to 2 decimal places
+		data.PacketLoss = math.Round(
+			(float64(qdisc.Netem.Qopt.Loss)/float64(math.MaxUint32)*100)*100) / 100 //nolint: mnd
+	}
+
+	return data
 }
 
 // GenerateTopologyOptions contains options for generating a topology.
