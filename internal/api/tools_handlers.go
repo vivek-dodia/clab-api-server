@@ -747,7 +747,7 @@ func SetNetemHandler(c *gin.Context) {
 // @Tags Tools - Netem
 // @Security BearerAuth
 // @Produce json
-// @Param containerName query string true "Container/node name" example(clab-my-lab-srl1)
+// @Param containerName query string true "Container/node name"
 // @Success 200 {object} models.NetemShowResponse "Netem impairments"
 // @Failure 400 {object} models.ErrorResponse "Invalid input parameters"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized (JWT)"
