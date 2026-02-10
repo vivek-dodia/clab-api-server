@@ -1534,7 +1534,6 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "example": "clab-my-lab-srl1",
                         "description": "Container/node name",
                         "name": "containerName",
                         "in": "query",

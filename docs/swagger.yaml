@@ -1845,7 +1845,6 @@ paths:
         superuser privileges.
       parameters:
       - description: Container/node name
-        example: clab-my-lab-srl1
         in: query
         name: containerName
         required: true
