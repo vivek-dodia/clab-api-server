@@ -2,11 +2,13 @@ package tests_go
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -179,6 +181,121 @@ topology:
 	)
 }
 
+func (s *LabCleanupSuite) TestDestroyCleanupWithPurgeLabDirAllowsSuperuserForOtherOwnerLab() {
+	labName := fmt.Sprintf("%s-purge-su-%s", s.cfg.LabNamePrefix, s.randomSuffix(6))
+
+	apiUserToken := s.login(s.cfg.APIUserUser, s.cfg.APIUserPass)
+	apiUserHeaders := s.getAuthHeaders(apiUserToken)
+
+	topology := fmt.Sprintf(`{
+  "name": "%s",
+  "topology": {
+    "kinds": {
+      "linux": {
+        "image": "ghcr.io/srl-labs/network-multitool:latest"
+      }
+    },
+    "nodes": {
+      "n1": {
+        "kind": "linux"
+      }
+    }
+  }
+}`, labName)
+	bodyBytes, statusCode, createErr := s.createLab(apiUserHeaders, labName, topology, false, s.cfg.DeployTimeout)
+	s.Require().NoError(createErr, "Failed to execute create request")
+	s.Require().Equal(http.StatusOK, statusCode, "Create request returned non-OK status. Body: %s", string(bodyBytes))
+
+	defer func() {
+		_, _, _ = s.destroyLab(s.superuserHeaders, labName, true, s.cfg.CleanupTimeout)
+	}()
+
+	apiUser, lookupErr := user.Lookup(s.cfg.APIUserUser)
+	if lookupErr != nil {
+		s.T().Skipf("Skipping test: unable to lookup API user '%s': %v", s.cfg.APIUserUser, lookupErr)
+	}
+
+	labDir := filepath.Join(apiUser.HomeDir, ".clab", labName)
+	exists, existsErr := s.pathExistsAsUser(labDir, s.cfg.APIUserUser, s.cfg.RequestTimeout)
+	s.Require().NoError(existsErr, "Failed to verify API-user lab directory existence before destroy")
+	s.Require().Truef(exists, "Expected API-user lab directory to exist before destroy: %s", labDir)
+
+	bodyBytes, statusCode, destroyErr := s.destroyLabWithQuery(s.superuserHeaders, labName, map[string]string{
+		"cleanup":     "true",
+		"purgeLabDir": "true",
+	}, s.cfg.CleanupTimeout)
+	s.Require().NoError(destroyErr, "Failed to execute destroy request")
+	s.Require().Equal(http.StatusOK, statusCode, "Destroy request returned non-OK status. Body: %s", string(bodyBytes))
+
+	time.Sleep(2 * time.Second)
+
+	exists, existsErr = s.pathExistsAsUser(labDir, s.cfg.APIUserUser, s.cfg.RequestTimeout)
+	s.Require().NoError(existsErr, "Failed to verify API-user lab directory existence after destroy")
+	s.Require().Falsef(exists,
+		"Expected superuser purge to remove API-user lab directory when purgeLabDir=true: %s",
+		labDir,
+	)
+}
+
+func (s *LabCleanupSuite) TestDestroyCleanupWithPurgeLabDirDeniedForNonSuperuserOnOtherOwnerLab() {
+	labName := fmt.Sprintf("%s-purge-deny-%s", s.cfg.LabNamePrefix, s.randomSuffix(6))
+
+	apiUserToken := s.login(s.cfg.APIUserUser, s.cfg.APIUserPass)
+	apiUserHeaders := s.getAuthHeaders(apiUserToken)
+
+	topology := fmt.Sprintf(`{
+  "name": "%s",
+  "topology": {
+    "kinds": {
+      "linux": {
+        "image": "ghcr.io/srl-labs/network-multitool:latest"
+      }
+    },
+    "nodes": {
+      "n1": {
+        "kind": "linux"
+      }
+    }
+  }
+}`, labName)
+	bodyBytes, statusCode, createErr := s.createLab(s.superuserHeaders, labName, topology, false, s.cfg.DeployTimeout)
+	s.Require().NoError(createErr, "Failed to execute create request")
+	s.Require().Equal(http.StatusOK, statusCode, "Create request returned non-OK status. Body: %s", string(bodyBytes))
+
+	defer func() {
+		_, _, _ = s.destroyLab(s.superuserHeaders, labName, true, s.cfg.CleanupTimeout)
+	}()
+
+	superuser, lookupErr := user.Lookup(s.cfg.SuperuserUser)
+	if lookupErr != nil {
+		s.T().Skipf("Skipping test: unable to lookup superuser '%s': %v", s.cfg.SuperuserUser, lookupErr)
+	}
+
+	labDir := filepath.Join(superuser.HomeDir, ".clab", labName)
+	exists, existsErr := s.pathExistsAsUser(labDir, s.cfg.SuperuserUser, s.cfg.RequestTimeout)
+	s.Require().NoError(existsErr, "Failed to verify superuser lab directory existence before non-owner destroy")
+	s.Require().Truef(exists, "Expected superuser lab directory to exist before non-owner destroy: %s", labDir)
+
+	bodyBytes, statusCode, destroyErr := s.destroyLabWithQuery(apiUserHeaders, labName, map[string]string{
+		"cleanup":     "true",
+		"purgeLabDir": "true",
+	}, s.cfg.CleanupTimeout)
+	s.Require().NoError(destroyErr, "Failed to execute non-owner destroy request")
+	s.Require().Truef(
+		statusCode == http.StatusForbidden || statusCode == http.StatusNotFound,
+		"Expected 403/404 for non-owner destroy+purge, got %d. Body: %s",
+		statusCode,
+		string(bodyBytes),
+	)
+
+	exists, existsErr = s.pathExistsAsUser(labDir, s.cfg.SuperuserUser, s.cfg.RequestTimeout)
+	s.Require().NoError(existsErr, "Failed to verify superuser lab directory existence after non-owner destroy")
+	s.Require().Truef(exists,
+		"Expected non-owner destroy+purge to leave superuser lab directory intact: %s",
+		labDir,
+	)
+}
+
 func (s *LabCleanupSuite) runContainerlabWithFallback(timeout time.Duration, args ...string) (string, error) {
 	s.T().Helper()
 
@@ -210,6 +327,32 @@ func (s *LabCleanupSuite) runContainerlabWithFallback(timeout time.Duration, arg
 	}
 
 	return sudoOut, sudoRunErr
+}
+
+func (s *LabCleanupSuite) pathExistsAsUser(path, username string, timeout time.Duration) (bool, error) {
+	if _, err := os.Stat(path); err == nil {
+		return true, nil
+	} else if os.IsNotExist(err) {
+		return false, nil
+	} else if !os.IsPermission(err) {
+		return false, err
+	}
+
+	if _, err := exec.LookPath("sudo"); err != nil {
+		return false, fmt.Errorf("permission denied for path '%s' and sudo is unavailable: %w", path, err)
+	}
+
+	_, cmdErr := s.runCommand(timeout, "sudo", "-n", "-u", username, "test", "-e", path)
+	if cmdErr == nil {
+		return true, nil
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(cmdErr, &exitErr) && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+
+	return false, cmdErr
 }
 
 func (s *LabCleanupSuite) destroyLabWithQuery(headers http.Header, labName string, queryParams map[string]string, timeout time.Duration) ([]byte, int, error) {

@@ -490,6 +490,16 @@ func DestroyLabHandler(c *gin.Context) {
 		return
 	}
 
+	// For purgeLabDir checks, derive the managed base directory from the lab owner.
+	// This allows superusers to purge labs owned by other users while still enforcing
+	// path safety constraints (managed ~/.clab or shared labs directory only).
+	purgeBaseUser := username
+	if purgeLabDir {
+		if info, exists, err := getLabInfo(ctx, username, labName); err == nil && exists && info != nil && info.Owner != "" {
+			purgeBaseUser = info.Owner
+		}
+	}
+
 	var nodeFilterSlice []string
 	if nodeFilter != "" {
 		nodeFilterSlice = strings.Split(nodeFilter, ",")
@@ -521,9 +531,9 @@ func DestroyLabHandler(c *gin.Context) {
 		sharedDir := os.Getenv("CLAB_SHARED_LABS_DIR")
 		expectedBase := ""
 		if sharedDir != "" {
-			expectedBase = filepath.Join(sharedDir, "users", username)
+			expectedBase = filepath.Join(sharedDir, "users", purgeBaseUser)
 		} else {
-			usr, lookupErr := user.Lookup(username)
+			usr, lookupErr := user.Lookup(purgeBaseUser)
 			if lookupErr == nil {
 				expectedBase = filepath.Join(usr.HomeDir, ".clab")
 			}
