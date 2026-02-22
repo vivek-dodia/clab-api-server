@@ -536,7 +536,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "boolean",
-                        "description": "Remove lab directory after destroy",
+                        "description": "Remove containerlab lab artifacts during destroy phase",
                         "name": "cleanup",
                         "in": "query"
                     },
@@ -634,8 +634,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "boolean",
-                        "description": "Remove lab directory after destroy",
+                        "description": "Remove containerlab lab artifacts after destroy",
                         "name": "cleanup",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Purge topology parent directory for managed lab paths (~/.clab or shared labs dir)",
+                        "name": "purgeLabDir",
                         "in": "query"
                     },
                     {

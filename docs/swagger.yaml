@@ -1063,9 +1063,14 @@ paths:
         name: labName
         required: true
         type: string
-      - description: Remove lab directory after destroy
+      - description: Remove containerlab lab artifacts after destroy
         in: query
         name: cleanup
+        type: boolean
+      - description: Purge topology parent directory for managed lab paths (~/.clab
+          or shared labs dir)
+        in: query
+        name: purgeLabDir
         type: boolean
       - description: Attempt graceful shutdown
         in: query
@@ -1157,7 +1162,7 @@ paths:
         name: labName
         required: true
         type: string
-      - description: Remove lab directory after destroy
+      - description: Remove containerlab lab artifacts during destroy phase
         in: query
         name: cleanup
         type: boolean

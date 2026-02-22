@@ -446,7 +446,8 @@ func DeployLabArchiveHandler(c *gin.Context) {
 // @Security BearerAuth
 // @Produce json
 // @Param labName path string true "Name of the lab to destroy"
-// @Param cleanup query boolean false "Remove lab directory after destroy"
+// @Param cleanup query boolean false "Remove containerlab lab artifacts after destroy"
+// @Param purgeLabDir query boolean false "Purge topology parent directory for managed lab paths (~/.clab or shared labs dir)"
 // @Param graceful query boolean false "Attempt graceful shutdown"
 // @Param keepMgmtNet query boolean false "Keep the management network"
 // @Param nodeFilter query string false "Destroy only specific nodes"
@@ -468,6 +469,7 @@ func DestroyLabHandler(c *gin.Context) {
 	}
 
 	cleanup := c.Query("cleanup") == "true"
+	purgeLabDir := c.Query("purgeLabDir") == "true"
 	graceful := c.Query("graceful") == "true"
 	keepMgmtNet := c.Query("keepMgmtNet") == "true"
 	nodeFilter := c.Query("nodeFilter")
@@ -498,12 +500,12 @@ func DestroyLabHandler(c *gin.Context) {
 		TopoPath:    originalTopoPath,
 		Username:    username,
 		Graceful:    graceful,
-		Cleanup:     false, // We handle cleanup separately
+		Cleanup:     cleanup, // Keep containerlab cleanup behavior for all topology locations.
 		KeepMgmtNet: keepMgmtNet,
 		NodeFilter:  nodeFilterSlice,
 	}
 
-	log.Infof("DestroyLab user '%s': Destroying lab '%s' (cleanup=%t)...", username, labName, cleanup)
+	log.Infof("DestroyLab user '%s': Destroying lab '%s' (cleanup=%t, purgeLabDir=%t)...", username, labName, cleanup, purgeLabDir)
 	if err := svc.Destroy(ctx, destroyOpts); err != nil {
 		log.Errorf("DestroyLab failed for user '%s', lab '%s': %v", username, labName, err)
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to destroy lab '%s': %s", labName, err.Error())})
@@ -512,8 +514,8 @@ func DestroyLabHandler(c *gin.Context) {
 
 	log.Infof("Lab '%s' destroyed successfully for user '%s'.", labName, username)
 
-	// Cleanup directory if requested
-	if cleanup && originalTopoPath != "" && !strings.HasPrefix(originalTopoPath, "http") {
+	// Purge topology parent directory if requested.
+	if purgeLabDir && originalTopoPath != "" && !strings.HasPrefix(originalTopoPath, "http") {
 		targetDir := filepath.Dir(originalTopoPath)
 
 		sharedDir := os.Getenv("CLAB_SHARED_LABS_DIR")
@@ -548,7 +550,7 @@ func DestroyLabHandler(c *gin.Context) {
 // @Security BearerAuth
 // @Produce json
 // @Param labName path string true "Name of the lab to redeploy"
-// @Param cleanup query boolean false "Remove lab directory after destroy"
+// @Param cleanup query boolean false "Remove containerlab lab artifacts during destroy phase"
 // @Param graceful query boolean false "Attempt graceful shutdown"
 // @Param keepMgmtNet query boolean false "Keep the management network"
 // @Param maxWorkers query int false "Limit concurrent workers"
