@@ -140,11 +140,8 @@ jobs:
       with:
         images: ghcr.io/${{ env.REPO_LOWER }}/clab-api-server # Use lowercase repo name
         tags: |
-          type=schedule
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}} # e.g., v1.2.3
-          type=semver,pattern={{major}}.{{minor}} # e.g., v1.2
+          type=raw,value=${{ github.event.release.tag_name }}
+          type=raw,value=latest
           type=sha # Git SHA
 
     #---------------------------------------------------------------

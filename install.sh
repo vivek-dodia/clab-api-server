@@ -13,11 +13,11 @@
 #
 #   # Install a specific version
 #   curl -sL https://raw.githubusercontent.com/srl-labs/clab-api-server/refs/heads/main/install.sh \
-#     | sudo -E bash -s -- --version v0.1.1
+#     | sudo -E bash -s -- --version clab-0.73.0-api-0.2.1
 #
 #   # Just pull the binary (no env file / service)
 #   curl -sL https://raw.githubusercontent.com/srl-labs/clab-api-server/refs/heads/main/install.sh \
-#     | sudo -E bash -s -- pull-only --version v0.1.1
+#     | sudo -E bash -s -- pull-only --version clab-0.73.0-api-0.2.1
 #
 #   # Upgrade an existing installation (script is already on disk)
 #   sudo ./install.sh upgrade
@@ -26,7 +26,7 @@
 #   sudo ./install.sh uninstall --yes
 #
 # ── Environment variables / CLI flags ───────────────────────────────────────────
-#   --version vX.Y.Z   (or VERSION=vX.Y.Z)  ➜ install that version, otherwise latest
+#   --version clab-<clab>-api-<api-server>  (or VERSION=...)  ➜ install that version, otherwise latest
 #   --yes                              ➜ non‑interactive uninstall
 #
 
@@ -56,11 +56,31 @@ arch() {
 }
 
 latest_tag() {
-  # Resolve latest tag without GitHub API
-  curl -sSLI "https://github.com/${REPO}/releases/latest" \
-    | grep -i '^location:' \
-    | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' \
-    | head -n1
+  # Resolve latest tag without GitHub API.
+  local location tag
+
+  location="$(curl -sSLI "https://github.com/${REPO}/releases/latest" \
+    | awk 'tolower($1)=="location:"{print $2}' \
+    | tr -d '\r' \
+    | tail -n1)"
+
+  if [[ -z $location ]]; then
+    return 1
+  fi
+
+  tag="$location"
+  if [[ $tag == *"/releases/tag/"* ]]; then
+    tag="${tag#*releases/tag/}"
+  else
+    tag="${tag##*/}"
+  fi
+  tag="${tag%%\?*}"
+  tag="${tag%%#*}"
+
+  if [[ -z $tag ]]; then
+    return 1
+  fi
+  echo "$tag"
 }
 
 download_binary() {
@@ -176,7 +196,7 @@ while [[ $# -gt 0 ]]; do
     --yes|-y) YES=1 ;;
     -h|--help)
       cat <<USAGE
-Usage: $0 [install|pull-only|upgrade|uninstall] [--version vX.Y.Z] [--yes]
+Usage: $0 [install|pull-only|upgrade|uninstall] [--version clab-<clab>-api-<api-server>] [--yes]
 USAGE
       exit 0 ;;
     *) die "Unknown argument: $1" ;;
