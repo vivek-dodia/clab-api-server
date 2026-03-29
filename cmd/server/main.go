@@ -152,6 +152,7 @@ func main() {
 	}
 
 	// Setup API routes
+	router.Use(api.CORSMiddleware())
 	api.SetupRoutes(router)
 
 	// Root handler (remains the same)

@@ -17,6 +17,7 @@ A standalone RESTful API server for managing [Containerlab](https://containerlab
 * **Logs:** Check logs of the nodes, static or streaming
 * **User Context:** Track ownership and manage files within user home directories
 * **Multitenancy:** Support for multiple users with separate access to labs
+* **Standalone Topology Editing:** File-scoped topology endpoints for browser UI integration
 * **Documentation:** Embedded Swagger UI and ReDoc for API exploration
 
 ---
@@ -154,6 +155,7 @@ Common flags for the start command include:
 | `SUPERUSER_GROUP` | `clab_admins` | Linux group for elevated privileges |
 | `CLAB_RUNTIME` | `docker` | Container runtime used by Containerlab |
 | `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`) |
+| `CORS_ALLOWED_ORIGINS` | | Comma-separated browser origin allowlist (for standalone UI) |
 | `GIN_MODE` | `release` | Web framework mode (`debug` or `release`) |
 | `SSH_BASE_PORT` | `2223` | Starting port for SSH proxy allocation |
 | `SSH_MAX_PORT` | `2322` | Maximum port for SSH proxy allocation |
@@ -206,6 +208,19 @@ curl -X POST http://localhost:8080/api/v1/labs \
   -H "Content-Type: application/json" \
   -d '{"topologyContent":{"name":"srl01","topology":{"kinds":{"nokia_srlinux":{"type":"ixrd3","image":"ghcr.io/nokia/srlinux"}},"nodes":{"srl1":{"kind":"nokia_srlinux"},"srl2":{"kind":"nokia_srlinux"}},"links":[{"endpoints":["srl1:e1-1","srl2:e1-1"]}]}}}'
 ```
+
+## Standalone UI Endpoints
+
+The standalone `containerlab-gui` app uses these authenticated endpoints:
+
+- `GET /api/v1/topologies` - list editable topology files for the user
+- `GET|PUT /api/v1/topologies/{labName}/yaml` - read/write canonical topology YAML (`<lab>.clab.yml`)
+- `GET|PUT /api/v1/topologies/{labName}/annotations` - read/write canonical annotations JSON (`<lab>.clab.yml.annotations.json`)
+- `GET|PUT|DELETE|HEAD /api/v1/topologies/{labName}/file?path=<relativePath>` - scoped file operations inside the lab directory
+- `POST /api/v1/topologies/{labName}/file/rename` - scoped rename operation
+- `POST /api/v1/topologies/{labName}/deploy` - deploy an on-disk topology by lab name
+
+Enable browser access by setting `CORS_ALLOWED_ORIGINS` (for example `http://localhost:5174`).
 
 ## Flashpost Collection
 

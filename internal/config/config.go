@@ -9,21 +9,22 @@ import (
 )
 
 type Config struct {
-	APIPort        string        `mapstructure:"API_PORT"`
-	JWTSecret      string        `mapstructure:"JWT_SECRET"`
-	JWTExpiration  time.Duration `mapstructure:"JWT_EXPIRATION"`  // Renamed for clarity - uses time.Duration directly
-	APIUserGroup   string        `mapstructure:"API_USER_GROUP"`  // Group required for basic API login (alternative to clab_admins)
-	SuperuserGroup string        `mapstructure:"SUPERUSER_GROUP"` // Group for elevated privileges
-	ClabRuntime    string        `mapstructure:"CLAB_RUNTIME"`
-	LogLevel       string        `mapstructure:"LOG_LEVEL"`
-	TLSEnable      bool          `mapstructure:"TLS_ENABLE"`
-	TLSCertFile    string        `mapstructure:"TLS_CERT_FILE"`
-	TLSKeyFile     string        `mapstructure:"TLS_KEY_FILE"`
-	GinMode        string        `mapstructure:"GIN_MODE"`
-	TrustedProxies string        `mapstructure:"TRUSTED_PROXIES"`
-	APIServerHost  string        `mapstructure:"API_SERVER_HOST"` // Host/IP/FQDN used for SSH access commands
-	SSHBasePort    int           `mapstructure:"SSH_BASE_PORT"`   // Base port for SSH proxy allocation
-	SSHMaxPort     int           `mapstructure:"SSH_MAX_PORT"`    // Maximum port for SSH proxy allocation
+	APIPort            string        `mapstructure:"API_PORT"`
+	JWTSecret          string        `mapstructure:"JWT_SECRET"`
+	JWTExpiration      time.Duration `mapstructure:"JWT_EXPIRATION"`  // Renamed for clarity - uses time.Duration directly
+	APIUserGroup       string        `mapstructure:"API_USER_GROUP"`  // Group required for basic API login (alternative to clab_admins)
+	SuperuserGroup     string        `mapstructure:"SUPERUSER_GROUP"` // Group for elevated privileges
+	ClabRuntime        string        `mapstructure:"CLAB_RUNTIME"`
+	LogLevel           string        `mapstructure:"LOG_LEVEL"`
+	CORSAllowedOrigins string        `mapstructure:"CORS_ALLOWED_ORIGINS"` // Comma-separated list of allowed browser origins
+	TLSEnable          bool          `mapstructure:"TLS_ENABLE"`
+	TLSCertFile        string        `mapstructure:"TLS_CERT_FILE"`
+	TLSKeyFile         string        `mapstructure:"TLS_KEY_FILE"`
+	GinMode            string        `mapstructure:"GIN_MODE"`
+	TrustedProxies     string        `mapstructure:"TRUSTED_PROXIES"`
+	APIServerHost      string        `mapstructure:"API_SERVER_HOST"` // Host/IP/FQDN used for SSH access commands
+	SSHBasePort        int           `mapstructure:"SSH_BASE_PORT"`   // Base port for SSH proxy allocation
+	SSHMaxPort         int           `mapstructure:"SSH_MAX_PORT"`    // Maximum port for SSH proxy allocation
 }
 
 var AppConfig Config
@@ -42,6 +43,7 @@ func LoadConfig(envFilePath string) error {
 	viper.SetDefault("SUPERUSER_GROUP", "")
 	viper.SetDefault("CLAB_RUNTIME", "docker")
 	viper.SetDefault("LOG_LEVEL", "info")
+	viper.SetDefault("CORS_ALLOWED_ORIGINS", "")
 	viper.SetDefault("TLS_ENABLE", false)
 	viper.SetDefault("TLS_CERT_FILE", "")
 	viper.SetDefault("TLS_KEY_FILE", "")

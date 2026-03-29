@@ -200,6 +200,15 @@ type SaveConfigResponse struct {
 	Output string `json:"output"`
 }
 
+// TopologyEntry describes an editable topology file exposed to the standalone UI.
+type TopologyEntry struct {
+	LabName             string `json:"labName"`
+	YamlFileName        string `json:"yamlFileName"`
+	AnnotationsFileName string `json:"annotationsFileName"`
+	HasAnnotations      bool   `json:"hasAnnotations"`
+	DeploymentState     string `json:"deploymentState"` // deployed | undeployed
+}
+
 // --- Structs for Tools ---
 
 // DisableTxOffloadRequest represents the payload for disabling TX offload.
