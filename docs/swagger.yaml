@@ -673,6 +673,27 @@ definitions:
         example: true
         type: boolean
     type: object
+  models.TopologyDocEventResponse:
+    properties:
+      action:
+        example: change
+        type: string
+      documentKind:
+        example: annotations
+        type: string
+      labName:
+        example: mylab
+        type: string
+      path:
+        example: mylab.clab.yml.annotations.json
+        type: string
+      revision:
+        example: yaml=123-456;annotations=78-910
+        type: string
+      type:
+        example: topology-doc
+        type: string
+    type: object
   models.TopologyEntry:
     properties:
       annotationsFileName:
@@ -1693,6 +1714,45 @@ paths:
       security:
       - BearerAuth: []
       summary: Update lab annotations
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/topology/events:
+    get:
+      description: Streams topology YAML/annotations change events for a single lab
+        topology document pair as NDJSON.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative topology YAML or annotations path inside lab directory
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/x-ndjson
+      responses:
+        "200":
+          description: Topology document event stream
+          schema:
+            $ref: '#/definitions/models.TopologyDocEventResponse'
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stream topology document events
       tags:
       - Labs
   /api/v1/labs/{labName}/topology/file:

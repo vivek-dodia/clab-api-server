@@ -1385,6 +1385,65 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/labs/{labName}/topology/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams topology YAML/annotations change events for a single lab topology document pair as NDJSON.",
+                "produces": [
+                    "application/x-ndjson"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Stream topology document events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative topology YAML or annotations path inside lab directory",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Topology document event stream",
+                        "schema": {
+                            "$ref": "#/definitions/models.TopologyDocEventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid path",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/labs/{labName}/topology/file": {
             "get": {
                 "security": [
@@ -3945,6 +4004,35 @@ const docTemplate = `{
                 "success": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "models.TopologyDocEventResponse": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "example": "change"
+                },
+                "documentKind": {
+                    "type": "string",
+                    "example": "annotations"
+                },
+                "labName": {
+                    "type": "string",
+                    "example": "mylab"
+                },
+                "path": {
+                    "type": "string",
+                    "example": "mylab.clab.yml.annotations.json"
+                },
+                "revision": {
+                    "type": "string",
+                    "example": "yaml=123-456;annotations=78-910"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "topology-doc"
                 }
             }
         },

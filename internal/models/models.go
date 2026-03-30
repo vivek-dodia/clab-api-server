@@ -91,6 +91,16 @@ type SimpleSuccessResponse struct {
 	Success bool `json:"success" example:"true"`
 }
 
+// TopologyDocEventResponse describes a streamed topology document change event.
+type TopologyDocEventResponse struct {
+	Type         string `json:"type" example:"topology-doc"`
+	LabName      string `json:"labName" example:"mylab"`
+	Path         string `json:"path" example:"mylab.clab.yml.annotations.json"`
+	DocumentKind string `json:"documentKind" example:"annotations"`
+	Action       string `json:"action" example:"change"`
+	Revision     string `json:"revision" example:"yaml=123-456;annotations=78-910"`
+}
+
 // --- Structs for parsing `clab inspect --format json` output ---
 
 // ClabInspectOutput matches the top-level structure of `clab inspect --all --format json`
