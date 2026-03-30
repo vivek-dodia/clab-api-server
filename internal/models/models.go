@@ -86,6 +86,11 @@ type GenericSuccessResponse struct {
 	Message string `json:"message"`
 }
 
+// SimpleSuccessResponse for operations that only return a boolean success flag.
+type SimpleSuccessResponse struct {
+	Success bool `json:"success" example:"true"`
+}
+
 // --- Structs for parsing `clab inspect --format json` output ---
 
 // ClabInspectOutput matches the top-level structure of `clab inspect --all --format json`
@@ -206,7 +211,13 @@ type TopologyEntry struct {
 	YamlFileName        string `json:"yamlFileName"`
 	AnnotationsFileName string `json:"annotationsFileName"`
 	HasAnnotations      bool   `json:"hasAnnotations"`
-	DeploymentState     string `json:"deploymentState"` // deployed | undeployed
+	DeploymentState     string `json:"deploymentState"` // undeployed (runtime state is derived from events stream)
+}
+
+// TopologyFileRenameRequest describes a scoped file rename operation inside a lab directory.
+type TopologyFileRenameRequest struct {
+	OldPath string `json:"oldPath" binding:"required" example:"configs/startup.cfg"`
+	NewPath string `json:"newPath" binding:"required" example:"configs/startup.bak.cfg"`
 }
 
 // --- Structs for Tools ---

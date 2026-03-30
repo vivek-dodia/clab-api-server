@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,54 +16,148 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
 
-func resolveRunningLabDocPath(c *gin.Context, docType string) (string, string, error) {
+type labTopologyDocPaths struct {
+	deployed      bool
+	runningDoc    string
+	localDoc      string
+	ownerUsername string
+}
+
+type cachedLabInfo struct {
+	expiresAt  time.Time
+	exists     bool
+	owner      string
+	absLabPath string
+}
+
+const labTopologyInfoCacheTTL = 1500 * time.Millisecond
+
+var labTopologyInfoCache sync.Map
+
+func getLabInfoCached(ctx context.Context, username, labName string) (*models.ClabContainerInfo, bool, error) {
+	cacheKey := username + "\x00" + labName
+
+	if cachedValue, ok := labTopologyInfoCache.Load(cacheKey); ok {
+		if cached, typed := cachedValue.(cachedLabInfo); typed {
+			if time.Now().Before(cached.expiresAt) {
+				if !cached.exists {
+					return nil, false, nil
+				}
+				return &models.ClabContainerInfo{
+					Owner:      cached.owner,
+					AbsLabPath: cached.absLabPath,
+				}, true, nil
+			}
+			labTopologyInfoCache.Delete(cacheKey)
+		}
+	}
+
+	info, exists, err := getLabInfo(ctx, username, labName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	record := cachedLabInfo{
+		expiresAt: time.Now().Add(labTopologyInfoCacheTTL),
+		exists:    exists,
+	}
+	if exists && info != nil {
+		record.owner = info.Owner
+		record.absLabPath = info.AbsLabPath
+	}
+	labTopologyInfoCache.Store(cacheKey, record)
+
+	if !exists || info == nil {
+		return nil, false, nil
+	}
+	return info, true, nil
+}
+
+func resolveLabTopologyDocPaths(c *gin.Context, docType string) (*labTopologyDocPaths, error) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
 
 	if !isValidLabName(labName) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid characters in lab name."})
-		return "", "", fmt.Errorf("invalid lab name")
+		return nil, fmt.Errorf("invalid lab name")
 	}
 
-	topologyPath, ownerCheckErr := verifyLabOwnership(c, username, labName)
-	if ownerCheckErr != nil {
-		return "", "", ownerCheckErr
-	}
-	if strings.TrimSpace(topologyPath) == "" {
-		err := fmt.Errorf("topology path for lab '%s' is empty", labName)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
-		return "", "", err
+	if docType != "yaml" && docType != "annotations" {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid topology document type."})
+		return nil, fmt.Errorf("invalid topology document type")
 	}
 
-	docPath := filepath.Clean(topologyPath)
-	switch docType {
-	case "yaml":
-		// keep topology path
-	case "annotations":
-		docPath = docPath + ".annotations.json"
-	default:
-		err := fmt.Errorf("invalid topology document type")
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
-		return "", "", err
+	localDoc, _, _, _, err := resolveDefaultTopologyDocPath(username, labName, docType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to resolve lab document path: %s", err.Error())})
+		return nil, err
 	}
 
-	ownerUsername := username
+	paths := &labTopologyDocPaths{
+		deployed:      false,
+		localDoc:      localDoc,
+		ownerUsername: username,
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	if info, exists, lookupErr := getLabInfo(ctx, username, labName); lookupErr == nil && exists && info != nil && info.Owner != "" {
-		ownerUsername = info.Owner
+
+	labInfo, exists, lookupErr := getLabInfoCached(ctx, username, labName)
+	if lookupErr != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to check lab '%s' status: %s", labName, lookupErr.Error())})
+		return nil, lookupErr
 	}
 
-	return docPath, ownerUsername, nil
+	if !exists {
+		return paths, nil
+	}
+
+	if !isSuperuser(username) && labInfo.Owner != username {
+		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: fmt.Sprintf("lab '%s' not found or not owned by user", labName)})
+		return nil, fmt.Errorf("lab '%s' not found or not owned by user", labName)
+	}
+
+	paths.deployed = true
+	if strings.TrimSpace(labInfo.Owner) != "" {
+		paths.ownerUsername = labInfo.Owner
+	}
+
+	if strings.TrimSpace(labInfo.AbsLabPath) != "" {
+		paths.runningDoc = filepath.Clean(labInfo.AbsLabPath)
+		if docType == "annotations" {
+			paths.runningDoc += ".annotations.json"
+		}
+	}
+
+	ownerLocalDoc, _, _, _, ownerPathErr := resolveDefaultTopologyDocPath(paths.ownerUsername, labName, docType)
+	if ownerPathErr != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to resolve owner lab document path: %s", ownerPathErr.Error())})
+		return nil, ownerPathErr
+	}
+	paths.localDoc = ownerLocalDoc
+
+	return paths, nil
 }
 
-func readRunningLabDoc(c *gin.Context, docType string) {
-	docPath, _, err := resolveRunningLabDocPath(c, docType)
+func readLabTopologyDoc(c *gin.Context, docType string) {
+	paths, err := resolveLabTopologyDocPaths(c, docType)
 	if err != nil {
 		return
 	}
 
-	content, readErr := os.ReadFile(docPath)
+	if paths.deployed && strings.TrimSpace(paths.runningDoc) != "" {
+		content, readErr := os.ReadFile(paths.runningDoc)
+		if readErr == nil {
+			c.Data(http.StatusOK, "text/plain; charset=utf-8", content)
+			return
+		}
+		if !os.IsNotExist(readErr) {
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: readErr.Error()})
+			return
+		}
+	}
+
+	content, readErr := os.ReadFile(paths.localDoc)
 	if readErr != nil {
 		if os.IsNotExist(readErr) {
 			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "File not found"})
@@ -75,8 +170,26 @@ func readRunningLabDoc(c *gin.Context, docType string) {
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", content)
 }
 
-func writeRunningLabDoc(c *gin.Context, docType string) {
-	docPath, ownerUsername, err := resolveRunningLabDocPath(c, docType)
+func writeLabTopologyDocFile(absPath, ownerUsername, labName string, body []byte) error {
+	targetDir := filepath.Dir(absPath)
+	if mkdirErr := os.MkdirAll(targetDir, 0750); mkdirErr != nil {
+		return fmt.Errorf("failed to ensure lab directory: %w", mkdirErr)
+	}
+
+	if writeErr := os.WriteFile(absPath, body, 0640); writeErr != nil {
+		return fmt.Errorf("failed to write file: %w", writeErr)
+	}
+
+	if _, uid, gid, uidErr := getLabDirectoryInfo(ownerUsername, labName); uidErr == nil {
+		_ = os.Chown(targetDir, uid, gid)
+		_ = os.Chown(absPath, uid, gid)
+	}
+
+	return nil
+}
+
+func writeLabTopologyDoc(c *gin.Context, docType string) {
+	paths, err := resolveLabTopologyDocPaths(c, docType)
 	if err != nil {
 		return
 	}
@@ -87,41 +200,92 @@ func writeRunningLabDoc(c *gin.Context, docType string) {
 		return
 	}
 
-	targetDir := filepath.Dir(docPath)
-	if mkdirErr := os.MkdirAll(targetDir, 0750); mkdirErr != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to ensure lab directory: %s", mkdirErr.Error())})
-		return
+	targetPath := paths.localDoc
+	if paths.deployed && strings.TrimSpace(paths.runningDoc) != "" {
+		if _, statErr := os.Stat(paths.runningDoc); statErr == nil {
+			targetPath = paths.runningDoc
+		} else if !os.IsNotExist(statErr) {
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: statErr.Error()})
+			return
+		}
 	}
 
-	if writeErr := os.WriteFile(docPath, body, 0640); writeErr != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to write file: %s", writeErr.Error())})
+	if writeErr := writeLabTopologyDocFile(targetPath, paths.ownerUsername, c.Param("labName"), body); writeErr != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: writeErr.Error()})
 		return
-	}
-
-	if _, uid, gid, uidErr := getLabDirectoryInfo(ownerUsername, c.Param("labName")); uidErr == nil {
-		_ = os.Chown(targetDir, uid, gid)
-		_ = os.Chown(docPath, uid, gid)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
-// GetRunningLabYamlHandler returns the source YAML used by a running lab.
+// @Summary Get lab topology YAML
+// @Description Returns the topology YAML for the specified lab. For deployed labs, the running topology source path is preferred and local files are used as fallback.
+// @Tags Labs
+// @Security BearerAuth
+// @Produce plain
+// @Param labName path string true "Lab name"
+// @Success 200 {string} string "Topology YAML content"
+// @Failure 400 {object} models.ErrorResponse "Invalid lab name"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 404 {object} models.ErrorResponse "File not found"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/{labName}/topology/yaml [get]
+// GetRunningLabYamlHandler returns the source YAML used by a lab.
 func GetRunningLabYamlHandler(c *gin.Context) {
-	readRunningLabDoc(c, "yaml")
+	readLabTopologyDoc(c, "yaml")
 }
 
-// PutRunningLabYamlHandler updates the source YAML used by a running lab.
+// @Summary Update lab topology YAML
+// @Description Updates the topology YAML for the specified lab. For deployed labs, writes to the running topology source when present and otherwise writes to local files.
+// @Tags Labs
+// @Security BearerAuth
+// @Accept plain
+// @Produce json
+// @Param labName path string true "Lab name"
+// @Param content body string true "Topology YAML content"
+// @Success 200 {object} models.SimpleSuccessResponse "Write success"
+// @Failure 400 {object} models.ErrorResponse "Invalid input"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 404 {object} models.ErrorResponse "Lab not found"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/{labName}/topology/yaml [put]
+// PutRunningLabYamlHandler updates the source YAML used by a lab.
 func PutRunningLabYamlHandler(c *gin.Context) {
-	writeRunningLabDoc(c, "yaml")
+	writeLabTopologyDoc(c, "yaml")
 }
 
-// GetRunningLabAnnotationsHandler returns the annotations JSON associated with a running lab.
+// @Summary Get lab annotations
+// @Description Returns annotations for the specified lab. For deployed labs, the running annotations path is preferred and local files are used as fallback.
+// @Tags Labs
+// @Security BearerAuth
+// @Produce plain
+// @Param labName path string true "Lab name"
+// @Success 200 {string} string "Annotations content"
+// @Failure 400 {object} models.ErrorResponse "Invalid lab name"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 404 {object} models.ErrorResponse "File not found"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/{labName}/topology/annotations [get]
+// GetRunningLabAnnotationsHandler returns the annotations JSON associated with a lab.
 func GetRunningLabAnnotationsHandler(c *gin.Context) {
-	readRunningLabDoc(c, "annotations")
+	readLabTopologyDoc(c, "annotations")
 }
 
-// PutRunningLabAnnotationsHandler updates or creates the annotations JSON associated with a running lab.
+// @Summary Update lab annotations
+// @Description Updates annotations for the specified lab. For deployed labs, writes to the running annotations path when present and otherwise writes to local files.
+// @Tags Labs
+// @Security BearerAuth
+// @Accept plain
+// @Produce json
+// @Param labName path string true "Lab name"
+// @Param content body string true "Annotations content"
+// @Success 200 {object} models.SimpleSuccessResponse "Write success"
+// @Failure 400 {object} models.ErrorResponse "Invalid input"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 404 {object} models.ErrorResponse "Lab not found"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/{labName}/topology/annotations [put]
+// PutRunningLabAnnotationsHandler updates or creates the annotations JSON associated with a lab.
 func PutRunningLabAnnotationsHandler(c *gin.Context) {
-	writeRunningLabDoc(c, "annotations")
+	writeLabTopologyDoc(c, "annotations")
 }

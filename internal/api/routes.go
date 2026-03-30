@@ -52,6 +52,10 @@ func SetupRoutes(router *gin.Engine) {
 			// List labs for user (or all if superuser)
 			labs.GET("", ListLabsHandler) // GET /api/v1/labs
 
+			// List editable topology files exposed from the user's lab directory
+			// Must be registered before /:labName routes.
+			labs.GET("/topology/files", ListTopologiesHandler) // GET /api/v1/labs/topology/files
+
 			// Actions on a specific lab by name
 			labSpecific := labs.Group("/:labName")
 			{
@@ -64,20 +68,29 @@ func SetupRoutes(router *gin.Engine) {
 				// Redeploy lab
 				labSpecific.PUT("", RedeployLabHandler) // PUT /api/v1/labs/{labName}
 
+				// Deploy on-disk topology file for this lab name
+				labSpecific.POST("/deploy", DeployTopologyHandler) // POST /api/v1/labs/{labName}/deploy
+
 				// Inspect lab interfaces
 				labSpecific.GET("/interfaces", InspectInterfacesHandler) // GET /api/v1/labs/{labName}/interfaces
 
-				// Save Lab Config
+				// Save lab config
 				labSpecific.POST("/save", SaveLabConfigHandler) // POST /api/v1/labs/{labName}/save
 
-				// Execute Command in Lab
+				// Execute command in lab
 				labSpecific.POST("/exec", ExecCommandHandler) // POST /api/v1/labs/{labName}/exec
 
-				// Read/Write running lab topology source documents
+				// Read/write topology source documents for this lab.
+				// For deployed labs these target the running topology source path first.
 				labSpecific.GET("/topology/yaml", GetRunningLabYamlHandler)               // GET /api/v1/labs/{labName}/topology/yaml
 				labSpecific.PUT("/topology/yaml", PutRunningLabYamlHandler)               // PUT /api/v1/labs/{labName}/topology/yaml
 				labSpecific.GET("/topology/annotations", GetRunningLabAnnotationsHandler) // GET /api/v1/labs/{labName}/topology/annotations
 				labSpecific.PUT("/topology/annotations", PutRunningLabAnnotationsHandler) // PUT /api/v1/labs/{labName}/topology/annotations
+				labSpecific.GET("/topology/file", GetTopologyFileHandler)                 // GET /api/v1/labs/{labName}/topology/file?path=...
+				labSpecific.HEAD("/topology/file", HeadTopologyFileHandler)               // HEAD /api/v1/labs/{labName}/topology/file?path=...
+				labSpecific.PUT("/topology/file", PutTopologyFileHandler)                 // PUT /api/v1/labs/{labName}/topology/file?path=...
+				labSpecific.DELETE("/topology/file", DeleteTopologyFileHandler)           // DELETE /api/v1/labs/{labName}/topology/file?path=...
+				labSpecific.POST("/topology/file/rename", RenameTopologyFileHandler)      // POST /api/v1/labs/{labName}/topology/file/rename
 
 				// Node Specific Routes (nested under lab)
 				nodeSpecific := labSpecific.Group("/nodes/:nodeName")
@@ -89,22 +102,6 @@ func SetupRoutes(router *gin.Engine) {
 					nodeSpecific.GET("/logs", GetNodeLogsHandler) // GET /api/v1/labs/{labName}/nodes/{nodeName}/logs
 				}
 			}
-		}
-
-		// Standalone topology editor routes
-		topologies := apiV1.Group("/topologies")
-		{
-			topologies.GET("", ListTopologiesHandler)                              // GET /api/v1/topologies
-			topologies.POST("/:labName/deploy", DeployTopologyHandler)             // POST /api/v1/topologies/{labName}/deploy
-			topologies.GET("/:labName/yaml", GetTopologyYamlHandler)               // GET /api/v1/topologies/{labName}/yaml
-			topologies.PUT("/:labName/yaml", PutTopologyYamlHandler)               // PUT /api/v1/topologies/{labName}/yaml
-			topologies.GET("/:labName/annotations", GetTopologyAnnotationsHandler) // GET /api/v1/topologies/{labName}/annotations
-			topologies.PUT("/:labName/annotations", PutTopologyAnnotationsHandler) // PUT /api/v1/topologies/{labName}/annotations
-			topologies.GET("/:labName/file", GetTopologyFileHandler)               // GET /api/v1/topologies/{labName}/file?path=...
-			topologies.HEAD("/:labName/file", HeadTopologyFileHandler)             // HEAD /api/v1/topologies/{labName}/file?path=...
-			topologies.PUT("/:labName/file", PutTopologyFileHandler)               // PUT /api/v1/topologies/{labName}/file?path=...
-			topologies.DELETE("/:labName/file", DeleteTopologyFileHandler)         // DELETE /api/v1/topologies/{labName}/file?path=...
-			topologies.POST("/:labName/file/rename", RenameTopologyFileHandler)    // POST /api/v1/topologies/{labName}/file/rename
 		}
 
 		// SSH Session Management Routes (Global)

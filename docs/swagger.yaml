@@ -667,6 +667,38 @@ definitions:
         description: API server version
         type: string
     type: object
+  models.SimpleSuccessResponse:
+    properties:
+      success:
+        example: true
+        type: boolean
+    type: object
+  models.TopologyEntry:
+    properties:
+      annotationsFileName:
+        type: string
+      deploymentState:
+        description: deployed | undeployed
+        type: string
+      hasAnnotations:
+        type: boolean
+      labName:
+        type: string
+      yamlFileName:
+        type: string
+    type: object
+  models.TopologyFileRenameRequest:
+    properties:
+      newPath:
+        example: configs/startup.bak.cfg
+        type: string
+      oldPath:
+        example: configs/startup.cfg
+        type: string
+    required:
+    - newPath
+    - oldPath
+    type: object
   models.UserCreateRequest:
     properties:
       displayName:
@@ -1218,6 +1250,76 @@ paths:
       summary: Redeploy lab
       tags:
       - Labs
+  /api/v1/labs/{labName}/deploy:
+    post:
+      description: Deploys `<labName>.clab.yml` from the authenticated user's lab
+        directory.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Allow overwriting an existing lab
+        in: query
+        name: reconfigure
+        type: boolean
+      - description: Limit concurrent workers
+        in: query
+        name: maxWorkers
+        type: integer
+      - description: Custom Go template file for topology data export
+        in: query
+        name: exportTemplate
+        type: string
+      - description: Comma-separated list of node names to deploy
+        in: query
+        name: nodeFilter
+        type: string
+      - description: Skip post-deploy actions
+        in: query
+        name: skipPostDeploy
+        type: boolean
+      - description: Skip setting extended ACLs on lab directory
+        in: query
+        name: skipLabdirAcl
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Deployed lab details
+          schema:
+            $ref: '#/definitions/models.ClabInspectOutput'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Topology file not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Deploy on-disk topology for lab
+      tags:
+      - Labs
   /api/v1/labs/{labName}/exec:
     post:
       consumes:
@@ -1468,6 +1570,373 @@ paths:
       summary: Save lab configuration
       tags:
       - Labs
+  /api/v1/labs/{labName}/topology/annotations:
+    get:
+      description: Returns annotations for the specified lab. For deployed labs, the
+        running annotations path is preferred and local files are used as fallback.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Annotations content
+          schema:
+            type: string
+        "400":
+          description: Invalid lab name
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: File not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get lab annotations
+      tags:
+      - Labs
+    put:
+      consumes:
+      - text/plain
+      description: Updates annotations for the specified lab. For deployed labs, writes
+        to the running annotations path when present and otherwise writes to local
+        files.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Annotations content
+        in: body
+        name: content
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Write success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Lab not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update lab annotations
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/topology/file:
+    delete:
+      description: Deletes a file inside the specified lab directory using a scoped
+        relative path.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative file path inside lab directory
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Delete success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete lab topology file
+      tags:
+      - Labs
+    get:
+      description: Reads a file from within the specified lab directory using a scoped
+        relative path.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative file path inside lab directory
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: File content
+          schema:
+            type: string
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: File not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Read lab topology file
+      tags:
+      - Labs
+    head:
+      description: Checks whether a file exists inside the specified lab directory.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative file path inside lab directory
+        in: query
+        name: path
+        required: true
+        type: string
+      responses:
+        "200":
+          description: File exists
+        "400":
+          description: Invalid path
+        "401":
+          description: Unauthorized
+        "404":
+          description: File not found
+        "500":
+          description: Internal server error
+      security:
+      - BearerAuth: []
+      summary: Check lab topology file existence
+      tags:
+      - Labs
+    put:
+      consumes:
+      - text/plain
+      description: Writes a file inside the specified lab directory using a scoped
+        relative path.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative file path inside lab directory
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: File content
+        in: body
+        name: content
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Write success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Write lab topology file
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/topology/file/rename:
+    post:
+      consumes:
+      - application/json
+      description: Renames or moves a file inside the specified lab directory using
+        scoped relative paths.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Old and new relative file paths
+        in: body
+        name: rename_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TopologyFileRenameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Rename success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Rename lab topology file
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/topology/yaml:
+    get:
+      description: Returns the topology YAML for the specified lab. For deployed labs,
+        the running topology source path is preferred and local files are used as
+        fallback.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Topology YAML content
+          schema:
+            type: string
+        "400":
+          description: Invalid lab name
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: File not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get lab topology YAML
+      tags:
+      - Labs
+    put:
+      consumes:
+      - text/plain
+      description: Updates the topology YAML for the specified lab. For deployed labs,
+        writes to the running topology source when present and otherwise writes to
+        local files.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Topology YAML content
+        in: body
+        name: content
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Write success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Lab not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update lab topology YAML
+      tags:
+      - Labs
   /api/v1/labs/archive:
     post:
       consumes:
@@ -1538,6 +2007,32 @@ paths:
       security:
       - BearerAuth: []
       summary: Deploy lab from archive
+      tags:
+      - Labs
+  /api/v1/labs/topology/files:
+    get:
+      description: Returns editable topology entries from the authenticated user's
+        lab directory.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Topology entries
+          schema:
+            items:
+              $ref: '#/definitions/models.TopologyEntry'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List editable lab topology files
       tags:
       - Labs
   /api/v1/ssh/sessions:

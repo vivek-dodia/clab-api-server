@@ -18,11 +18,6 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
 
-type renameTopologyFileRequest struct {
-	OldPath string `json:"oldPath" binding:"required"`
-	NewPath string `json:"newPath" binding:"required"`
-}
-
 func resolveDefaultTopologyDocPath(username, labName, docType string) (string, string, int, int, error) {
 	if !isValidLabName(labName) {
 		return "", "", -1, -1, fmt.Errorf("invalid lab name")
@@ -41,60 +36,15 @@ func resolveDefaultTopologyDocPath(username, labName, docType string) (string, s
 	return resolveTopologyFilePath(username, labName, fileName)
 }
 
-func readDefaultTopologyDoc(c *gin.Context, docType string) {
-	username := c.GetString("username")
-	labName := c.Param("labName")
-
-	absPath, _, _, _, err := resolveDefaultTopologyDocPath(username, labName, docType)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	content, readErr := os.ReadFile(absPath)
-	if readErr != nil {
-		if os.IsNotExist(readErr) {
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "File not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: readErr.Error()})
-		return
-	}
-
-	c.Data(http.StatusOK, "text/plain; charset=utf-8", content)
-}
-
-func writeDefaultTopologyDoc(c *gin.Context, docType string) {
-	username := c.GetString("username")
-	labName := c.Param("labName")
-
-	absPath, labDir, uid, gid, err := resolveDefaultTopologyDocPath(username, labName, docType)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	body, readErr := io.ReadAll(c.Request.Body)
-	if readErr != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to read request body"})
-		return
-	}
-
-	if mkdirErr := os.MkdirAll(labDir, 0750); mkdirErr != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to ensure lab directory: %s", mkdirErr.Error())})
-		return
-	}
-	_ = os.Chown(labDir, uid, gid)
-
-	if writeErr := os.WriteFile(absPath, body, 0640); writeErr != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to write file: %s", writeErr.Error())})
-		return
-	}
-	_ = os.Chown(absPath, uid, gid)
-
-	c.JSON(http.StatusOK, gin.H{"success": true})
-}
-
+// @Summary List editable lab topology files
+// @Description Returns editable topology entries from the authenticated user's lab directory.
+// @Tags Labs
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {array} models.TopologyEntry "Topology entries"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/topology/files [get]
 // ListTopologiesHandler returns editable topology files for the authenticated user.
 func ListTopologiesHandler(c *gin.Context) {
 	username := c.GetString("username")
@@ -105,8 +55,7 @@ func ListTopologiesHandler(c *gin.Context) {
 		return
 	}
 
-	deployedByLab := listDeployedLabsByName(username)
-	entries, listErr := listTopologyEntries(baseDir, deployedByLab)
+	entries, listErr := listTopologyEntries(baseDir)
 	if listErr != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: listErr.Error()})
 		return
@@ -115,6 +64,26 @@ func ListTopologiesHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, entries)
 }
 
+// @Summary Deploy on-disk topology for lab
+// @Description Deploys `<labName>.clab.yml` from the authenticated user's lab directory.
+// @Tags Labs
+// @Security BearerAuth
+// @Produce json
+// @Param labName path string true "Lab name"
+// @Param reconfigure query boolean false "Allow overwriting an existing lab"
+// @Param maxWorkers query int false "Limit concurrent workers"
+// @Param exportTemplate query string false "Custom Go template file for topology data export"
+// @Param nodeFilter query string false "Comma-separated list of node names to deploy"
+// @Param skipPostDeploy query boolean false "Skip post-deploy actions"
+// @Param skipLabdirAcl query boolean false "Skip setting extended ACLs on lab directory"
+// @Success 200 {object} models.ClabInspectOutput "Deployed lab details"
+// @Failure 400 {object} models.ErrorResponse "Invalid input"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 403 {object} models.ErrorResponse "Forbidden"
+// @Failure 404 {object} models.ErrorResponse "Topology file not found"
+// @Failure 409 {object} models.ErrorResponse "Conflict"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/{labName}/deploy [post]
 // DeployTopologyHandler deploys an on-disk topology identified by lab name.
 func DeployTopologyHandler(c *gin.Context) {
 	username := c.GetString("username")
@@ -213,26 +182,19 @@ func DeployTopologyHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// GetTopologyYamlHandler returns the canonical YAML topology file for the lab.
-func GetTopologyYamlHandler(c *gin.Context) {
-	readDefaultTopologyDoc(c, "yaml")
-}
-
-// PutTopologyYamlHandler writes the canonical YAML topology file for the lab.
-func PutTopologyYamlHandler(c *gin.Context) {
-	writeDefaultTopologyDoc(c, "yaml")
-}
-
-// GetTopologyAnnotationsHandler returns the canonical annotations document for the lab.
-func GetTopologyAnnotationsHandler(c *gin.Context) {
-	readDefaultTopologyDoc(c, "annotations")
-}
-
-// PutTopologyAnnotationsHandler writes the canonical annotations document for the lab.
-func PutTopologyAnnotationsHandler(c *gin.Context) {
-	writeDefaultTopologyDoc(c, "annotations")
-}
-
+// @Summary Read lab topology file
+// @Description Reads a file from within the specified lab directory using a scoped relative path.
+// @Tags Labs
+// @Security BearerAuth
+// @Produce plain
+// @Param labName path string true "Lab name"
+// @Param path query string true "Relative file path inside lab directory"
+// @Success 200 {string} string "File content"
+// @Failure 400 {object} models.ErrorResponse "Invalid path"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 404 {object} models.ErrorResponse "File not found"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/{labName}/topology/file [get]
 func GetTopologyFileHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
@@ -257,6 +219,18 @@ func GetTopologyFileHandler(c *gin.Context) {
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", content)
 }
 
+// @Summary Check lab topology file existence
+// @Description Checks whether a file exists inside the specified lab directory.
+// @Tags Labs
+// @Security BearerAuth
+// @Param labName path string true "Lab name"
+// @Param path query string true "Relative file path inside lab directory"
+// @Success 200 "File exists"
+// @Failure 400 "Invalid path"
+// @Failure 401 "Unauthorized"
+// @Failure 404 "File not found"
+// @Failure 500 "Internal server error"
+// @Router /api/v1/labs/{labName}/topology/file [head]
 func HeadTopologyFileHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
@@ -280,6 +254,20 @@ func HeadTopologyFileHandler(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
+// @Summary Write lab topology file
+// @Description Writes a file inside the specified lab directory using a scoped relative path.
+// @Tags Labs
+// @Security BearerAuth
+// @Accept plain
+// @Produce json
+// @Param labName path string true "Lab name"
+// @Param path query string true "Relative file path inside lab directory"
+// @Param content body string true "File content"
+// @Success 200 {object} models.SimpleSuccessResponse "Write success"
+// @Failure 400 {object} models.ErrorResponse "Invalid input"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/{labName}/topology/file [put]
 func PutTopologyFileHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
@@ -312,6 +300,18 @@ func PutTopologyFileHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
+// @Summary Delete lab topology file
+// @Description Deletes a file inside the specified lab directory using a scoped relative path.
+// @Tags Labs
+// @Security BearerAuth
+// @Produce json
+// @Param labName path string true "Lab name"
+// @Param path query string true "Relative file path inside lab directory"
+// @Success 200 {object} models.SimpleSuccessResponse "Delete success"
+// @Failure 400 {object} models.ErrorResponse "Invalid path"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/{labName}/topology/file [delete]
 func DeleteTopologyFileHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
@@ -331,11 +331,24 @@ func DeleteTopologyFileHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
+// @Summary Rename lab topology file
+// @Description Renames or moves a file inside the specified lab directory using scoped relative paths.
+// @Tags Labs
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param labName path string true "Lab name"
+// @Param rename_request body models.TopologyFileRenameRequest true "Old and new relative file paths"
+// @Success 200 {object} models.SimpleSuccessResponse "Rename success"
+// @Failure 400 {object} models.ErrorResponse "Invalid input"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/{labName}/topology/file/rename [post]
 func RenameTopologyFileHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
 
-	var req renameTopologyFileRequest
+	var req models.TopologyFileRenameRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body: " + err.Error()})
 		return
@@ -359,6 +372,21 @@ func RenameTopologyFileHandler(c *gin.Context) {
 	}
 
 	if renameErr := os.Rename(oldPath, newPath); renameErr != nil {
+		// Make rename robust for retry/concurrency races used by editor temp-file flows:
+		// if source vanished but destination already exists, treat as already-renamed.
+		if os.IsNotExist(renameErr) {
+			_, statErr := os.Stat(newPath)
+			if statErr == nil {
+				c.JSON(http.StatusOK, gin.H{"success": true})
+				return
+			}
+			if os.IsNotExist(statErr) {
+				c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Source file not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to stat destination file: %s", statErr.Error())})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to rename file: %s", renameErr.Error())})
 		return
 	}
@@ -366,34 +394,7 @@ func RenameTopologyFileHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
-func listDeployedLabsByName(username string) map[string]bool {
-	result := map[string]bool{}
-
-	svc := GetClabService()
-	if svc == nil {
-		return result
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	containers, err := svc.ListContainers(ctx, clab.ListOptions{})
-	if err != nil {
-		return result
-	}
-
-	superuser := isSuperuser(username)
-	for _, container := range containers {
-		info := clab.ContainerToClabContainerInfo(container)
-		if superuser || info.Owner == username {
-			result[info.LabName] = true
-		}
-	}
-
-	return result
-}
-
-func listTopologyEntries(baseDir string, deployedByLab map[string]bool) ([]models.TopologyEntry, error) {
+func listTopologyEntries(baseDir string) ([]models.TopologyEntry, error) {
 	entries := []models.TopologyEntry{}
 
 	dirEntries, err := os.ReadDir(baseDir)
@@ -429,17 +430,12 @@ func listTopologyEntries(baseDir string, deployedByLab map[string]bool) ([]model
 			return info, err == nil
 		}()
 
-		deploymentState := "undeployed"
-		if deployedByLab[labName] {
-			deploymentState = "deployed"
-		}
-
 		entries = append(entries, models.TopologyEntry{
 			LabName:             labName,
 			YamlFileName:        yamlFileName,
 			AnnotationsFileName: annotationsFileName,
 			HasAnnotations:      hasAnnotations,
-			DeploymentState:     deploymentState,
+			DeploymentState:     "undeployed",
 		})
 	}
 
@@ -457,6 +453,41 @@ func getUserLabsBaseDirectory(username string) (string, error) {
 	}
 
 	return filepath.Dir(sentinelDir), nil
+}
+
+func resolveCanonicalTopologyRootPath(cleanLabDir, labName, cleanPath string) string {
+	// Only allow canonical root-level topology files (no nested paths).
+	if strings.Contains(cleanPath, string(filepath.Separator)) {
+		return ""
+	}
+
+	canonicalNames := map[string]struct{}{
+		labName + ".clab.yml":                   {},
+		labName + ".clab.yaml":                  {},
+		labName + ".clab.yml.annotations.json":  {},
+		labName + ".clab.yaml.annotations.json": {},
+	}
+	if _, ok := canonicalNames[cleanPath]; !ok {
+		return ""
+	}
+
+	rootDir := filepath.Clean(filepath.Dir(cleanLabDir))
+	rootCandidate := filepath.Clean(filepath.Join(rootDir, cleanPath))
+
+	if _, err := os.Stat(rootCandidate); err == nil {
+		return rootCandidate
+	}
+
+	// For annotations files, prefer the root location when the corresponding
+	// root topology YAML exists, even if annotations are being created first.
+	if strings.HasSuffix(cleanPath, ".annotations.json") {
+		rootYAML := strings.TrimSuffix(rootCandidate, ".annotations.json")
+		if _, err := os.Stat(rootYAML); err == nil {
+			return rootCandidate
+		}
+	}
+
+	return ""
 }
 
 func resolveTopologyFilePath(username, labName, relPath string) (absolutePath, labDir string, uid, gid int, err error) {
@@ -481,6 +512,11 @@ func resolveTopologyFilePath(username, labName, relPath string) (absolutePath, l
 
 	absPath := filepath.Clean(filepath.Join(labDir, cleanPath))
 	cleanLabDir := filepath.Clean(labDir)
+
+	if canonicalRootPath := resolveCanonicalTopologyRootPath(cleanLabDir, labName, cleanPath); canonicalRootPath != "" {
+		return canonicalRootPath, cleanLabDir, uid, gid, nil
+	}
+
 	if absPath != cleanLabDir && !strings.HasPrefix(absPath, cleanLabDir+string(filepath.Separator)) {
 		return "", "", -1, -1, fmt.Errorf("resolved path escapes lab directory")
 	}
