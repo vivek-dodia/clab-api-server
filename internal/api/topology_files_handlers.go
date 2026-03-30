@@ -65,17 +65,25 @@ func ListTopologiesHandler(c *gin.Context) {
 }
 
 // @Summary Deploy on-disk topology for lab
-// @Description Deploys `<labName>.clab.yml` from the authenticated user's lab directory.
+// @Description Deploys an on-disk topology from the authenticated user's lab directory.
+// @Description
+// @Description **Notes**
+// @Description - `path` defaults to `<labName>.clab.yml` when omitted.
+// @Description - `stream=true` returns `application/x-ndjson` lifecycle events.
+// @Description - `includeLogs=true` includes captured lifecycle logs in the JSON response.
 // @Tags Labs
 // @Security BearerAuth
 // @Produce json
 // @Param labName path string true "Lab name"
+// @Param path query string false "Relative topology file path inside lab directory (defaults to <labName>.clab.yml)"
 // @Param reconfigure query boolean false "Allow overwriting an existing lab"
 // @Param maxWorkers query int false "Limit concurrent workers"
 // @Param exportTemplate query string false "Custom Go template file for topology data export"
 // @Param nodeFilter query string false "Comma-separated list of node names to deploy"
 // @Param skipPostDeploy query boolean false "Skip post-deploy actions"
 // @Param skipLabdirAcl query boolean false "Skip setting extended ACLs on lab directory"
+// @Param stream query boolean false "Stream lifecycle output as NDJSON events"
+// @Param includeLogs query boolean false "Include captured lifecycle logs in the JSON response"
 // @Success 200 {object} models.ClabInspectOutput "Deployed lab details"
 // @Failure 400 {object} models.ErrorResponse "Invalid input"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
@@ -88,6 +96,8 @@ func ListTopologiesHandler(c *gin.Context) {
 func DeployTopologyHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
+	streamLogs := c.Query("stream") == "true"
+	includeLogs := c.Query("includeLogs") == "true"
 	if !isValidLabName(labName) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid characters in lab name."})
 		return
@@ -114,13 +124,24 @@ func DeployTopologyHandler(c *gin.Context) {
 		return
 	}
 
-	labDir, _, _, dirErr := getLabDirectoryInfo(username, labName)
-	if dirErr != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: dirErr.Error()})
-		return
+	requestedPath := strings.TrimSpace(c.Query("path"))
+	topologyPath := ""
+	if requestedPath != "" {
+		resolvedPath, _, _, _, resolveErr := resolveTopologyFilePath(username, labName, requestedPath)
+		if resolveErr != nil {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: resolveErr.Error()})
+			return
+		}
+		topologyPath = resolvedPath
+	} else {
+		labDir, _, _, dirErr := getLabDirectoryInfo(username, labName)
+		if dirErr != nil {
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: dirErr.Error()})
+			return
+		}
+		topologyPath = filepath.Join(labDir, labName+".clab.yml")
 	}
 
-	topologyPath := filepath.Join(labDir, labName+".clab.yml")
 	if _, statErr := os.Stat(topologyPath); statErr != nil {
 		if os.IsNotExist(statErr) {
 			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: fmt.Sprintf("Topology file not found for lab '%s'.", labName)})
@@ -163,7 +184,7 @@ func DeployTopologyHandler(c *gin.Context) {
 	deployCtx, deployCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer deployCancel()
 
-	containers, deployErr := svc.Deploy(deployCtx, clab.DeployOptions{
+	deployOptions := clab.DeployOptions{
 		TopoPath:       topologyPath,
 		Username:       username,
 		Reconfigure:    reconfigure,
@@ -172,7 +193,54 @@ func DeployTopologyHandler(c *gin.Context) {
 		NodeFilter:     nodeFilterSlice,
 		SkipPostDeploy: skipPostDeploy,
 		SkipLabDirACLs: skipLabdirAcl,
-	})
+	}
+
+	if streamLogs {
+		var inspectResult models.ClabInspectOutput
+		streamLifecycleCommandWithOptions(c, func() error {
+			containers, err := svc.Deploy(deployCtx, deployOptions)
+			if err != nil {
+				return fmt.Errorf("Failed to deploy lab '%s': %s", labName, err.Error())
+			}
+			inspectResult = clab.ContainersToClabInspectOutput(containers)
+			return nil
+		}, "", &lifecycleStreamOptions{
+			Preamble: buildDeployPreambleLines(),
+			OnSuccess: func() []string {
+				lines := make([]string, 0, 32)
+				lines = append(lines, buildDeployVersionNoticeLines()...)
+				lines = append(lines, buildDeploySummaryTableLines(labName, inspectResult)...)
+				return lines
+			},
+		})
+		return
+	}
+
+	if includeLogs {
+		var result models.ClabInspectOutput
+		logs, deployErr := captureLifecycleLogs(func() error {
+			containers, err := svc.Deploy(deployCtx, deployOptions)
+			if err != nil {
+				return err
+			}
+			result = clab.ContainersToClabInspectOutput(containers)
+			return nil
+		})
+		if deployErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": fmt.Sprintf("Failed to deploy lab '%s': %s", labName, deployErr.Error()),
+				"logs":  logs,
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"result": result,
+			"logs":   logs,
+		})
+		return
+	}
+
+	containers, deployErr := svc.Deploy(deployCtx, deployOptions)
 	if deployErr != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to deploy lab '%s': %s", labName, deployErr.Error())})
 		return
@@ -396,6 +464,7 @@ func RenameTopologyFileHandler(c *gin.Context) {
 
 func listTopologyEntries(baseDir string) ([]models.TopologyEntry, error) {
 	entries := []models.TopologyEntry{}
+	entryByLab := map[string]models.TopologyEntry{}
 
 	dirEntries, err := os.ReadDir(baseDir)
 	if err != nil {
@@ -416,27 +485,99 @@ func listTopologyEntries(baseDir string) ([]models.TopologyEntry, error) {
 		}
 
 		labDir := filepath.Join(baseDir, labName)
-		yamlFileName := labName + ".clab.yml"
-		annotationsFileName := yamlFileName + ".annotations.json"
-		yamlPath := filepath.Join(labDir, yamlFileName)
-		annotationsPath := filepath.Join(labDir, annotationsFileName)
-
-		if _, statErr := os.Stat(yamlPath); statErr != nil {
+		labDirEntries, readErr := os.ReadDir(labDir)
+		if readErr != nil {
 			continue
 		}
+
+		yamlCandidates := []string{}
+		for _, labEntry := range labDirEntries {
+			if labEntry.IsDir() {
+				continue
+			}
+			name := labEntry.Name()
+			lower := strings.ToLower(name)
+			if strings.HasSuffix(lower, ".clab.yml") || strings.HasSuffix(lower, ".clab.yaml") {
+				yamlCandidates = append(yamlCandidates, name)
+			}
+		}
+		if len(yamlCandidates) == 0 {
+			continue
+		}
+
+		sort.Strings(yamlCandidates)
+		yamlFileName := yamlCandidates[0]
+		preferredYml := labName + ".clab.yml"
+		preferredYaml := labName + ".clab.yaml"
+		for _, candidate := range yamlCandidates {
+			if candidate == preferredYml {
+				yamlFileName = candidate
+				break
+			}
+			if candidate == preferredYaml {
+				yamlFileName = candidate
+			}
+		}
+
+		annotationsFileName := yamlFileName + ".annotations.json"
+		annotationsPath := filepath.Join(labDir, annotationsFileName)
 
 		_, hasAnnotations := func() (os.FileInfo, bool) {
 			info, err := os.Stat(annotationsPath)
 			return info, err == nil
 		}()
 
-		entries = append(entries, models.TopologyEntry{
+		topologyEntry := models.TopologyEntry{
 			LabName:             labName,
 			YamlFileName:        yamlFileName,
 			AnnotationsFileName: annotationsFileName,
 			HasAnnotations:      hasAnnotations,
 			DeploymentState:     "undeployed",
-		})
+		}
+		entries = append(entries, topologyEntry)
+		entryByLab[labName] = topologyEntry
+	}
+
+	for _, entry := range dirEntries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		lower := strings.ToLower(name)
+		if !strings.HasSuffix(lower, ".clab.yml") && !strings.HasSuffix(lower, ".clab.yaml") {
+			continue
+		}
+
+		labName := name
+		if strings.HasSuffix(lower, ".clab.yml") {
+			labName = name[:len(name)-len(".clab.yml")]
+		} else if strings.HasSuffix(lower, ".clab.yaml") {
+			labName = name[:len(name)-len(".clab.yaml")]
+		}
+		if !isValidLabName(labName) {
+			continue
+		}
+		if _, exists := entryByLab[labName]; exists {
+			continue
+		}
+
+		annotationsFileName := name + ".annotations.json"
+		annotationsPath := filepath.Join(baseDir, annotationsFileName)
+		_, hasAnnotations := func() (os.FileInfo, bool) {
+			info, err := os.Stat(annotationsPath)
+			return info, err == nil
+		}()
+
+		topologyEntry := models.TopologyEntry{
+			LabName:             labName,
+			YamlFileName:        name,
+			AnnotationsFileName: annotationsFileName,
+			HasAnnotations:      hasAnnotations,
+			DeploymentState:     "undeployed",
+		}
+		entries = append(entries, topologyEntry)
+		entryByLab[labName] = topologyEntry
 	}
 
 	sort.Slice(entries, func(i, j int) bool {

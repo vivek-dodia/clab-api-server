@@ -678,7 +678,7 @@ definitions:
       annotationsFileName:
         type: string
       deploymentState:
-        description: deployed | undeployed
+        description: undeployed (runtime state is derived from events stream)
         type: string
       hasAnnotations:
         type: boolean
@@ -1088,7 +1088,12 @@ paths:
       - Labs
   /api/v1/labs/{labName}:
     delete:
-      description: Destroys a lab by name after verifying ownership.
+      description: |-
+        Destroys a lab by name after verifying ownership.
+
+        **Notes**
+        - `stream=true` returns `application/x-ndjson` lifecycle events.
+        - `includeLogs=true` includes captured lifecycle logs in the JSON response.
       parameters:
       - description: Name of the lab to destroy
         in: path
@@ -1116,6 +1121,14 @@ paths:
         in: query
         name: nodeFilter
         type: string
+      - description: Stream lifecycle output as NDJSON events
+        in: query
+        name: stream
+        type: boolean
+      - description: Include captured lifecycle logs in the JSON response
+        in: query
+        name: includeLogs
+        type: boolean
       produces:
       - application/json
       responses:
@@ -1188,6 +1201,8 @@ paths:
 
         **Notes**
         - This operation destroys the lab and then deploys it again.
+        - `stream=true` returns `application/x-ndjson` lifecycle events.
+        - `includeLogs=true` includes captured lifecycle logs in the JSON response.
       parameters:
       - description: Name of the lab to redeploy
         in: path
@@ -1222,6 +1237,14 @@ paths:
         in: query
         name: skipLabdirAcl
         type: boolean
+      - description: Stream lifecycle output as NDJSON events
+        in: query
+        name: stream
+        type: boolean
+      - description: Include captured lifecycle logs in the JSON response
+        in: query
+        name: includeLogs
+        type: boolean
       produces:
       - application/json
       responses:
@@ -1252,13 +1275,23 @@ paths:
       - Labs
   /api/v1/labs/{labName}/deploy:
     post:
-      description: Deploys `<labName>.clab.yml` from the authenticated user's lab
-        directory.
+      description: |-
+        Deploys an on-disk topology from the authenticated user's lab directory.
+
+        **Notes**
+        - `path` defaults to `<labName>.clab.yml` when omitted.
+        - `stream=true` returns `application/x-ndjson` lifecycle events.
+        - `includeLogs=true` includes captured lifecycle logs in the JSON response.
       parameters:
       - description: Lab name
         in: path
         name: labName
         required: true
+        type: string
+      - description: Relative topology file path inside lab directory (defaults to
+          <labName>.clab.yml)
+        in: query
+        name: path
         type: string
       - description: Allow overwriting an existing lab
         in: query
@@ -1283,6 +1316,14 @@ paths:
       - description: Skip setting extended ACLs on lab directory
         in: query
         name: skipLabdirAcl
+        type: boolean
+      - description: Stream lifecycle output as NDJSON events
+        in: query
+        name: stream
+        type: boolean
+      - description: Include captured lifecycle logs in the JSON response
+        in: query
+        name: includeLogs
         type: boolean
       produces:
       - application/json

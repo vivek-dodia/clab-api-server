@@ -558,7 +558,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Redeploys a lab by name.\n\n**Notes**\n- This operation destroys the lab and then deploys it again.",
+                "description": "Redeploys a lab by name.\n\n**Notes**\n- This operation destroys the lab and then deploys it again.\n- ` + "`" + `stream=true` + "`" + ` returns ` + "`" + `application/x-ndjson` + "`" + ` lifecycle events.\n- ` + "`" + `includeLogs=true` + "`" + ` includes captured lifecycle logs in the JSON response.",
                 "produces": [
                     "application/json"
                 ],
@@ -615,6 +615,18 @@ const docTemplate = `{
                         "description": "Skip setting extended ACLs on lab directory",
                         "name": "skipLabdirAcl",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Stream lifecycle output as NDJSON events",
+                        "name": "stream",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include captured lifecycle logs in the JSON response",
+                        "name": "includeLogs",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -656,7 +668,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Destroys a lab by name after verifying ownership.",
+                "description": "Destroys a lab by name after verifying ownership.\n\n**Notes**\n- ` + "`" + `stream=true` + "`" + ` returns ` + "`" + `application/x-ndjson` + "`" + ` lifecycle events.\n- ` + "`" + `includeLogs=true` + "`" + ` includes captured lifecycle logs in the JSON response.",
                 "produces": [
                     "application/json"
                 ],
@@ -701,6 +713,18 @@ const docTemplate = `{
                         "description": "Destroy only specific nodes",
                         "name": "nodeFilter",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Stream lifecycle output as NDJSON events",
+                        "name": "stream",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include captured lifecycle logs in the JSON response",
+                        "name": "includeLogs",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -744,7 +768,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deploys ` + "`" + `\u003clabName\u003e.clab.yml` + "`" + ` from the authenticated user's lab directory.",
+                "description": "Deploys an on-disk topology from the authenticated user's lab directory.\n\n**Notes**\n- ` + "`" + `path` + "`" + ` defaults to ` + "`" + `\u003clabName\u003e.clab.yml` + "`" + ` when omitted.\n- ` + "`" + `stream=true` + "`" + ` returns ` + "`" + `application/x-ndjson` + "`" + ` lifecycle events.\n- ` + "`" + `includeLogs=true` + "`" + ` includes captured lifecycle logs in the JSON response.",
                 "produces": [
                     "application/json"
                 ],
@@ -759,6 +783,12 @@ const docTemplate = `{
                         "name": "labName",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative topology file path inside lab directory (defaults to \u003clabName\u003e.clab.yml)",
+                        "name": "path",
+                        "in": "query"
                     },
                     {
                         "type": "boolean",
@@ -794,6 +824,18 @@ const docTemplate = `{
                         "type": "boolean",
                         "description": "Skip setting extended ACLs on lab directory",
                         "name": "skipLabdirAcl",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Stream lifecycle output as NDJSON events",
+                        "name": "stream",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include captured lifecycle logs in the JSON response",
+                        "name": "includeLogs",
                         "in": "query"
                     }
                 ],
@@ -3913,7 +3955,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "deploymentState": {
-                    "description": "deployed | undeployed",
+                    "description": "undeployed (runtime state is derived from events stream)",
                     "type": "string"
                 },
                 "hasAnnotations": {

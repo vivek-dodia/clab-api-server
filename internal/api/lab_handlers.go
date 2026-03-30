@@ -442,6 +442,10 @@ func DeployLabArchiveHandler(c *gin.Context) {
 
 // @Summary Destroy lab
 // @Description Destroys a lab by name after verifying ownership.
+// @Description
+// @Description **Notes**
+// @Description - `stream=true` returns `application/x-ndjson` lifecycle events.
+// @Description - `includeLogs=true` includes captured lifecycle logs in the JSON response.
 // @Tags Labs
 // @Security BearerAuth
 // @Produce json
@@ -451,6 +455,8 @@ func DeployLabArchiveHandler(c *gin.Context) {
 // @Param graceful query boolean false "Attempt graceful shutdown"
 // @Param keepMgmtNet query boolean false "Keep the management network"
 // @Param nodeFilter query string false "Destroy only specific nodes"
+// @Param stream query boolean false "Stream lifecycle output as NDJSON events"
+// @Param includeLogs query boolean false "Include captured lifecycle logs in the JSON response"
 // @Success 200 {object} models.GenericSuccessResponse "Lab destroyed successfully"
 // @Failure 400 {object} models.ErrorResponse "Invalid lab name"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
@@ -460,6 +466,8 @@ func DeployLabArchiveHandler(c *gin.Context) {
 func DestroyLabHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
+	streamLogs := c.Query("stream") == "true"
+	includeLogs := c.Query("includeLogs") == "true"
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
@@ -516,16 +524,20 @@ func DestroyLabHandler(c *gin.Context) {
 	}
 
 	log.Infof("DestroyLab user '%s': Destroying lab '%s' (cleanup=%t, purgeLabDir=%t)...", username, labName, cleanup, purgeLabDir)
-	if err := svc.Destroy(ctx, destroyOpts); err != nil {
-		log.Errorf("DestroyLab failed for user '%s', lab '%s': %v", username, labName, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to destroy lab '%s': %s", labName, err.Error())})
-		return
+
+	runDestroy := func() error {
+		if err := svc.Destroy(ctx, destroyOpts); err != nil {
+			return fmt.Errorf("Failed to destroy lab '%s': %s", labName, err.Error())
+		}
+		return nil
 	}
 
-	log.Infof("Lab '%s' destroyed successfully for user '%s'.", labName, username)
+	purgeDestroyedLabDir := func() {
+		// Purge topology parent directory if requested.
+		if !purgeLabDir || originalTopoPath == "" || strings.HasPrefix(originalTopoPath, "http") {
+			return
+		}
 
-	// Purge topology parent directory if requested.
-	if purgeLabDir && originalTopoPath != "" && !strings.HasPrefix(originalTopoPath, "http") {
 		targetDir := filepath.Dir(originalTopoPath)
 
 		sharedDir := os.Getenv("CLAB_SHARED_LABS_DIR")
@@ -548,7 +560,49 @@ func DestroyLabHandler(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("Lab '%s' destroyed successfully", labName)})
+	successMessage := fmt.Sprintf("Lab '%s' destroyed successfully", labName)
+	if streamLogs {
+		streamLifecycleCommand(c, func() error {
+			if err := runDestroy(); err != nil {
+				return err
+			}
+			purgeDestroyedLabDir()
+			return nil
+		}, "")
+		return
+	}
+
+	lifecycleLogs := []string{}
+	if includeLogs {
+		logs, destroyErr := captureLifecycleLogs(runDestroy)
+		lifecycleLogs = logs
+		if destroyErr != nil {
+			log.Errorf("DestroyLab failed for user '%s', lab '%s': %v", username, labName, destroyErr)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": destroyErr.Error(),
+				"logs":  lifecycleLogs,
+			})
+			return
+		}
+	} else {
+		if destroyErr := runDestroy(); destroyErr != nil {
+			log.Errorf("DestroyLab failed for user '%s', lab '%s': %v", username, labName, destroyErr)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: destroyErr.Error()})
+			return
+		}
+	}
+
+	log.Infof("Lab '%s' destroyed successfully for user '%s'.", labName, username)
+	purgeDestroyedLabDir()
+	if includeLogs {
+		c.JSON(http.StatusOK, gin.H{
+			"message": successMessage,
+			"logs":    lifecycleLogs,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: successMessage})
 }
 
 // @Summary Redeploy lab
@@ -556,6 +610,8 @@ func DestroyLabHandler(c *gin.Context) {
 // @Description
 // @Description **Notes**
 // @Description - This operation destroys the lab and then deploys it again.
+// @Description - `stream=true` returns `application/x-ndjson` lifecycle events.
+// @Description - `includeLogs=true` includes captured lifecycle logs in the JSON response.
 // @Tags Labs
 // @Security BearerAuth
 // @Produce json
@@ -567,6 +623,8 @@ func DestroyLabHandler(c *gin.Context) {
 // @Param exportTemplate query string false "Custom Go template file for topology data export"
 // @Param skipPostDeploy query boolean false "Skip post-deploy actions"
 // @Param skipLabdirAcl query boolean false "Skip setting extended ACLs on lab directory"
+// @Param stream query boolean false "Stream lifecycle output as NDJSON events"
+// @Param includeLogs query boolean false "Include captured lifecycle logs in the JSON response"
 // @Success 200 {object} models.ClabInspectOutput "Redeployed lab details"
 // @Failure 400 {object} models.ErrorResponse "Invalid lab name"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
@@ -576,6 +634,8 @@ func DestroyLabHandler(c *gin.Context) {
 func RedeployLabHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
+	streamLogs := c.Query("stream") == "true"
+	includeLogs := c.Query("includeLogs") == "true"
 
 	if !isValidLabName(labName) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid characters in lab name."})
@@ -624,7 +684,6 @@ func RedeployLabHandler(c *gin.Context) {
 		targetOwner = info.Owner
 	}
 
-	// Destroy
 	destroyOpts := clab.DestroyOptions{
 		TopoPath:    originalTopoPath,
 		Username:    username,
@@ -634,13 +693,6 @@ func RedeployLabHandler(c *gin.Context) {
 		MaxWorkers:  uint(maxWorkers),
 	}
 
-	log.Infof("RedeployLab user '%s': Destroying lab '%s'...", username, labName)
-	if err := svc.Destroy(ctx, destroyOpts); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to destroy lab '%s': %s", labName, err.Error())})
-		return
-	}
-
-	// Deploy
 	deployOpts := clab.DeployOptions{
 		TopoPath:       originalTopoPath,
 		Username:       targetOwner,
@@ -651,15 +703,64 @@ func RedeployLabHandler(c *gin.Context) {
 		SkipLabDirACLs: skipLabdirAcl,
 	}
 
-	log.Infof("RedeployLab user '%s': Deploying lab '%s'...", username, labName)
-	containers, err := svc.Deploy(ctx, deployOpts)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to redeploy lab '%s': %s", labName, err.Error())})
+	runRedeploy := func() (models.ClabInspectOutput, error) {
+		log.Infof("RedeployLab user '%s': Destroying lab '%s'...", username, labName)
+		if err := svc.Destroy(ctx, destroyOpts); err != nil {
+			return nil, fmt.Errorf("Failed to destroy lab '%s': %s", labName, err.Error())
+		}
+
+		log.Infof("RedeployLab user '%s': Deploying lab '%s'...", username, labName)
+		containers, deployErr := svc.Deploy(ctx, deployOpts)
+		if deployErr != nil {
+			return nil, fmt.Errorf("Failed to redeploy lab '%s': %s", labName, deployErr.Error())
+		}
+
+		return clab.ContainersToClabInspectOutput(containers), nil
+	}
+
+	successMessage := fmt.Sprintf("Lab '%s' redeployed successfully", labName)
+	if streamLogs {
+		streamLifecycleCommand(c, func() error {
+			_, runErr := runRedeploy()
+			if runErr != nil {
+				return runErr
+			}
+			return nil
+		}, "")
+		return
+	}
+
+	if includeLogs {
+		var result models.ClabInspectOutput
+		logs, redeployErr := captureLifecycleLogs(func() error {
+			var runErr error
+			result, runErr = runRedeploy()
+			return runErr
+		})
+		if redeployErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": redeployErr.Error(),
+				"logs":  logs,
+			})
+			return
+		}
+
+		log.Infof("RedeployLab user '%s': Lab '%s' redeployed successfully.", username, labName)
+		c.JSON(http.StatusOK, gin.H{
+			"result":  result,
+			"logs":    logs,
+			"message": successMessage,
+		})
+		return
+	}
+
+	result, redeployErr := runRedeploy()
+	if redeployErr != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: redeployErr.Error()})
 		return
 	}
 
 	log.Infof("RedeployLab user '%s': Lab '%s' redeployed successfully.", username, labName)
-	result := clab.ContainersToClabInspectOutput(containers)
 	c.JSON(http.StatusOK, result)
 }
 
