@@ -490,6 +490,66 @@ func resolveCanonicalTopologyRootPath(cleanLabDir, labName, cleanPath string) st
 	return ""
 }
 
+type topologyFilePathContext struct {
+	ownerUsername      string
+	runningTopologyAbs string
+}
+
+func resolveTopologyFilePathContext(username, labName string) topologyFilePathContext {
+	result := topologyFilePathContext{
+		ownerUsername: username,
+	}
+
+	if !isSuperuser(username) {
+		return result
+	}
+
+	lookupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	labInfo, exists, lookupErr := getLabInfoCached(lookupCtx, username, labName)
+	if lookupErr != nil {
+		// Best-effort owner resolution: on lookup issues, keep defaulting
+		// to the requesting user path so local file access still works.
+		return result
+	}
+
+	if !exists || labInfo == nil {
+		return result
+	}
+
+	owner := strings.TrimSpace(labInfo.Owner)
+	if owner != "" {
+		result.ownerUsername = owner
+	}
+
+	if running := strings.TrimSpace(labInfo.AbsLabPath); running != "" {
+		result.runningTopologyAbs = filepath.Clean(running)
+	}
+
+	return result
+}
+
+func resolveRunningTopologyDocPath(labName, cleanPath, runningTopologyAbs string) string {
+	canonicalYamlNames := map[string]struct{}{
+		labName + ".clab.yml":  {},
+		labName + ".clab.yaml": {},
+	}
+	if _, ok := canonicalYamlNames[cleanPath]; ok {
+		return runningTopologyAbs
+	}
+
+	canonicalAnnotationsNames := map[string]struct{}{
+		labName + ".clab.yml.annotations.json":  {},
+		labName + ".clab.yaml.annotations.json": {},
+	}
+	if _, ok := canonicalAnnotationsNames[cleanPath]; ok {
+		return runningTopologyAbs + ".annotations.json"
+	}
+
+	return ""
+}
+
 func resolveTopologyFilePath(username, labName, relPath string) (absolutePath, labDir string, uid, gid int, err error) {
 	if !isValidLabName(labName) {
 		return "", "", -1, -1, fmt.Errorf("invalid lab name")
@@ -505,16 +565,28 @@ func resolveTopologyFilePath(username, labName, relPath string) (absolutePath, l
 		return "", "", -1, -1, fmt.Errorf("invalid file path")
 	}
 
-	labDir, uid, gid, dirErr := getLabDirectoryInfo(username, labName)
+	pathCtx := resolveTopologyFilePathContext(username, labName)
+
+	labDir, uid, gid, dirErr := getLabDirectoryInfo(pathCtx.ownerUsername, labName)
 	if dirErr != nil {
 		return "", "", -1, -1, dirErr
 	}
 
-	absPath := filepath.Clean(filepath.Join(labDir, cleanPath))
 	cleanLabDir := filepath.Clean(labDir)
+	if pathCtx.runningTopologyAbs != "" {
+		if canonicalRunningDoc := resolveRunningTopologyDocPath(labName, cleanPath, pathCtx.runningTopologyAbs); canonicalRunningDoc != "" {
+			return canonicalRunningDoc, filepath.Clean(filepath.Dir(pathCtx.runningTopologyAbs)), uid, gid, nil
+		}
+		cleanLabDir = filepath.Clean(filepath.Dir(pathCtx.runningTopologyAbs))
+	}
 
-	if canonicalRootPath := resolveCanonicalTopologyRootPath(cleanLabDir, labName, cleanPath); canonicalRootPath != "" {
-		return canonicalRootPath, cleanLabDir, uid, gid, nil
+	absPath := filepath.Clean(filepath.Join(cleanLabDir, cleanPath))
+
+	// Canonical root fallback is only relevant for managed local lab directories.
+	if pathCtx.runningTopologyAbs == "" {
+		if canonicalRootPath := resolveCanonicalTopologyRootPath(cleanLabDir, labName, cleanPath); canonicalRootPath != "" {
+			return canonicalRootPath, cleanLabDir, uid, gid, nil
+		}
 	}
 
 	if absPath != cleanLabDir && !strings.HasPrefix(absPath, cleanLabDir+string(filepath.Separator)) {
