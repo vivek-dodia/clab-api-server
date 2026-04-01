@@ -63,6 +63,45 @@ func TestResolveLaunchCommandSSHUsesDirectArgv(t *testing.T) {
 	}
 }
 
+func TestResolveLaunchCommandTelnetUsesDirectArgv(t *testing.T) {
+	command, err := resolveLaunchCommand(models.TerminalProtocolTelnet, CreateSessionOptions{
+		Runtime:     "docker",
+		ContainerID: "cid-789",
+		TelnetPort:  7001,
+	})
+	if err != nil {
+		t.Fatalf("resolveLaunchCommand returned unexpected error: %v", err)
+	}
+
+	expected := []string{"docker", "exec", "-it", "cid-789", "telnet", "127.0.0.1", "7001"}
+	if strings.Join(command, " ") != strings.Join(expected, " ") {
+		t.Fatalf("unexpected telnet command: got %v want %v", command, expected)
+	}
+	for _, disallowed := range []string{"ssh", "sh", "bash", "-lc", "-c"} {
+		for _, part := range command {
+			if part == disallowed {
+				t.Fatalf("unexpected shell/ssh wrapper token %q in %v", disallowed, command)
+			}
+		}
+	}
+}
+
+func TestResolveLaunchCommandTelnetDefaultsPort(t *testing.T) {
+	command, err := resolveLaunchCommand(models.TerminalProtocolTelnet, CreateSessionOptions{
+		Runtime:     "podman",
+		ContainerID: "cid-999",
+		TelnetPort:  0,
+	})
+	if err != nil {
+		t.Fatalf("resolveLaunchCommand returned unexpected error: %v", err)
+	}
+
+	expected := []string{"podman", "exec", "-it", "cid-999", "telnet", "127.0.0.1", "5000"}
+	if strings.Join(command, " ") != strings.Join(expected, " ") {
+		t.Fatalf("unexpected default telnet command: got %v want %v", command, expected)
+	}
+}
+
 func TestSanitizeTerminalSizeClampsInvalidValues(t *testing.T) {
 	cols, rows := sanitizeTerminalSize(0, 500)
 	if cols != DefaultTerminalCols {
