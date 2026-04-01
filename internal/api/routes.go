@@ -99,10 +99,20 @@ func SetupRoutes(router *gin.Engine) {
 					// Request SSH Access to a specific node
 					nodeSpecific.POST("/ssh", RequestSSHAccessHandler) // POST /api/v1/labs/{labName}/nodes/{nodeName}/ssh
 
+					// Create interactive terminal session for a specific node
+					nodeSpecific.POST("/terminal-sessions", RequestTerminalSessionHandler) // POST /api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions
+
 					// Logs
 					nodeSpecific.GET("/logs", GetNodeLogsHandler) // GET /api/v1/labs/{labName}/nodes/{nodeName}/logs
 				}
 			}
+		}
+
+		terminals := apiV1.Group("/terminal-sessions")
+		{
+			terminals.GET("/:sessionId", GetTerminalSessionHandler)           // GET /api/v1/terminal-sessions/{sessionId}
+			terminals.DELETE("/:sessionId", TerminateTerminalSessionHandler)  // DELETE /api/v1/terminal-sessions/{sessionId}
+			terminals.GET("/:sessionId/stream", StreamTerminalSessionHandler) // WS /api/v1/terminal-sessions/{sessionId}/stream
 		}
 
 		// SSH Session Management Routes (Global)

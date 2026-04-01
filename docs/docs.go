@@ -1120,7 +1120,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates temporary SSH access to a lab node and returns connection details.",
+                "description": "Creates temporary SSH access to a lab node and returns connection details for an external SSH client.\nThis endpoint does not create a browser terminal session. For browser terminals, use ` + "`" + `/api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions` + "`" + ` with ` + "`" + `protocol=ssh` + "`" + `.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1130,7 +1130,7 @@ const docTemplate = `{
                 "tags": [
                     "SSH Access"
                 ],
-                "summary": "Request SSH access to lab node",
+                "summary": "Request temporary SSH access details",
                 "parameters": [
                     {
                         "type": "string",
@@ -1182,6 +1182,89 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Lab or node not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a constrained interactive terminal session for an owned lab node using one of the supported protocols: ` + "`" + `ssh` + "`" + `, ` + "`" + `shell` + "`" + `, or ` + "`" + `telnet` + "`" + `.\n\n**Protocol behavior**\n- ` + "`" + `ssh` + "`" + `: launches the server-side ` + "`" + `ssh` + "`" + ` client in a PTY directly to the node management IP and streams that terminal over WebSocket.\n- ` + "`" + `shell` + "`" + `: launches a PTY-backed ` + "`" + `docker|podman exec -it \u003ccontainer\u003e \u003cserver-selected-command\u003e` + "`" + ` session.\n- ` + "`" + `telnet` + "`" + `: launches a PTY-backed ` + "`" + `docker|podman exec -it \u003ccontainer\u003e telnet 127.0.0.1 \u003cport\u003e` + "`" + ` session.\n\n**Security notes**\n- The backend chooses the launch command for every protocol. Clients choose only the protocol and terminal size.\n- Access is limited to owned nodes unless the caller is a configured superuser.\n\n**Relationship to ` + "`" + `/api/v1/labs/{labName}/nodes/{nodeName}/ssh` + "`" + `**\n- This endpoint creates the interactive browser terminal session.\n- The separate ` + "`" + `/ssh` + "`" + ` endpoint returns temporary SSH access details for an external SSH client and is not required for browser terminals.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terminal Sessions"
+                ],
+                "summary": "Create browser terminal session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Full container name of the node (e.g., clab-my-lab-srl1)",
+                        "name": "nodeName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Terminal session creation parameters",
+                        "name": "terminal_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TerminalSessionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Created terminal session",
+                        "schema": {
+                            "$ref": "#/definitions/models.TerminalSessionInfo"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameters",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Lab or node not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too many active terminal sessions",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -1969,6 +2052,172 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/terminal-sessions/{sessionId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns metadata and lifecycle state for a terminal session.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terminal Sessions"
+                ],
+                "summary": "Get terminal session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Terminal session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Terminal session metadata",
+                        "schema": {
+                            "$ref": "#/definitions/models.TerminalSessionInfo"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Terminates a terminal session owned by the caller (or any session for a superuser).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terminal Sessions"
+                ],
+                "summary": "Terminate terminal session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Terminal session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Terminal session terminated",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/terminal-sessions/{sessionId}/stream": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upgrades the request to a WebSocket connection for terminal input, output, resize, and close events.\n\n**Protocol notes**\n- Connect with a WebSocket client to this endpoint after creating a terminal session.\n- Client messages are JSON objects with ` + "`" + `type` + "`" + ` set to ` + "`" + `input` + "`" + `, ` + "`" + `resize` + "`" + `, or ` + "`" + `close` + "`" + `.\n- Server messages are JSON objects with ` + "`" + `type` + "`" + ` set to ` + "`" + `ready` + "`" + `, ` + "`" + `output` + "`" + `, or ` + "`" + `exit` + "`" + `.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terminal Sessions"
+                ],
+                "summary": "Stream terminal session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Terminal session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "101": {
+                        "description": "Switching Protocols to WebSocket",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Session already attached",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "410": {
+                        "description": "Session already exited",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -4004,6 +4253,89 @@ const docTemplate = `{
                 "success": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "models.TerminalProtocol": {
+            "type": "string",
+            "enum": [
+                "ssh",
+                "shell",
+                "telnet"
+            ],
+            "x-enum-varnames": [
+                "TerminalProtocolSSH",
+                "TerminalProtocolShell",
+                "TerminalProtocolTelnet"
+            ]
+        },
+        "models.TerminalSessionInfo": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "exitCode": {
+                    "type": "integer"
+                },
+                "expiresAt": {
+                    "type": "string"
+                },
+                "labName": {
+                    "type": "string"
+                },
+                "lastActivity": {
+                    "type": "string"
+                },
+                "nodeName": {
+                    "type": "string"
+                },
+                "protocol": {
+                    "$ref": "#/definitions/models.TerminalProtocol"
+                },
+                "sessionId": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.TerminalSessionRequest": {
+            "type": "object",
+            "required": [
+                "protocol"
+            ],
+            "properties": {
+                "cols": {
+                    "description": "Cols is the requested terminal width in characters.",
+                    "type": "integer"
+                },
+                "protocol": {
+                    "description": "Protocol selects the terminal transport: ssh, shell, or telnet.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.TerminalProtocol"
+                        }
+                    ]
+                },
+                "rows": {
+                    "description": "Rows is the requested terminal height in characters.",
+                    "type": "integer"
+                },
+                "sshUsername": {
+                    "description": "SSHUsername optionally overrides the SSH username for protocol=ssh.",
+                    "type": "string"
+                },
+                "telnetPort": {
+                    "description": "TelnetPort optionally overrides the telnet destination port for protocol=telnet.",
+                    "type": "integer"
                 }
             }
         },

@@ -673,6 +673,63 @@ definitions:
         example: true
         type: boolean
     type: object
+  models.TerminalProtocol:
+    enum:
+    - ssh
+    - shell
+    - telnet
+    type: string
+    x-enum-varnames:
+    - TerminalProtocolSSH
+    - TerminalProtocolShell
+    - TerminalProtocolTelnet
+  models.TerminalSessionInfo:
+    properties:
+      createdAt:
+        type: string
+      error:
+        type: string
+      exitCode:
+        type: integer
+      expiresAt:
+        type: string
+      labName:
+        type: string
+      lastActivity:
+        type: string
+      nodeName:
+        type: string
+      protocol:
+        $ref: '#/definitions/models.TerminalProtocol'
+      sessionId:
+        type: string
+      state:
+        type: string
+      username:
+        type: string
+    type: object
+  models.TerminalSessionRequest:
+    properties:
+      cols:
+        description: Cols is the requested terminal width in characters.
+        type: integer
+      protocol:
+        allOf:
+        - $ref: '#/definitions/models.TerminalProtocol'
+        description: 'Protocol selects the terminal transport: ssh, shell, or telnet.'
+      rows:
+        description: Rows is the requested terminal height in characters.
+        type: integer
+      sshUsername:
+        description: SSHUsername optionally overrides the SSH username for protocol=ssh.
+        type: string
+      telnetPort:
+        description: TelnetPort optionally overrides the telnet destination port for
+          protocol=telnet.
+        type: integer
+    required:
+    - protocol
+    type: object
   models.TopologyDocEventResponse:
     properties:
       action:
@@ -1541,8 +1598,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates temporary SSH access to a lab node and returns connection
-        details.
+      description: |-
+        Creates temporary SSH access to a lab node and returns connection details for an external SSH client.
+        This endpoint does not create a browser terminal session. For browser terminals, use `/api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions` with `protocol=ssh`.
       parameters:
       - description: Lab name
         in: path
@@ -1588,9 +1646,77 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Request SSH access to lab node
+      summary: Request temporary SSH access details
       tags:
       - SSH Access
+  /api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Creates a constrained interactive terminal session for an owned lab node using one of the supported protocols: `ssh`, `shell`, or `telnet`.
+
+        **Protocol behavior**
+        - `ssh`: launches the server-side `ssh` client in a PTY directly to the node management IP and streams that terminal over WebSocket.
+        - `shell`: launches a PTY-backed `docker|podman exec -it <container> <server-selected-command>` session.
+        - `telnet`: launches a PTY-backed `docker|podman exec -it <container> telnet 127.0.0.1 <port>` session.
+
+        **Security notes**
+        - The backend chooses the launch command for every protocol. Clients choose only the protocol and terminal size.
+        - Access is limited to owned nodes unless the caller is a configured superuser.
+
+        **Relationship to `/api/v1/labs/{labName}/nodes/{nodeName}/ssh`**
+        - This endpoint creates the interactive browser terminal session.
+        - The separate `/ssh` endpoint returns temporary SSH access details for an external SSH client and is not required for browser terminals.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Full container name of the node (e.g., clab-my-lab-srl1)
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      - description: Terminal session creation parameters
+        in: body
+        name: terminal_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TerminalSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Created terminal session
+          schema:
+            $ref: '#/definitions/models.TerminalSessionInfo'
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Lab or node not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "429":
+          description: Too many active terminal sessions
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create browser terminal session
+      tags:
+      - Terminal Sessions
   /api/v1/labs/{labName}/save:
     post:
       description: Saves the running configuration for nodes in a lab.
@@ -2213,6 +2339,119 @@ paths:
       summary: Terminate SSH session
       tags:
       - SSH Access
+  /api/v1/terminal-sessions/{sessionId}:
+    delete:
+      description: Terminates a terminal session owned by the caller (or any session
+        for a superuser).
+      parameters:
+      - description: Terminal session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Terminal session terminated
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Terminate terminal session
+      tags:
+      - Terminal Sessions
+    get:
+      description: Returns metadata and lifecycle state for a terminal session.
+      parameters:
+      - description: Terminal session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Terminal session metadata
+          schema:
+            $ref: '#/definitions/models.TerminalSessionInfo'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get terminal session
+      tags:
+      - Terminal Sessions
+  /api/v1/terminal-sessions/{sessionId}/stream:
+    get:
+      description: |-
+        Upgrades the request to a WebSocket connection for terminal input, output, resize, and close events.
+
+        **Protocol notes**
+        - Connect with a WebSocket client to this endpoint after creating a terminal session.
+        - Client messages are JSON objects with `type` set to `input`, `resize`, or `close`.
+        - Server messages are JSON objects with `type` set to `ready`, `output`, or `exit`.
+      parameters:
+      - description: Terminal session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "101":
+          description: Switching Protocols to WebSocket
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Session already attached
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "410":
+          description: Session already exited
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stream terminal session
+      tags:
+      - Terminal Sessions
   /api/v1/tools/certs/ca:
     post:
       consumes:

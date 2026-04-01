@@ -112,6 +112,10 @@ func main() {
 	api.InitSSHManager()
 	log.Infof("SSH port range configured: %d - %d", config.AppConfig.SSHBasePort, config.AppConfig.SSHMaxPort)
 
+	// --- Initialize Terminal Manager ---
+	log.Info("Initializing Terminal Session Manager...")
+	api.InitTerminalManager()
+
 	// --- Initialize Authentication ---
 	log.Info("Initializing authentication...")
 	auth.InitAuth() // Initialize auth with server start time
@@ -239,6 +243,7 @@ func main() {
 
 	// Shutdown SSH Manager (can run concurrently with server shutdown)
 	go api.ShutdownSSHManager() // No need to wait for this specifically unless it's critical
+	go api.ShutdownTerminalManager()
 
 	// Attempt graceful shutdown of the HTTP server
 	if err := srv.Shutdown(ctx); err != nil {
