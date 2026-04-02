@@ -176,6 +176,45 @@ definitions:
         $ref: '#/definitions/models.ClabContainerInfo'
       type: array
     type: object
+  models.CustomIconInfo:
+    properties:
+      dataUri:
+        type: string
+      format:
+        example: svg
+        type: string
+      name:
+        type: string
+      source:
+        example: global
+        type: string
+    type: object
+  models.CustomNodeDefaultRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  models.CustomNodeTemplate:
+    additionalProperties: true
+    type: object
+  models.CustomNodesReplaceRequest:
+    properties:
+      customNodes:
+        items:
+          $ref: '#/definitions/models.CustomNodeTemplate'
+        type: array
+    type: object
+  models.CustomNodesResponse:
+    properties:
+      customNodes:
+        items:
+          $ref: '#/definitions/models.CustomNodeTemplate'
+        type: array
+      defaultNode:
+        type: string
+    type: object
   models.DeployRequest:
     properties:
       topologyContent:
@@ -406,6 +445,43 @@ definitions:
       version:
         description: API server version
         type: string
+    type: object
+  models.IconListResponse:
+    properties:
+      icons:
+        items:
+          $ref: '#/definitions/models.CustomIconInfo'
+        type: array
+    type: object
+  models.IconReconcileRequest:
+    properties:
+      usedIcons:
+        items:
+          type: string
+        type: array
+    type: object
+  models.IconUploadRequest:
+    properties:
+      contentType:
+        example: image/svg+xml
+        type: string
+      dataBase64:
+        type: string
+      fileName:
+        example: my-router.svg
+        type: string
+    required:
+    - dataBase64
+    - fileName
+    type: object
+  models.IconUploadResponse:
+    properties:
+      iconName:
+        example: my-router
+        type: string
+      success:
+        example: true
+        type: boolean
     type: object
   models.InterfaceInfo:
     properties:
@@ -2164,6 +2240,84 @@ paths:
       summary: Update lab topology YAML
       tags:
       - Labs
+  /api/v1/labs/{labName}/ui/icons:
+    get:
+      description: Returns the custom TopoViewer icons available for a lab, merging
+        lab-local .clab-icons with the global ~/.clab/icons library. Lab-local icons
+        take precedence.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Merged lab icon list
+          schema:
+            $ref: '#/definitions/models.IconListResponse'
+        "400":
+          description: Invalid lab name
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List lab custom icons
+      tags:
+      - UI
+  /api/v1/labs/{labName}/ui/icons/reconcile:
+    post:
+      consumes:
+      - application/json
+      description: Copies used custom icons from the global ~/.clab/icons library
+        into the lab-local .clab-icons directory and removes unused lab-local custom
+        icons.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Used custom icon names
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.IconReconcileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reconcile success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Reconcile lab custom icons
+      tags:
+      - UI
   /api/v1/labs/archive:
     post:
       consumes:
@@ -2840,6 +2994,280 @@ paths:
       summary: Create VxLAN tunnel
       tags:
       - Tools - VxLAN
+  /api/v1/ui/custom-nodes:
+    get:
+      description: Returns the authenticated user's persisted TopoViewer custom node
+        templates. If none have been saved yet, seeded defaults matching VS Code are
+        returned.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Custom node templates
+          schema:
+            $ref: '#/definitions/models.CustomNodesResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List custom node templates
+      tags:
+      - UI
+    post:
+      consumes:
+      - application/json
+      description: Creates or updates a single TopoViewer custom node template for
+        the authenticated user.
+      parameters:
+      - description: Custom node template payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CustomNodeTemplate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated custom node templates
+          schema:
+            $ref: '#/definitions/models.CustomNodesResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Save custom node template
+      tags:
+      - UI
+    put:
+      consumes:
+      - application/json
+      description: Replaces the authenticated user's full TopoViewer custom node template
+        collection.
+      parameters:
+      - description: Replacement custom node template collection
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CustomNodesReplaceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated custom node templates
+          schema:
+            $ref: '#/definitions/models.CustomNodesResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Replace custom node templates
+      tags:
+      - UI
+  /api/v1/ui/custom-nodes/{name}:
+    delete:
+      description: Deletes a single TopoViewer custom node template for the authenticated
+        user.
+      parameters:
+      - description: Custom node name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated custom node templates
+          schema:
+            $ref: '#/definitions/models.CustomNodesResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete custom node template
+      tags:
+      - UI
+  /api/v1/ui/custom-nodes/default:
+    post:
+      consumes:
+      - application/json
+      description: Sets the default TopoViewer custom node template for the authenticated
+        user.
+      parameters:
+      - description: Default custom node selection
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CustomNodeDefaultRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated custom node templates
+          schema:
+            $ref: '#/definitions/models.CustomNodesResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Custom node not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set default custom node template
+      tags:
+      - UI
+  /api/v1/ui/icons:
+    get:
+      description: Returns the authenticated user's global custom TopoViewer icon
+        library from ~/.clab/icons.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Global custom icons
+          schema:
+            $ref: '#/definitions/models.IconListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List global custom icons
+      tags:
+      - UI
+    post:
+      consumes:
+      - application/json
+      description: Uploads a new global custom TopoViewer icon into ~/.clab/icons
+        for the authenticated user.
+      parameters:
+      - description: Custom icon upload payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.IconUploadRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Upload success
+          schema:
+            $ref: '#/definitions/models.IconUploadResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Rejected due to built-in icon name conflict
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload global custom icon
+      tags:
+      - UI
+  /api/v1/ui/icons/{iconName}:
+    delete:
+      description: Deletes a global custom TopoViewer icon from ~/.clab/icons for
+        the authenticated user.
+      parameters:
+      - description: Custom icon name
+        in: path
+        name: iconName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Delete success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid icon name
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Icon not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete global custom icon
+      tags:
+      - UI
   /api/v1/users:
     get:
       description: Returns a list of system users. Requires superuser privileges.

@@ -1949,6 +1949,122 @@
                 }
             }
         },
+        "/api/v1/labs/{labName}/ui/icons": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the custom TopoViewer icons available for a lab, merging lab-local .clab-icons with the global ~/.clab/icons library. Lab-local icons take precedence.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "List lab custom icons",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Merged lab icon list",
+                        "schema": {
+                            "$ref": "#/definitions/models.IconListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid lab name",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/ui/icons/reconcile": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Copies used custom icons from the global ~/.clab/icons library into the lab-local .clab-icons directory and removes unused lab-local custom icons.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Reconcile lab custom icons",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Used custom icon names",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.IconReconcileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reconcile success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ssh/sessions": {
             "get": {
                 "security": [
@@ -2812,6 +2928,424 @@
                 }
             }
         },
+        "/api/v1/ui/custom-nodes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the authenticated user's persisted TopoViewer custom node templates. If none have been saved yet, seeded defaults matching VS Code are returned.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "List custom node templates",
+                "responses": {
+                    "200": {
+                        "description": "Custom node templates",
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the authenticated user's full TopoViewer custom node template collection.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Replace custom node templates",
+                "parameters": [
+                    {
+                        "description": "Replacement custom node template collection",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesReplaceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated custom node templates",
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates or updates a single TopoViewer custom node template for the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Save custom node template",
+                "parameters": [
+                    {
+                        "description": "Custom node template payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodeTemplate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated custom node templates",
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ui/custom-nodes/default": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets the default TopoViewer custom node template for the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Set default custom node template",
+                "parameters": [
+                    {
+                        "description": "Default custom node selection",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodeDefaultRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated custom node templates",
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Custom node not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ui/custom-nodes/{name}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a single TopoViewer custom node template for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Delete custom node template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Custom node name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated custom node templates",
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ui/icons": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the authenticated user's global custom TopoViewer icon library from ~/.clab/icons.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "List global custom icons",
+                "responses": {
+                    "200": {
+                        "description": "Global custom icons",
+                        "schema": {
+                            "$ref": "#/definitions/models.IconListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Uploads a new global custom TopoViewer icon into ~/.clab/icons for the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Upload global custom icon",
+                "parameters": [
+                    {
+                        "description": "Custom icon upload payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.IconUploadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Upload success",
+                        "schema": {
+                            "$ref": "#/definitions/models.IconUploadResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Rejected due to built-in icon name conflict",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ui/icons/{iconName}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a global custom TopoViewer icon from ~/.clab/icons for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Delete global custom icon",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Custom icon name",
+                        "name": "iconName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Delete success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid icon name",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Icon not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users": {
             "get": {
                 "security": [
@@ -3567,6 +4101,65 @@
                 }
             }
         },
+        "models.CustomIconInfo": {
+            "type": "object",
+            "properties": {
+                "dataUri": {
+                    "type": "string"
+                },
+                "format": {
+                    "type": "string",
+                    "example": "svg"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string",
+                    "example": "global"
+                }
+            }
+        },
+        "models.CustomNodeDefaultRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CustomNodeTemplate": {
+            "type": "object",
+            "additionalProperties": true
+        },
+        "models.CustomNodesReplaceRequest": {
+            "type": "object",
+            "properties": {
+                "customNodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.CustomNodeTemplate"
+                    }
+                }
+            }
+        },
+        "models.CustomNodesResponse": {
+            "type": "object",
+            "properties": {
+                "customNodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.CustomNodeTemplate"
+                    }
+                },
+                "defaultNode": {
+                    "type": "string"
+                }
+            }
+        },
         "models.DeployRequest": {
             "type": "object",
             "properties": {
@@ -3865,6 +4458,61 @@
                 "version": {
                     "description": "API server version",
                     "type": "string"
+                }
+            }
+        },
+        "models.IconListResponse": {
+            "type": "object",
+            "properties": {
+                "icons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.CustomIconInfo"
+                    }
+                }
+            }
+        },
+        "models.IconReconcileRequest": {
+            "type": "object",
+            "properties": {
+                "usedIcons": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "models.IconUploadRequest": {
+            "type": "object",
+            "required": [
+                "dataBase64",
+                "fileName"
+            ],
+            "properties": {
+                "contentType": {
+                    "type": "string",
+                    "example": "image/svg+xml"
+                },
+                "dataBase64": {
+                    "type": "string"
+                },
+                "fileName": {
+                    "type": "string",
+                    "example": "my-router.svg"
+                }
+            }
+        },
+        "models.IconUploadResponse": {
+            "type": "object",
+            "properties": {
+                "iconName": {
+                    "type": "string",
+                    "example": "my-router"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },

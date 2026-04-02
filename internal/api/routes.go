@@ -40,6 +40,19 @@ func SetupRoutes(router *gin.Engine) {
 		// Events stream
 		apiV1.GET("/events", StreamEventsHandler)
 
+		ui := apiV1.Group("/ui")
+		{
+			ui.GET("/custom-nodes", GetCustomNodesHandler)
+			ui.PUT("/custom-nodes", PutCustomNodesHandler)
+			ui.POST("/custom-nodes", SaveCustomNodeHandler)
+			ui.DELETE("/custom-nodes/:name", DeleteCustomNodeHandler)
+			ui.POST("/custom-nodes/default", SetDefaultCustomNodeHandler)
+
+			ui.GET("/icons", ListGlobalIconsHandler)
+			ui.POST("/icons", UploadGlobalIconHandler)
+			ui.DELETE("/icons/:iconName", DeleteGlobalIconHandler)
+		}
+
 		// Lab management routes
 		labs := apiV1.Group("/labs")
 		{
@@ -92,6 +105,8 @@ func SetupRoutes(router *gin.Engine) {
 				labSpecific.PUT("/topology/file", PutTopologyFileHandler)                 // PUT /api/v1/labs/{labName}/topology/file?path=...
 				labSpecific.DELETE("/topology/file", DeleteTopologyFileHandler)           // DELETE /api/v1/labs/{labName}/topology/file?path=...
 				labSpecific.POST("/topology/file/rename", RenameTopologyFileHandler)      // POST /api/v1/labs/{labName}/topology/file/rename
+				labSpecific.GET("/ui/icons", ListLabIconsHandler)                         // GET /api/v1/labs/{labName}/ui/icons
+				labSpecific.POST("/ui/icons/reconcile", ReconcileLabIconsHandler)         // POST /api/v1/labs/{labName}/ui/icons/reconcile
 
 				// Node Specific Routes (nested under lab)
 				nodeSpecific := labSpecific.Group("/nodes/:nodeName")
