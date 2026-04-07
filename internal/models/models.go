@@ -9,8 +9,9 @@ import (
 
 // LoginRequest represents the payload for the login endpoint
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Username        string `json:"username" binding:"required"`
+	Password        string `json:"password" binding:"required"`
+	SessionDuration string `json:"sessionDuration,omitempty" example:"24h"`
 }
 
 // LoginResponse represents the payload returned after successful login

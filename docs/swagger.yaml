@@ -511,6 +511,9 @@ definitions:
     properties:
       password:
         type: string
+      sessionDuration:
+        example: 24h
+        type: string
       username:
         type: string
     required:

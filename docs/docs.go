@@ -4563,6 +4563,10 @@ const docTemplate = `{
                 "password": {
                     "type": "string"
                 },
+                "sessionDuration": {
+                    "type": "string",
+                    "example": "24h"
+                },
                 "username": {
                     "type": "string"
                 }

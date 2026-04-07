@@ -115,7 +115,7 @@ LOG_LEVEL=info
 
 # --- Authentication ---
 JWT_SECRET=please_change_me
-JWT_EXPIRATION_MINUTES=60m
+JWT_EXPIRATION=24h
 API_USER_GROUP=clab_api
 SUPERUSER_GROUP=clab_admins
 

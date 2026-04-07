@@ -38,7 +38,7 @@ func LoadConfig(envFilePath string) error {
 	// --- Set Defaults ---
 	viper.SetDefault("API_PORT", "8080")
 	viper.SetDefault("JWT_SECRET", "default_secret_change_me")
-	viper.SetDefault("JWT_EXPIRATION", "60m") // Default 60 minutes, but now accepts any duration format
+	viper.SetDefault("JWT_EXPIRATION", "24h") // Default 24 hours, but now accepts any duration format
 	viper.SetDefault("API_USER_GROUP", "")
 	viper.SetDefault("SUPERUSER_GROUP", "")
 	viper.SetDefault("CLAB_RUNTIME", "docker")

@@ -150,7 +150,7 @@ Common flags for the start command include:
 | `API_PORT` | `8080` | Server listening port |
 | `API_SERVER_HOST` | `localhost` | Hostname/IP used in SSH access URLs |
 | `JWT_SECRET` | `please_change_me` | **CRITICAL**: Secret key for JWT token generation |
-| `JWT_EXPIRATION` | `60m` | JWT token lifetime (e.g., "60m", "24h") |
+| `JWT_EXPIRATION` | `24h` | JWT token lifetime (e.g., "24h", "7d") |
 | `API_USER_GROUP` | `clab_api` | Linux group for API access |
 | `SUPERUSER_GROUP` | `clab_admins` | Linux group for elevated privileges |
 | `CLAB_RUNTIME` | `docker` | Container runtime used by Containerlab |
@@ -197,6 +197,12 @@ http://<server_ip>:<API_PORT>/redoc               # ReDoc UI
 TOKEN=$(curl -s -X POST http://localhost:8080/login \
   -H "Content-Type: application/json" \
   -d '{"username":"your_linux_username","password":"your_linux_password"}' \
+  | jq -r '.token')
+
+# Optional: request a custom token lifetime for this login
+TOKEN_CUSTOM=$(curl -s -X POST http://localhost:8080/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"your_linux_username","password":"your_linux_password","sessionDuration":"36h"}' \
   | jq -r '.token')
 
 # List labs
