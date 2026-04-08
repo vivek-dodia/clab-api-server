@@ -94,6 +94,12 @@ func SetupRoutes(router *gin.Engine) {
 				labSpecific.POST("/capture/packetflix", BuildPacketflixCaptureHandler)                 // POST /api/v1/labs/{labName}/capture/packetflix
 				labSpecific.POST("/capture/wireshark-vnc-sessions", CreateWiresharkVncSessionsHandler) // POST /api/v1/labs/{labName}/capture/wireshark-vnc-sessions
 
+				// Sharing + tools
+				labSpecific.POST("/sshx/:action", LabSSHXShareHandler)   // POST /api/v1/labs/{labName}/sshx/{action}
+				labSpecific.POST("/gotty/:action", LabGoTTYShareHandler) // POST /api/v1/labs/{labName}/gotty/{action}
+				labSpecific.POST("/fcli", RunLabFcliHandler)             // POST /api/v1/labs/{labName}/fcli
+				labSpecific.POST("/graph/drawio", GenerateLabDrawioHandler)
+
 				// Execute command in lab
 				labSpecific.POST("/exec", ExecCommandHandler) // POST /api/v1/labs/{labName}/exec
 
@@ -123,6 +129,15 @@ func SetupRoutes(router *gin.Engine) {
 
 					// Logs
 					nodeSpecific.GET("/logs", GetNodeLogsHandler) // GET /api/v1/labs/{labName}/nodes/{nodeName}/logs
+
+					// Lifecycle actions
+					nodeSpecific.POST("/start", StartNodeHandler)     // POST /api/v1/labs/{labName}/nodes/{nodeName}/start
+					nodeSpecific.POST("/stop", StopNodeHandler)       // POST /api/v1/labs/{labName}/nodes/{nodeName}/stop
+					nodeSpecific.POST("/pause", PauseNodeHandler)     // POST /api/v1/labs/{labName}/nodes/{nodeName}/pause
+					nodeSpecific.POST("/unpause", UnpauseNodeHandler) // POST /api/v1/labs/{labName}/nodes/{nodeName}/unpause
+
+					// Browser helper
+					nodeSpecific.GET("/browser-ports", GetNodeBrowserPortsHandler)
 				}
 			}
 		}
@@ -136,6 +151,7 @@ func SetupRoutes(router *gin.Engine) {
 
 		captureSessions := apiV1.Group("/capture/wireshark-vnc-sessions")
 		{
+			captureSessions.DELETE("", DeleteAllWiresharkVncSessionsHandler)
 			captureSessions.GET("/:sessionId/ready", GetWiresharkVncSessionReadyHandler)
 			captureSessions.DELETE("/:sessionId", DeleteWiresharkVncSessionHandler)
 			captureSessions.Any("/:sessionId/vnc/*proxyPath", ProxyWiresharkVncSessionHandler)

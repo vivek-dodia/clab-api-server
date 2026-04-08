@@ -416,6 +416,44 @@ func (m *Manager) CloseSession(
 	return m.stopWiresharkContainer(ctx, session.containerID)
 }
 
+func (m *Manager) CloseAllSessions(
+	ctx context.Context,
+	username string,
+	isSuperuser bool,
+) (int, error) {
+	if !isSuperuser && strings.TrimSpace(username) == "" {
+		return 0, errors.New("username is required")
+	}
+
+	m.mu.Lock()
+	pending := make([]*wiresharkSession, 0, len(m.sessions))
+	for sessionID, session := range m.sessions {
+		if !isSuperuser && session.username != username {
+			continue
+		}
+		pending = append(pending, session)
+		delete(m.sessions, sessionID)
+	}
+	m.mu.Unlock()
+
+	if len(pending) == 0 {
+		return 0, nil
+	}
+
+	errs := make([]string, 0)
+	for _, session := range pending {
+		if err := m.stopWiresharkContainer(ctx, session.containerID); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", session.id, err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return len(pending), fmt.Errorf("failed stopping some sessions: %s", strings.Join(errs, "; "))
+	}
+
+	return len(pending), nil
+}
+
 func (m *Manager) SessionReady(
 	ctx context.Context,
 	sessionID string,

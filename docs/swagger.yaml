@@ -51,6 +51,13 @@ definitions:
         description: Overall CPU usage percentage
         type: number
     type: object
+  models.CaptureCloseAllResponse:
+    properties:
+      closed:
+        type: integer
+      message:
+        type: string
+    type: object
   models.CapturePacketflixRequest:
     properties:
       remoteHostname:
@@ -348,6 +355,28 @@ definitions:
         description: Used disk space in bytes
         type: integer
     type: object
+  models.DrawioGenerateRequest:
+    properties:
+      layout:
+        example: horizontal
+        type: string
+      theme:
+        example: nokia_modern
+        type: string
+    type: object
+  models.DrawioGenerateResponse:
+    properties:
+      content:
+        type: string
+      fileName:
+        type: string
+      layout:
+        type: string
+      message:
+        type: string
+      output:
+        type: string
+    type: object
   models.EdgeSharkStatusResponse:
     properties:
       packetflixPort:
@@ -432,6 +461,20 @@ definitions:
       items:
         $ref: '#/definitions/models.ClabExecInternalResult'
       type: array
+    type: object
+  models.FcliCommandRequest:
+    properties:
+      command:
+        type: string
+    required:
+    - command
+    type: object
+  models.FcliCommandResponse:
+    properties:
+      command:
+        type: string
+      output:
+        type: string
     type: object
   models.GenerateNodeTier:
     properties:
@@ -755,6 +798,30 @@ definitions:
         $ref: '#/definitions/models.NetemInterfaceInfo'
       type: array
     type: object
+  models.NodeBrowserPort:
+    properties:
+      containerPort:
+        type: integer
+      description:
+        type: string
+      hostIp:
+        type: string
+      hostPort:
+        type: integer
+      protocol:
+        type: string
+    type: object
+  models.NodeBrowserPortsResponse:
+    properties:
+      containerName:
+        type: string
+      nodeName:
+        type: string
+      ports:
+        items:
+          $ref: '#/definitions/models.NodeBrowserPort'
+        type: array
+    type: object
   models.NodeInterfaceInfo:
     properties:
       interfaces:
@@ -842,6 +909,15 @@ definitions:
         type: string
       version:
         description: API server version
+        type: string
+    type: object
+  models.ShareToolResponse:
+    properties:
+      link:
+        type: string
+      message:
+        type: string
+      output:
         type: string
     type: object
   models.SimpleSuccessResponse:
@@ -1101,6 +1177,30 @@ info:
   title: Containerlab API
   version: "1.0"
 paths:
+  /api/v1/capture/wireshark-vnc-sessions:
+    delete:
+      description: Terminates all capture VNC sessions owned by the authenticated
+        user. Superusers terminate all sessions.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Capture sessions terminated
+          schema:
+            $ref: '#/definitions/models.CaptureCloseAllResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete all Wireshark VNC sessions
+      tags:
+      - Capture
   /api/v1/capture/wireshark-vnc-sessions/{sessionId}:
     delete:
       description: Terminates a capture VNC session and stops the corresponding Wireshark
@@ -1908,6 +2008,142 @@ paths:
       summary: Execute command in lab
       tags:
       - Labs
+  /api/v1/labs/{labName}/fcli:
+    post:
+      consumes:
+      - application/json
+      description: Runs an fcli command against the selected lab topology.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: fcli command request
+        in: body
+        name: fcli_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.FcliCommandRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.FcliCommandResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Run fcli command
+      tags:
+      - Labs - Tools
+  /api/v1/labs/{labName}/gotty/{action}:
+    post:
+      description: Executes GoTTY share action (attach, detach, reattach) for a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Action (attach|detach|reattach)
+        in: path
+        name: action
+        required: true
+        type: string
+      - description: GoTTY port (attach/reattach only)
+        in: query
+        name: port
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ShareToolResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: GoTTY share action
+      tags:
+      - Labs - Sharing
+  /api/v1/labs/{labName}/graph/drawio:
+    post:
+      consumes:
+      - application/json
+      description: Generates a draw.io diagram from a lab topology and returns the
+        generated XML content.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Draw.io generation options
+        in: body
+        name: drawio_request
+        schema:
+          $ref: '#/definitions/models.DrawioGenerateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DrawioGenerateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate draw.io graph
+      tags:
+      - Labs - Graph
   /api/v1/labs/{labName}/interfaces:
     get:
       description: Returns interface details for nodes in a lab.
@@ -1951,6 +2187,49 @@ paths:
       summary: List lab interfaces
       tags:
       - Labs
+  /api/v1/labs/{labName}/nodes/{nodeName}/browser-ports:
+    get:
+      description: Returns exposed host ports for a node suitable for opening in a
+        browser.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.NodeBrowserPortsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get node browser ports
+      tags:
+      - Labs - Nodes
   /api/v1/labs/{labName}/nodes/{nodeName}/logs:
     get:
       description: |-
@@ -2014,6 +2293,48 @@ paths:
       summary: Get node logs
       tags:
       - Logs
+  /api/v1/labs/{labName}/nodes/{nodeName}/pause:
+    post:
+      description: Pauses a running node in a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Pause node
+      tags:
+      - Labs - Nodes
   /api/v1/labs/{labName}/nodes/{nodeName}/ssh:
     post:
       consumes:
@@ -2069,6 +2390,90 @@ paths:
       summary: Request temporary SSH access details
       tags:
       - SSH Access
+  /api/v1/labs/{labName}/nodes/{nodeName}/start:
+    post:
+      description: Starts a stopped node in a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Start node
+      tags:
+      - Labs - Nodes
+  /api/v1/labs/{labName}/nodes/{nodeName}/stop:
+    post:
+      description: Stops a running node in a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stop node
+      tags:
+      - Labs - Nodes
   /api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions:
     post:
       consumes:
@@ -2137,6 +2542,48 @@ paths:
       summary: Create browser terminal session
       tags:
       - Terminal Sessions
+  /api/v1/labs/{labName}/nodes/{nodeName}/unpause:
+    post:
+      description: Unpauses a paused node in a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unpause node
+      tags:
+      - Labs - Nodes
   /api/v1/labs/{labName}/save:
     post:
       description: Saves the running configuration for nodes in a lab.
@@ -2178,6 +2625,48 @@ paths:
       summary: Save lab configuration
       tags:
       - Labs
+  /api/v1/labs/{labName}/sshx/{action}:
+    post:
+      description: Executes SSHX share action (attach, detach, reattach) for a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Action (attach|detach|reattach)
+        in: path
+        name: action
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ShareToolResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: SSHX share action
+      tags:
+      - Labs - Sharing
   /api/v1/labs/{labName}/topology/annotations:
     get:
       description: Returns annotations for the specified lab. For deployed labs, the

@@ -112,6 +112,45 @@ type InterfacesOptions struct {
 	NodeFilter string
 }
 
+type NodeLifecycleAction string
+
+const (
+	NodeLifecycleActionStart   NodeLifecycleAction = "start"
+	NodeLifecycleActionStop    NodeLifecycleAction = "stop"
+	NodeLifecycleActionPause   NodeLifecycleAction = "pause"
+	NodeLifecycleActionUnpause NodeLifecycleAction = "unpause"
+)
+
+type NodeLifecycleOptions struct {
+	ContainerName string
+	Action        NodeLifecycleAction
+}
+
+type ContainerlabToolRunOptions struct {
+	Args []string
+}
+
+type DrawioGenerateOptions struct {
+	TopoPath      string
+	Runtime       string
+	Layout        string
+	Theme         string
+	Interactive   bool
+	DrawioVersion string
+}
+
+type DrawioGenerateResult struct {
+	Path   string
+	Output string
+}
+
+type FcliRunOptions struct {
+	Runtime      string
+	Network      string
+	TopologyPath string
+	CommandArgs  []string
+}
+
 // Deploy deploys a lab using the containerlab library.
 func (s *Service) Deploy(ctx context.Context, opts DeployOptions) ([]clabruntime.GenericContainer, error) {
 	ctx, cancel := s.ensureTimeout(ctx)
@@ -348,6 +387,160 @@ func (s *Service) ListContainers(ctx context.Context, opts ListOptions) ([]clabr
 	}
 
 	return containers, nil
+}
+
+func (s *Service) RunNodeLifecycleAction(ctx context.Context, opts NodeLifecycleOptions) error {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	containerName := strings.TrimSpace(opts.ContainerName)
+	if containerName == "" {
+		return fmt.Errorf("container name is required")
+	}
+
+	rt, err := s.getContainerRuntime()
+	if err != nil {
+		return err
+	}
+
+	switch opts.Action {
+	case NodeLifecycleActionStart:
+		_, err = rt.StartContainer(
+			ctx,
+			containerName,
+			clabruntime.NewEndpointlessNode(&clabtypes.NodeConfig{LongName: containerName}),
+		)
+	case NodeLifecycleActionStop:
+		err = rt.StopContainer(ctx, containerName)
+	case NodeLifecycleActionPause:
+		err = rt.PauseContainer(ctx, containerName)
+	case NodeLifecycleActionUnpause:
+		err = rt.UnpauseContainer(ctx, containerName)
+	default:
+		return fmt.Errorf("unsupported node lifecycle action: %q", opts.Action)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to %s container %q: %w", opts.Action, containerName, err)
+	}
+
+	return nil
+}
+
+func (s *Service) RunContainerlabTool(ctx context.Context, opts ContainerlabToolRunOptions) (string, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	if len(opts.Args) == 0 {
+		return "", fmt.Errorf("at least one command argument is required")
+	}
+
+	return s.runCommand(ctx, "containerlab", opts.Args)
+}
+
+func (s *Service) RunFcliCommand(ctx context.Context, opts FcliRunOptions) (string, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	topologyPath := strings.TrimSpace(opts.TopologyPath)
+	if topologyPath == "" {
+		return "", fmt.Errorf("topology path is required")
+	}
+
+	if len(opts.CommandArgs) == 0 {
+		return "", fmt.Errorf("fcli command is required")
+	}
+
+	runtimeName := strings.TrimSpace(opts.Runtime)
+	if runtimeName == "" {
+		runtimeName = strings.TrimSpace(config.AppConfig.ClabRuntime)
+	}
+	if runtimeName == "" {
+		runtimeName = "docker"
+	}
+
+	networkName := strings.TrimSpace(opts.Network)
+	if networkName == "" {
+		networkName = "clab"
+	}
+
+	args := []string{
+		"run",
+		"--pull", "always",
+		"--rm",
+		"--network", networkName,
+		"-v", "/etc/hosts:/etc/hosts:ro",
+		"-v", fmt.Sprintf("%s:/topo.yml", topologyPath),
+		"ghcr.io/srl-labs/nornir-srl:latest",
+		"-t", "/topo.yml",
+	}
+	args = append(args, opts.CommandArgs...)
+
+	return s.runCommand(ctx, runtimeName, args)
+}
+
+func (s *Service) GenerateDrawioFile(ctx context.Context, opts DrawioGenerateOptions) (DrawioGenerateResult, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	topoPath := strings.TrimSpace(opts.TopoPath)
+	if topoPath == "" {
+		return DrawioGenerateResult{}, fmt.Errorf("topology path is required")
+	}
+
+	runtimeName := strings.TrimSpace(opts.Runtime)
+	if runtimeName == "" {
+		runtimeName = strings.TrimSpace(config.AppConfig.ClabRuntime)
+	}
+	if runtimeName == "" {
+		runtimeName = "docker"
+	}
+
+	layout := strings.ToLower(strings.TrimSpace(opts.Layout))
+	if layout == "" {
+		layout = "horizontal"
+	}
+	if layout != "horizontal" && layout != "vertical" {
+		return DrawioGenerateResult{}, fmt.Errorf("unsupported drawio layout: %q", layout)
+	}
+
+	theme := strings.TrimSpace(opts.Theme)
+	if theme == "" {
+		theme = "nokia_modern"
+	}
+
+	args := []string{
+		"graph",
+		"-r", runtimeName,
+		"--drawio",
+	}
+
+	if drawioVersion := strings.TrimSpace(opts.DrawioVersion); drawioVersion != "" {
+		args = append(args, "--drawio-version", drawioVersion)
+	}
+
+	if opts.Interactive {
+		args = append(args, "--drawio-args", "-I")
+	} else {
+		args = append(args, "--drawio-args", fmt.Sprintf("--theme %s --layout %s", theme, layout))
+	}
+
+	args = append(args, "-t", topoPath)
+
+	output, err := s.runCommand(ctx, "containerlab", args)
+	if err != nil {
+		return DrawioGenerateResult{}, err
+	}
+
+	drawioPath := drawioOutputPathFromTopo(topoPath)
+	if _, err := os.Stat(drawioPath); err != nil {
+		return DrawioGenerateResult{}, fmt.Errorf("drawio output file not found at %q: %w", drawioPath, err)
+	}
+
+	return DrawioGenerateResult{
+		Path:   drawioPath,
+		Output: output,
+	}, nil
 }
 
 // ListContainerInterfaces lists interfaces for a specific container.
@@ -1545,6 +1738,38 @@ func (s *Service) processGitTopoFile(topo, workDir string) (string, error) {
 	}
 
 	return topoFile, nil
+}
+
+func (s *Service) runCommand(ctx context.Context, name string, args []string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	output, err := cmd.CombinedOutput()
+	trimmed := strings.TrimSpace(string(output))
+	if err != nil {
+		if trimmed == "" {
+			return "", fmt.Errorf("command %s %s failed: %w", name, strings.Join(args, " "), err)
+		}
+		return trimmed, fmt.Errorf(
+			"command %s %s failed: %w: %s",
+			name,
+			strings.Join(args, " "),
+			err,
+			trimmed,
+		)
+	}
+
+	return trimmed, nil
+}
+
+func drawioOutputPathFromTopo(topoPath string) string {
+	lowerPath := strings.ToLower(topoPath)
+	switch {
+	case strings.HasSuffix(lowerPath, ".yaml"):
+		return topoPath[:len(topoPath)-len(".yaml")] + ".drawio"
+	case strings.HasSuffix(lowerPath, ".yml"):
+		return topoPath[:len(topoPath)-len(".yml")] + ".drawio"
+	default:
+		return topoPath + ".drawio"
+	}
 }
 
 // isGitURL checks if the given path is a GitHub or GitLab URL that needs to be cloned.

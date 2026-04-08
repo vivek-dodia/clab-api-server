@@ -467,6 +467,40 @@ func DeleteWiresharkVncSessionHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: "Capture session terminated"})
 }
 
+// DeleteAllWiresharkVncSessionsHandler terminates all running wireshark VNC sessions
+// owned by the current user (or all sessions for a superuser).
+// @Summary Delete all Wireshark VNC sessions
+// @Description Terminates all capture VNC sessions owned by the authenticated user. Superusers terminate all sessions.
+// @Tags Capture
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} models.CaptureCloseAllResponse "Capture sessions terminated"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/capture/wireshark-vnc-sessions [delete]
+func DeleteAllWiresharkVncSessionsHandler(c *gin.Context) {
+	username := c.GetString("username")
+
+	manager := getCaptureManager(c)
+	if manager == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+
+	closed, err := manager.CloseAllSessions(ctx, username, isSuperuser(username))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.CaptureCloseAllResponse{
+		Message: fmt.Sprintf("Closed %d capture session(s)", closed),
+		Closed:  closed,
+	})
+}
+
 // ProxyWiresharkVncSessionHandler proxies noVNC assets and websocket traffic.
 // @Summary Proxy Wireshark VNC assets
 // @Description Proxies noVNC HTTP assets for a capture session. WebSocket upgrades on this path are used by noVNC but are not represented in Swagger.
