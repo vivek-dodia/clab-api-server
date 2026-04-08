@@ -24,6 +24,211 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/capture/wireshark-vnc-sessions/{sessionId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Terminates a capture VNC session and stops the corresponding Wireshark container.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Delete Wireshark VNC session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Capture session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Capture session terminated",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/capture/wireshark-vnc-sessions/{sessionId}/ready": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns whether a capture VNC session is ready and its proxied URL path.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Get Wireshark VNC session readiness",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Capture session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Readiness state",
+                        "schema": {
+                            "$ref": "#/definitions/models.CaptureWiresharkVncReadyResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/capture/wireshark-vnc-sessions/{sessionId}/vnc/{proxyPath}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Proxies noVNC HTTP assets for a capture session. WebSocket upgrades on this path are used by noVNC but are not represented in Swagger.",
+                "produces": [
+                    "text/html"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Proxy Wireshark VNC assets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Capture session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Proxy subpath under the noVNC root",
+                        "name": "proxyPath",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Proxied noVNC asset response",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "VNC proxy upstream error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/events": {
             "get": {
                 "security": [
@@ -754,6 +959,170 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/capture/packetflix": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Builds packetflix URI(s) for the provided lab interface targets (non-VNC capture mode).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Build packetflix capture URI",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Packetflix capture request",
+                        "name": "capture_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CapturePacketflixRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Packetflix capture URI payload",
+                        "schema": {
+                            "$ref": "#/definitions/models.CapturePacketflixResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Lab or container not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "EdgeShark not running",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/capture/wireshark-vnc-sessions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates one or more Wireshark noVNC capture sessions for the specified lab interface targets.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Create Wireshark VNC capture session(s)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Wireshark VNC capture request",
+                        "name": "capture_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CaptureWiresharkVncRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Created capture sessions",
+                        "schema": {
+                            "$ref": "#/definitions/models.CaptureWiresharkVncCreateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Lab or container not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "EdgeShark not running",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -2548,6 +2917,129 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/tools/edgeshark/install": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Installs and starts EdgeShark services on the host runtime using compose.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Install EdgeShark",
+                "responses": {
+                    "200": {
+                        "description": "EdgeShark installed",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Superuser privileges required",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tools/edgeshark/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns whether EdgeShark is reachable and its runtime details.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Get EdgeShark status",
+                "responses": {
+                    "200": {
+                        "description": "EdgeShark status",
+                        "schema": {
+                            "$ref": "#/definitions/models.EdgeSharkStatusResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tools/edgeshark/uninstall": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stops and removes EdgeShark services managed by compose.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Uninstall EdgeShark",
+                "responses": {
+                    "200": {
+                        "description": "EdgeShark uninstalled",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Superuser privileges required",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tools/netem/reset": {
             "post": {
                 "security": [
@@ -3938,6 +4430,139 @@ const docTemplate = `{
                 }
             }
         },
+        "models.CapturePacketflixRequest": {
+            "type": "object",
+            "required": [
+                "targets"
+            ],
+            "properties": {
+                "remoteHostname": {
+                    "type": "string"
+                },
+                "targets": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/models.CaptureTarget"
+                    }
+                }
+            }
+        },
+        "models.CapturePacketflixResponse": {
+            "type": "object",
+            "properties": {
+                "captures": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.CapturePacketflixURI"
+                    }
+                }
+            }
+        },
+        "models.CapturePacketflixURI": {
+            "type": "object",
+            "properties": {
+                "containerName": {
+                    "type": "string"
+                },
+                "interfaceNames": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "packetflixUri": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CaptureTarget": {
+            "type": "object",
+            "required": [
+                "containerName",
+                "interfaceName"
+            ],
+            "properties": {
+                "containerName": {
+                    "type": "string"
+                },
+                "interfaceName": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CaptureWiresharkVncCreateResponse": {
+            "type": "object",
+            "properties": {
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.CaptureWiresharkVncSession"
+                    }
+                }
+            }
+        },
+        "models.CaptureWiresharkVncReadyResponse": {
+            "type": "object",
+            "properties": {
+                "ready": {
+                    "type": "boolean"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CaptureWiresharkVncRequest": {
+            "type": "object",
+            "required": [
+                "targets"
+            ],
+            "properties": {
+                "targets": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/models.CaptureTarget"
+                    }
+                },
+                "theme": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CaptureWiresharkVncSession": {
+            "type": "object",
+            "properties": {
+                "containerName": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "expiresAt": {
+                    "type": "string"
+                },
+                "interfaceNames": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "labName": {
+                    "type": "string"
+                },
+                "sessionId": {
+                    "type": "string"
+                },
+                "showVolumeTip": {
+                    "type": "boolean"
+                },
+                "vncPath": {
+                    "type": "string"
+                }
+            }
+        },
         "models.CertResponse": {
             "type": "object",
             "properties": {
@@ -4211,6 +4836,23 @@ const docTemplate = `{
                 "usedDisk": {
                     "description": "Used disk space in bytes",
                     "type": "integer"
+                }
+            }
+        },
+        "models.EdgeSharkStatusResponse": {
+            "type": "object",
+            "properties": {
+                "packetflixPort": {
+                    "type": "integer"
+                },
+                "running": {
+                    "type": "boolean"
+                },
+                "runtime": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
                 }
             }
         },

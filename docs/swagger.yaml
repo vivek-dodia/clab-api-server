@@ -51,6 +51,93 @@ definitions:
         description: Overall CPU usage percentage
         type: number
     type: object
+  models.CapturePacketflixRequest:
+    properties:
+      remoteHostname:
+        type: string
+      targets:
+        items:
+          $ref: '#/definitions/models.CaptureTarget'
+        minItems: 1
+        type: array
+    required:
+    - targets
+    type: object
+  models.CapturePacketflixResponse:
+    properties:
+      captures:
+        items:
+          $ref: '#/definitions/models.CapturePacketflixURI'
+        type: array
+    type: object
+  models.CapturePacketflixURI:
+    properties:
+      containerName:
+        type: string
+      interfaceNames:
+        items:
+          type: string
+        type: array
+      packetflixUri:
+        type: string
+    type: object
+  models.CaptureTarget:
+    properties:
+      containerName:
+        type: string
+      interfaceName:
+        type: string
+    required:
+    - containerName
+    - interfaceName
+    type: object
+  models.CaptureWiresharkVncCreateResponse:
+    properties:
+      sessions:
+        items:
+          $ref: '#/definitions/models.CaptureWiresharkVncSession'
+        type: array
+    type: object
+  models.CaptureWiresharkVncReadyResponse:
+    properties:
+      ready:
+        type: boolean
+      url:
+        type: string
+    type: object
+  models.CaptureWiresharkVncRequest:
+    properties:
+      targets:
+        items:
+          $ref: '#/definitions/models.CaptureTarget'
+        minItems: 1
+        type: array
+      theme:
+        type: string
+    required:
+    - targets
+    type: object
+  models.CaptureWiresharkVncSession:
+    properties:
+      containerName:
+        type: string
+      createdAt:
+        type: string
+      expiresAt:
+        type: string
+      interfaceNames:
+        items:
+          type: string
+        type: array
+      labName:
+        type: string
+      sessionId:
+        type: string
+      showVolumeTip:
+        type: boolean
+      vncPath:
+        type: string
+    type: object
   models.CertResponse:
     properties:
       certPath:
@@ -260,6 +347,17 @@ definitions:
       usedDisk:
         description: Used disk space in bytes
         type: integer
+    type: object
+  models.EdgeSharkStatusResponse:
+    properties:
+      packetflixPort:
+        type: integer
+      running:
+        type: boolean
+      runtime:
+        type: string
+      version:
+        type: string
     type: object
   models.ErrorResponse:
     properties:
@@ -1003,6 +1101,141 @@ info:
   title: Containerlab API
   version: "1.0"
 paths:
+  /api/v1/capture/wireshark-vnc-sessions/{sessionId}:
+    delete:
+      description: Terminates a capture VNC session and stops the corresponding Wireshark
+        container.
+      parameters:
+      - description: Capture session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Capture session terminated
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Wireshark VNC session
+      tags:
+      - Capture
+  /api/v1/capture/wireshark-vnc-sessions/{sessionId}/ready:
+    get:
+      description: Returns whether a capture VNC session is ready and its proxied
+        URL path.
+      parameters:
+      - description: Capture session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Readiness state
+          schema:
+            $ref: '#/definitions/models.CaptureWiresharkVncReadyResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Wireshark VNC session readiness
+      tags:
+      - Capture
+  /api/v1/capture/wireshark-vnc-sessions/{sessionId}/vnc/{proxyPath}:
+    get:
+      description: Proxies noVNC HTTP assets for a capture session. WebSocket upgrades
+        on this path are used by noVNC but are not represented in Swagger.
+      parameters:
+      - description: Capture session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      - description: Proxy subpath under the noVNC root
+        in: path
+        name: proxyPath
+        required: true
+        type: string
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: Proxied noVNC asset response
+          schema:
+            type: string
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "502":
+          description: VNC proxy upstream error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Proxy Wireshark VNC assets
+      tags:
+      - Capture
   /api/v1/events:
     get:
       description: |-
@@ -1430,6 +1663,114 @@ paths:
       summary: Redeploy lab
       tags:
       - Labs
+  /api/v1/labs/{labName}/capture/packetflix:
+    post:
+      consumes:
+      - application/json
+      description: Builds packetflix URI(s) for the provided lab interface targets
+        (non-VNC capture mode).
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Packetflix capture request
+        in: body
+        name: capture_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CapturePacketflixRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Packetflix capture URI payload
+          schema:
+            $ref: '#/definitions/models.CapturePacketflixResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Lab or container not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "503":
+          description: EdgeShark not running
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Build packetflix capture URI
+      tags:
+      - Capture
+  /api/v1/labs/{labName}/capture/wireshark-vnc-sessions:
+    post:
+      consumes:
+      - application/json
+      description: Creates one or more Wireshark noVNC capture sessions for the specified
+        lab interface targets.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Wireshark VNC capture request
+        in: body
+        name: capture_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CaptureWiresharkVncRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Created capture sessions
+          schema:
+            $ref: '#/definitions/models.CaptureWiresharkVncCreateResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Lab or container not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "503":
+          description: EdgeShark not running
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Wireshark VNC capture session(s)
+      tags:
+      - Capture
   /api/v1/labs/{labName}/deploy:
     post:
       description: |-
@@ -2746,6 +3087,84 @@ paths:
       summary: Disable TX checksum offload
       tags:
       - Tools
+  /api/v1/tools/edgeshark/install:
+    post:
+      description: Installs and starts EdgeShark services on the host runtime using
+        compose.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: EdgeShark installed
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Superuser privileges required
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Install EdgeShark
+      tags:
+      - Capture
+  /api/v1/tools/edgeshark/status:
+    get:
+      description: Returns whether EdgeShark is reachable and its runtime details.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: EdgeShark status
+          schema:
+            $ref: '#/definitions/models.EdgeSharkStatusResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get EdgeShark status
+      tags:
+      - Capture
+  /api/v1/tools/edgeshark/uninstall:
+    post:
+      description: Stops and removes EdgeShark services managed by compose.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: EdgeShark uninstalled
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Superuser privileges required
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Uninstall EdgeShark
+      tags:
+      - Capture
   /api/v1/tools/netem/reset:
     post:
       consumes:

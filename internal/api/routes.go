@@ -90,6 +90,10 @@ func SetupRoutes(router *gin.Engine) {
 				// Save lab config
 				labSpecific.POST("/save", SaveLabConfigHandler) // POST /api/v1/labs/{labName}/save
 
+				// Capture
+				labSpecific.POST("/capture/packetflix", BuildPacketflixCaptureHandler)                 // POST /api/v1/labs/{labName}/capture/packetflix
+				labSpecific.POST("/capture/wireshark-vnc-sessions", CreateWiresharkVncSessionsHandler) // POST /api/v1/labs/{labName}/capture/wireshark-vnc-sessions
+
 				// Execute command in lab
 				labSpecific.POST("/exec", ExecCommandHandler) // POST /api/v1/labs/{labName}/exec
 
@@ -130,6 +134,13 @@ func SetupRoutes(router *gin.Engine) {
 			terminals.GET("/:sessionId/stream", StreamTerminalSessionHandler) // WS /api/v1/terminal-sessions/{sessionId}/stream
 		}
 
+		captureSessions := apiV1.Group("/capture/wireshark-vnc-sessions")
+		{
+			captureSessions.GET("/:sessionId/ready", GetWiresharkVncSessionReadyHandler)
+			captureSessions.DELETE("/:sessionId", DeleteWiresharkVncSessionHandler)
+			captureSessions.Any("/:sessionId/vnc/*proxyPath", ProxyWiresharkVncSessionHandler)
+		}
+
 		// SSH Session Management Routes (Global)
 		ssh := apiV1.Group("/ssh")
 		{
@@ -146,6 +157,13 @@ func SetupRoutes(router *gin.Engine) {
 		// Tools Routes (Mostly Superuser)
 		tools := apiV1.Group("/tools")
 		{
+			edgeshark := tools.Group("/edgeshark")
+			{
+				edgeshark.GET("/status", GetEdgeSharkStatusHandler)
+				edgeshark.POST("/install", InstallEdgeSharkHandler)
+				edgeshark.POST("/uninstall", UninstallEdgeSharkHandler)
+			}
+
 			// Disable TX Offload (Superuser Only)
 			tools.POST("/disable-tx-offload", DisableTxOffloadHandler) // POST /api/v1/tools/disable-tx-offload
 

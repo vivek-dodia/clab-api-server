@@ -9,22 +9,28 @@ import (
 )
 
 type Config struct {
-	APIPort            string        `mapstructure:"API_PORT"`
-	JWTSecret          string        `mapstructure:"JWT_SECRET"`
-	JWTExpiration      time.Duration `mapstructure:"JWT_EXPIRATION"`  // Renamed for clarity - uses time.Duration directly
-	APIUserGroup       string        `mapstructure:"API_USER_GROUP"`  // Group required for basic API login (alternative to clab_admins)
-	SuperuserGroup     string        `mapstructure:"SUPERUSER_GROUP"` // Group for elevated privileges
-	ClabRuntime        string        `mapstructure:"CLAB_RUNTIME"`
-	LogLevel           string        `mapstructure:"LOG_LEVEL"`
-	CORSAllowedOrigins string        `mapstructure:"CORS_ALLOWED_ORIGINS"` // Comma-separated list of allowed browser origins
-	TLSEnable          bool          `mapstructure:"TLS_ENABLE"`
-	TLSCertFile        string        `mapstructure:"TLS_CERT_FILE"`
-	TLSKeyFile         string        `mapstructure:"TLS_KEY_FILE"`
-	GinMode            string        `mapstructure:"GIN_MODE"`
-	TrustedProxies     string        `mapstructure:"TRUSTED_PROXIES"`
-	APIServerHost      string        `mapstructure:"API_SERVER_HOST"` // Host/IP/FQDN used for SSH access commands
-	SSHBasePort        int           `mapstructure:"SSH_BASE_PORT"`   // Base port for SSH proxy allocation
-	SSHMaxPort         int           `mapstructure:"SSH_MAX_PORT"`    // Maximum port for SSH proxy allocation
+	APIPort                      string        `mapstructure:"API_PORT"`
+	JWTSecret                    string        `mapstructure:"JWT_SECRET"`
+	JWTExpiration                time.Duration `mapstructure:"JWT_EXPIRATION"`  // Renamed for clarity - uses time.Duration directly
+	APIUserGroup                 string        `mapstructure:"API_USER_GROUP"`  // Group required for basic API login (alternative to clab_admins)
+	SuperuserGroup               string        `mapstructure:"SUPERUSER_GROUP"` // Group for elevated privileges
+	ClabRuntime                  string        `mapstructure:"CLAB_RUNTIME"`
+	CapturePacketflixPort        int           `mapstructure:"CAPTURE_PACKETFLIX_PORT"`
+	CaptureRemoteHostname        string        `mapstructure:"CAPTURE_REMOTE_HOSTNAME"`
+	CaptureWiresharkDockerImage  string        `mapstructure:"CAPTURE_WIRESHARK_DOCKER_IMAGE"`
+	CaptureWiresharkPullPolicy   string        `mapstructure:"CAPTURE_WIRESHARK_PULL_POLICY"`
+	CaptureWiresharkSessionTTL   time.Duration `mapstructure:"CAPTURE_WIRESHARK_SESSION_TTL"`
+	CaptureEdgesharkExtraEnvVars string        `mapstructure:"CAPTURE_EDGESHARK_EXTRA_ENV_VARS"`
+	LogLevel                     string        `mapstructure:"LOG_LEVEL"`
+	CORSAllowedOrigins           string        `mapstructure:"CORS_ALLOWED_ORIGINS"` // Comma-separated list of allowed browser origins
+	TLSEnable                    bool          `mapstructure:"TLS_ENABLE"`
+	TLSCertFile                  string        `mapstructure:"TLS_CERT_FILE"`
+	TLSKeyFile                   string        `mapstructure:"TLS_KEY_FILE"`
+	GinMode                      string        `mapstructure:"GIN_MODE"`
+	TrustedProxies               string        `mapstructure:"TRUSTED_PROXIES"`
+	APIServerHost                string        `mapstructure:"API_SERVER_HOST"` // Host/IP/FQDN used for SSH access commands
+	SSHBasePort                  int           `mapstructure:"SSH_BASE_PORT"`   // Base port for SSH proxy allocation
+	SSHMaxPort                   int           `mapstructure:"SSH_MAX_PORT"`    // Maximum port for SSH proxy allocation
 }
 
 var AppConfig Config
@@ -42,6 +48,12 @@ func LoadConfig(envFilePath string) error {
 	viper.SetDefault("API_USER_GROUP", "")
 	viper.SetDefault("SUPERUSER_GROUP", "")
 	viper.SetDefault("CLAB_RUNTIME", "docker")
+	viper.SetDefault("CAPTURE_PACKETFLIX_PORT", 5001)
+	viper.SetDefault("CAPTURE_REMOTE_HOSTNAME", "")
+	viper.SetDefault("CAPTURE_WIRESHARK_DOCKER_IMAGE", "ghcr.io/kaelemc/wireshark-vnc-docker:latest")
+	viper.SetDefault("CAPTURE_WIRESHARK_PULL_POLICY", "always")
+	viper.SetDefault("CAPTURE_WIRESHARK_SESSION_TTL", "2h")
+	viper.SetDefault("CAPTURE_EDGESHARK_EXTRA_ENV_VARS", "")
 	viper.SetDefault("LOG_LEVEL", "info")
 	viper.SetDefault("CORS_ALLOWED_ORIGINS", "")
 	viper.SetDefault("TLS_ENABLE", false)

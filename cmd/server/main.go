@@ -116,6 +116,10 @@ func main() {
 	log.Info("Initializing Terminal Session Manager...")
 	api.InitTerminalManager()
 
+	// --- Initialize Capture Manager ---
+	log.Info("Initializing Capture Manager...")
+	api.InitCaptureManager()
+
 	// --- Initialize Authentication ---
 	log.Info("Initializing authentication...")
 	auth.InitAuth() // Initialize auth with server start time
@@ -244,6 +248,7 @@ func main() {
 	// Shutdown SSH Manager (can run concurrently with server shutdown)
 	go api.ShutdownSSHManager() // No need to wait for this specifically unless it's critical
 	go api.ShutdownTerminalManager()
+	go api.ShutdownCaptureManager()
 
 	// Attempt graceful shutdown of the HTTP server
 	if err := srv.Shutdown(ctx); err != nil {
