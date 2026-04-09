@@ -734,6 +734,75 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/labs/topology/import-from-url": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Clones a supported Git repository URL and registers it as an undeployed lab.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Import topology repository as undeployed lab",
+                "parameters": [
+                    {
+                        "description": "Topology source URL",
+                        "name": "import_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ImportTopologyFromURLRequest"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Override imported lab name",
+                        "name": "labNameOverride",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Import result",
+                        "schema": {
+                            "$ref": "#/definitions/models.ImportTopologyFromURLResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Lab already exists",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/labs/{labName}": {
             "get": {
                 "security": [
@@ -5862,6 +5931,34 @@ const docTemplate = `{
                 "success": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "models.ImportTopologyFromURLRequest": {
+            "type": "object",
+            "required": [
+                "topologySourceUrl"
+            ],
+            "properties": {
+                "topologySourceUrl": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ImportTopologyFromURLResponse": {
+            "type": "object",
+            "properties": {
+                "fileName": {
+                    "type": "string"
+                },
+                "labName": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "topology": {
+                    "$ref": "#/definitions/models.TopologyEntry"
                 }
             }
         },

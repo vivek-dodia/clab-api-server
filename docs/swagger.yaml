@@ -624,6 +624,24 @@ definitions:
         example: true
         type: boolean
     type: object
+  models.ImportTopologyFromURLRequest:
+    properties:
+      topologySourceUrl:
+        type: string
+    required:
+    - topologySourceUrl
+    type: object
+  models.ImportTopologyFromURLResponse:
+    properties:
+      fileName:
+        type: string
+      labName:
+        type: string
+      success:
+        type: boolean
+      topology:
+        $ref: '#/definitions/models.TopologyEntry'
+    type: object
   models.InterfaceInfo:
     properties:
       alias:
@@ -3247,6 +3265,51 @@ paths:
       security:
       - BearerAuth: []
       summary: List editable lab topology files
+      tags:
+      - Labs
+  /api/v1/labs/topology/import-from-url:
+    post:
+      consumes:
+      - application/json
+      description: Clones a supported Git repository URL and registers it as an undeployed
+        lab.
+      parameters:
+      - description: Topology source URL
+        in: body
+        name: import_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ImportTopologyFromURLRequest'
+      - description: Override imported lab name
+        in: query
+        name: labNameOverride
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Import result
+          schema:
+            $ref: '#/definitions/models.ImportTopologyFromURLResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Lab already exists
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Import topology repository as undeployed lab
       tags:
       - Labs
   /api/v1/ssh/sessions:

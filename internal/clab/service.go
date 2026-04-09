@@ -151,6 +151,54 @@ type FcliRunOptions struct {
 	CommandArgs  []string
 }
 
+type CloneTopologySourceOptions struct {
+	SourceURL string
+	Username  string
+}
+
+type CloneTopologySourceResult struct {
+	RepoDir      string
+	RepoName     string
+	TopologyPath string
+}
+
+// CloneTopologySource clones a supported topology source URL and resolves the topology file path.
+func (s *Service) CloneTopologySource(opts CloneTopologySourceOptions) (*CloneTopologySourceResult, error) {
+	sourceURL := strings.TrimSpace(opts.SourceURL)
+	if sourceURL == "" {
+		return nil, fmt.Errorf("topology source URL is required")
+	}
+	if strings.TrimSpace(opts.Username) == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+
+	workDir, err := s.prepareWorkDir(opts.Username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare working directory: %w", err)
+	}
+
+	normalizedURL := sourceURL
+	if clabgit.IsGitHubShortURL(normalizedURL) {
+		normalizedURL = "https://github.com/" + normalizedURL
+	}
+
+	repo, err := clabgit.NewRepo(normalizedURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse git URL: %w", err)
+	}
+
+	topoPath, err := s.processGitTopoFile(sourceURL, workDir)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CloneTopologySourceResult{
+		RepoDir:      filepath.Join(workDir, repo.GetName()),
+		RepoName:     repo.GetName(),
+		TopologyPath: topoPath,
+	}, nil
+}
+
 // Deploy deploys a lab using the containerlab library.
 func (s *Service) Deploy(ctx context.Context, opts DeployOptions) ([]clabruntime.GenericContainer, error) {
 	ctx, cancel := s.ensureTimeout(ctx)

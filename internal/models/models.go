@@ -231,6 +231,19 @@ type TopologyFileRenameRequest struct {
 	NewPath string `json:"newPath" binding:"required" example:"configs/startup.bak.cfg"`
 }
 
+// ImportTopologyFromURLRequest describes an undeployed topology import from a remote source URL.
+type ImportTopologyFromURLRequest struct {
+	TopologySourceUrl string `json:"topologySourceUrl" binding:"required"`
+}
+
+// ImportTopologyFromURLResponse describes the result of an undeployed topology import.
+type ImportTopologyFromURLResponse struct {
+	Success  bool          `json:"success"`
+	LabName  string        `json:"labName"`
+	FileName string        `json:"fileName"`
+	Topology TopologyEntry `json:"topology"`
+}
+
 // --- Structs for Tools ---
 
 // DisableTxOffloadRequest represents the payload for disabling TX offload.

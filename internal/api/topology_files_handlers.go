@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +15,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	clabgit "github.com/srl-labs/containerlab/git"
+	"gopkg.in/yaml.v3"
 
 	"github.com/srl-labs/clab-api-server/internal/clab"
 	"github.com/srl-labs/clab-api-server/internal/models"
@@ -62,6 +66,312 @@ func ListTopologiesHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, entries)
+}
+
+func sanitizeImportedLabName(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, r := range trimmed {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-':
+			builder.WriteRune(r)
+		default:
+			builder.WriteRune('-')
+		}
+	}
+
+	sanitized := strings.Trim(builder.String(), "-")
+	if len(sanitized) > 128 {
+		sanitized = sanitized[:128]
+	}
+	return sanitized
+}
+
+func canonicalizeTopologyName(raw []byte, labName string) []byte {
+	trimmedLabName := strings.TrimSpace(labName)
+	if trimmedLabName == "" {
+		if bytes.HasSuffix(raw, []byte("\n")) {
+			return raw
+		}
+		return append(raw, '\n')
+	}
+
+	var doc map[string]interface{}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		if bytes.HasSuffix(raw, []byte("\n")) {
+			return raw
+		}
+		return append(raw, '\n')
+	}
+	if doc == nil {
+		doc = make(map[string]interface{})
+	}
+	doc["name"] = trimmedLabName
+
+	rendered, err := yaml.Marshal(doc)
+	if err != nil {
+		if bytes.HasSuffix(raw, []byte("\n")) {
+			return raw
+		}
+		return append(raw, '\n')
+	}
+	return rendered
+}
+
+func copyDirectoryTree(sourceDir, targetDir string, uid, gid int) error {
+	sourceRoot := filepath.Clean(sourceDir)
+	targetRoot := filepath.Clean(targetDir)
+
+	return filepath.WalkDir(sourceRoot, func(currentPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		relativePath, relErr := filepath.Rel(sourceRoot, currentPath)
+		if relErr != nil {
+			return relErr
+		}
+
+		targetPath := targetRoot
+		if relativePath != "." {
+			targetPath = filepath.Join(targetRoot, relativePath)
+		}
+
+		if entry.Type()&os.ModeSymlink != 0 {
+			// Skip symbolic links for safety.
+			return nil
+		}
+
+		if entry.IsDir() {
+			mode := os.FileMode(0750)
+			if info, infoErr := entry.Info(); infoErr == nil {
+				if perm := info.Mode().Perm(); perm != 0 {
+					mode = perm
+				}
+			}
+			if err := os.MkdirAll(targetPath, mode); err != nil {
+				return err
+			}
+			_ = os.Chown(targetPath, uid, gid)
+			return nil
+		}
+
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
+			return err
+		}
+		content, readErr := os.ReadFile(currentPath)
+		if readErr != nil {
+			return readErr
+		}
+
+		fileMode := info.Mode().Perm()
+		if fileMode == 0 {
+			fileMode = 0640
+		}
+		if writeErr := os.WriteFile(targetPath, content, fileMode); writeErr != nil {
+			return writeErr
+		}
+		_ = os.Chown(targetPath, uid, gid)
+		return nil
+	})
+}
+
+func directoryHasTopLevelTopologyFiles(dirPath string) (bool, error) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return false, err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := strings.ToLower(entry.Name())
+		if strings.HasSuffix(name, ".clab.yml") || strings.HasSuffix(name, ".clab.yaml") {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// @Summary Import topology repository as undeployed lab
+// @Description Clones a supported Git repository URL and registers it as an undeployed lab.
+// @Tags Labs
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param import_request body models.ImportTopologyFromURLRequest true "Topology source URL"
+// @Param labNameOverride query string false "Override imported lab name"
+// @Success 200 {object} models.ImportTopologyFromURLResponse "Import result"
+// @Failure 400 {object} models.ErrorResponse "Invalid input"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 409 {object} models.ErrorResponse "Lab already exists"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /api/v1/labs/topology/import-from-url [post]
+func ImportTopologyFromURLHandler(c *gin.Context) {
+	username := c.GetString("username")
+
+	var req models.ImportTopologyFromURLRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body: " + err.Error()})
+		return
+	}
+
+	topologySourceURL := strings.TrimSpace(req.TopologySourceUrl)
+	if topologySourceURL == "" {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Missing required field 'topologySourceUrl'."})
+		return
+	}
+
+	if !clabgit.IsGitHubOrGitLabURL(topologySourceURL) && !clabgit.IsGitHubShortURL(topologySourceURL) {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Only GitHub and GitLab repository sources are supported for undeployed clone."})
+		return
+	}
+
+	labNameOverride := strings.TrimSpace(c.Query("labNameOverride"))
+	if labNameOverride != "" && !isValidLabName(labNameOverride) {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid characters in 'labNameOverride' query parameter."})
+		return
+	}
+
+	normalizedSourceURL := topologySourceURL
+	if clabgit.IsGitHubShortURL(normalizedSourceURL) {
+		normalizedSourceURL = "https://github.com/" + normalizedSourceURL
+	}
+	repo, repoErr := clabgit.NewRepo(normalizedSourceURL)
+	if repoErr != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid topology source URL."})
+		return
+	}
+
+	labName := labNameOverride
+	if labName == "" {
+		labName = sanitizeImportedLabName(repo.GetName())
+	}
+	if !isValidLabName(labName) {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Unable to derive a valid lab name. Use labNameOverride."})
+		return
+	}
+
+	targetDir, uid, gid, dirErr := getLabDirectoryInfo(username, labName)
+	if dirErr != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: dirErr.Error()})
+		return
+	}
+
+	if stat, statErr := os.Stat(targetDir); statErr == nil {
+		if !stat.IsDir() {
+			c.JSON(http.StatusConflict, models.ErrorResponse{Error: fmt.Sprintf("Path for lab '%s' already exists and is not a directory.", labName)})
+			return
+		}
+
+		hasTopologyFiles, hasTopoErr := directoryHasTopLevelTopologyFiles(targetDir)
+		if hasTopoErr != nil {
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to inspect existing lab directory: %s", hasTopoErr.Error())})
+			return
+		}
+		if hasTopologyFiles {
+			c.JSON(http.StatusConflict, models.ErrorResponse{Error: fmt.Sprintf("Lab '%s' already exists.", labName)})
+			return
+		}
+
+		// The user may have deleted only the topology file, leaving a stale lab directory behind.
+		// Remove it to ensure import recreates a clean undeployed lab tree.
+		if removeErr := os.RemoveAll(targetDir); removeErr != nil {
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to reset existing lab directory: %s", removeErr.Error())})
+			return
+		}
+	} else if statErr != nil && !os.IsNotExist(statErr) {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to stat lab directory: %s", statErr.Error())})
+		return
+	}
+
+	svc := GetClabService()
+	if svc == nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Containerlab service not initialized"})
+		return
+	}
+
+	cloned, err := svc.CloneTopologySource(clab.CloneTopologySourceOptions{
+		SourceURL: topologySourceURL,
+		Username:  username,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to clone topology source: %s", err.Error())})
+		return
+	}
+
+	sourceDir := filepath.Clean(cloned.RepoDir)
+	targetDir = filepath.Clean(targetDir)
+	if sourceDir != targetDir {
+		if copyErr := copyDirectoryTree(sourceDir, targetDir, uid, gid); copyErr != nil {
+			_ = os.RemoveAll(targetDir)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to copy cloned repository: %s", copyErr.Error())})
+			return
+		}
+	}
+
+	topologyContent, readErr := os.ReadFile(cloned.TopologyPath)
+	if readErr != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to read topology file: %s", readErr.Error())})
+		return
+	}
+
+	fileName := labName + ".clab.yml"
+	canonicalPath := filepath.Join(targetDir, fileName)
+	canonicalContent := canonicalizeTopologyName(topologyContent, labName)
+	if writeErr := os.WriteFile(canonicalPath, canonicalContent, 0640); writeErr != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to write canonical topology file: %s", writeErr.Error())})
+		return
+	}
+	_ = os.Chown(canonicalPath, uid, gid)
+
+	hasAnnotations := false
+	sourceAnnotationsPath := cloned.TopologyPath + ".annotations.json"
+	canonicalAnnotationsPath := canonicalPath + ".annotations.json"
+	if _, statErr := os.Stat(sourceAnnotationsPath); statErr == nil {
+		hasAnnotations = true
+		if filepath.Clean(sourceAnnotationsPath) != filepath.Clean(canonicalAnnotationsPath) {
+			annotationsContent, readAnnotationsErr := os.ReadFile(sourceAnnotationsPath)
+			if readAnnotationsErr != nil {
+				c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to read annotations file: %s", readAnnotationsErr.Error())})
+				return
+			}
+			if writeAnnotationsErr := os.WriteFile(canonicalAnnotationsPath, annotationsContent, 0640); writeAnnotationsErr != nil {
+				c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to write canonical annotations file: %s", writeAnnotationsErr.Error())})
+				return
+			}
+			_ = os.Chown(canonicalAnnotationsPath, uid, gid)
+		}
+	} else if statErr != nil && !os.IsNotExist(statErr) {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to stat annotations file: %s", statErr.Error())})
+		return
+	}
+
+	topology := models.TopologyEntry{
+		LabName:             labName,
+		YamlFileName:        fileName,
+		AnnotationsFileName: fileName + ".annotations.json",
+		HasAnnotations:      hasAnnotations,
+		DeploymentState:     "undeployed",
+	}
+
+	c.JSON(http.StatusOK, models.ImportTopologyFromURLResponse{
+		Success:  true,
+		LabName:  labName,
+		FileName: fileName,
+		Topology: topology,
+	})
 }
 
 // @Summary Deploy on-disk topology for lab

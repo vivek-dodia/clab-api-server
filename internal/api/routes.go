@@ -68,6 +68,7 @@ func SetupRoutes(router *gin.Engine) {
 			// List editable topology files exposed from the user's lab directory
 			// Must be registered before /:labName routes.
 			labs.GET("/topology/files", ListTopologiesHandler) // GET /api/v1/labs/topology/files
+			labs.POST("/topology/import-from-url", ImportTopologyFromURLHandler)
 
 			// Actions on a specific lab by name
 			labSpecific := labs.Group("/:labName")
