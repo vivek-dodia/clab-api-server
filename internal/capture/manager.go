@@ -24,10 +24,12 @@ import (
 
 const (
 	defaultSessionSweepInterval = time.Minute
-	edgesharkComposeURL         = "https://github.com/siemens/edgeshark/raw/main/deployments/wget/docker-compose.yaml"
+	defaultEdgesharkComposeURL  = "https://github.com/siemens/edgeshark/raw/main/deployments/wget/docker-compose.yaml"
 )
 
 var sanitizeContainerNameRx = regexp.MustCompile(`[^a-zA-Z0-9_.-]+`)
+
+var edgesharkComposeURL = defaultEdgesharkComposeURL
 
 var (
 	ErrEdgeSharkNotRunning = errors.New("edgeshark is not running")
@@ -651,6 +653,11 @@ func (m *Manager) findEdgeSharkNetwork(ctx context.Context) (string, error) {
 		return "", nil
 	}
 	sort.Strings(networks)
+	for _, networkName := range networks {
+		if strings.Contains(strings.ToLower(networkName), "edgeshark") {
+			return networkName, nil
+		}
+	}
 	return networks[0], nil
 }
 

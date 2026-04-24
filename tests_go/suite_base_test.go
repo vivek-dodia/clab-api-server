@@ -239,6 +239,18 @@ func (s *BaseSuite) getAuthHeaders(token string) http.Header {
 	return headers
 }
 
+func (s *BaseSuite) loginBothUsers() (apiUserHeaders, superuserHeaders http.Header) {
+	s.T().Helper()
+
+	apiUserToken := s.login(s.cfg.APIUserUser, s.cfg.APIUserPass)
+	superuserToken := s.login(s.cfg.SuperuserUser, s.cfg.SuperuserPass)
+
+	require.NotEmpty(s.T(), apiUserToken)
+	require.NotEmpty(s.T(), superuserToken)
+
+	return s.getAuthHeaders(apiUserToken), s.getAuthHeaders(superuserToken)
+}
+
 // createLab sends the request to create/reconfigure a lab.
 // It returns the raw response body, status code, and any transport error.
 // Assertions on the status code should be done by the caller.
@@ -424,6 +436,35 @@ func (s *BaseSuite) cleanupLab(labName string, performCleanup bool) {
 	}
 	s.logDebug("Pausing for %v after cleanup...", s.cfg.CleanupPause)
 	time.Sleep(s.cfg.CleanupPause)
+}
+
+func (s *BaseSuite) firstContainerInLab(labName string, headers http.Header) ClabContainerInfo {
+	s.T().Helper()
+
+	inspectURL := fmt.Sprintf("%s/api/v1/labs/%s", s.cfg.APIURL, labName)
+	bodyBytes, statusCode, err := s.doRequest("GET", inspectURL, headers, nil, s.cfg.RequestTimeout)
+	require.NoError(s.T(), err, "Failed to inspect lab '%s'", labName)
+	require.Equal(s.T(), http.StatusOK, statusCode, "Expected 200 inspecting lab '%s'. Body: %s", labName, string(bodyBytes))
+
+	var containers []ClabContainerInfo
+	require.NoError(s.T(), json.Unmarshal(bodyBytes, &containers), "Failed to unmarshal inspect response. Body: %s", string(bodyBytes))
+	require.NotEmpty(s.T(), containers, "Expected at least one container in lab '%s'", labName)
+	require.NotEmpty(s.T(), containers[0].Name, "Expected first container in lab '%s' to have a name", labName)
+
+	return containers[0]
+}
+
+func (s *BaseSuite) assertJSONError(bodyBytes []byte, contains string) {
+	s.T().Helper()
+
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	require.NoError(s.T(), json.Unmarshal(bodyBytes, &errResp), "Failed to unmarshal error response. Body: %s", string(bodyBytes))
+	require.NotEmpty(s.T(), errResp.Error, "Expected non-empty error response. Body: %s", string(bodyBytes))
+	if contains != "" {
+		require.Contains(s.T(), errResp.Error, contains)
+	}
 }
 
 // --- Generic HTTP Request Helper (method on BaseSuite) ---
