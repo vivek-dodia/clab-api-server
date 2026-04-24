@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -48,6 +49,80 @@ type Service struct{}
 // NewService creates a new containerlab service.
 func NewService() *Service {
 	return &Service{}
+}
+
+type rootLinkNode struct {
+	shortName string
+	endpoints []clablinks.Endpoint
+	nspath    string
+}
+
+func newRootLinkNode(shortName string) (*rootLinkNode, error) {
+	currns, err := ns.GetCurrentNS()
+	if err != nil {
+		return nil, err
+	}
+	defer currns.Close()
+
+	return &rootLinkNode{
+		shortName: shortName,
+		endpoints: []clablinks.Endpoint{},
+		nspath:    currns.Path(),
+	}, nil
+}
+
+func (n *rootLinkNode) AddLinkToContainer(_ context.Context, link netlink.Link, f func(ns.NetNS) error) error {
+	netns, err := ns.GetNS(n.nspath)
+	if err != nil {
+		return err
+	}
+	defer netns.Close()
+
+	if err := netlink.LinkSetNsFd(link, int(netns.Fd())); err != nil {
+		return err
+	}
+
+	return netns.Do(f)
+}
+
+func (n *rootLinkNode) AddEndpoint(e clablinks.Endpoint) error {
+	n.endpoints = append(n.endpoints, e)
+	return nil
+}
+
+func (*rootLinkNode) GetLinkEndpointType() clablinks.LinkEndpointType {
+	return clablinks.LinkEndpointTypeHost
+}
+
+func (n *rootLinkNode) GetShortName() string {
+	return n.shortName
+}
+
+func (n *rootLinkNode) GetEndpoints() []clablinks.Endpoint {
+	return n.endpoints
+}
+
+func (n *rootLinkNode) ExecFunction(_ context.Context, f func(ns.NetNS) error) error {
+	netns, err := ns.GetNS(n.nspath)
+	if err != nil {
+		return err
+	}
+	defer netns.Close()
+
+	return netns.Do(f)
+}
+
+func (*rootLinkNode) GetState() clabnodesstate.NodeState {
+	return clabnodesstate.Deployed
+}
+
+func (n *rootLinkNode) Delete(ctx context.Context) error {
+	for _, e := range n.endpoints {
+		if err := e.GetLink().Remove(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DeployOptions contains options for deploying a lab.
@@ -995,20 +1070,19 @@ func (s *Service) CreateVeth(ctx context.Context, opts VethCreateOptions) error 
 		return fmt.Errorf("failed to create nodes: %w", err)
 	}
 
-	// Create link brief
-	linkBrief := &clablinks.LinkBriefRaw{
-		Endpoints: []string{
-			fmt.Sprintf("%s:%s", parsedAEnd.Node, parsedAEnd.Iface),
-			fmt.Sprintf("%s:%s", parsedBEnd.Node, parsedBEnd.Iface),
+	hostNode, err := newRootLinkNode("host")
+	if err != nil {
+		return fmt.Errorf("failed to create host link node: %w", err)
+	}
+
+	linkRaw := &clablinks.LinkVEthRaw{
+		Endpoints: []*clablinks.EndpointRaw{
+			clablinks.NewEndpointRaw(parsedAEnd.Node, parsedAEnd.Iface, ""),
+			clablinks.NewEndpointRaw(parsedBEnd.Node, parsedBEnd.Iface, ""),
 		},
 		LinkCommonParams: clablinks.LinkCommonParams{
 			MTU: opts.MTU,
 		},
-	}
-
-	linkRaw, err := linkBrief.ToTypeSpecificRawLink()
-	if err != nil {
-		return fmt.Errorf("failed to convert link brief: %w", err)
 	}
 
 	// Copy nodes to links.Nodes
@@ -1016,6 +1090,7 @@ func (s *Service) CreateVeth(ctx context.Context, opts VethCreateOptions) error 
 	for k, v := range clab.Nodes {
 		resolveNodes[k] = v
 	}
+	resolveNodes["host"] = hostNode
 
 	link, err := linkRaw.Resolve(&clablinks.ResolveParams{Nodes: resolveNodes})
 	if err != nil {
@@ -1024,7 +1099,9 @@ func (s *Service) CreateVeth(ctx context.Context, opts VethCreateOptions) error 
 
 	// Deploy the endpoints
 	for _, ep := range link.GetEndpoints() {
-		ep.Deploy(ctx)
+		if err := ep.Deploy(ctx); err != nil {
+			return fmt.Errorf("failed to deploy endpoint %s: %w", ep, err)
+		}
 	}
 
 	log.Info("veth pair created successfully",
@@ -1141,6 +1218,12 @@ func (s *Service) CreateVxlan(ctx context.Context, opts VxlanCreateOptions) erro
 		parentDevice = r.Interface.Name
 	}
 
+	hostNode, err := newRootLinkNode("host")
+	if err != nil {
+		return fmt.Errorf("failed to create host link node: %w", err)
+	}
+
+	vxlanIface := "vx-" + opts.Link
 	vxlraw := &clablinks.LinkVxlanRaw{
 		Remote:          opts.Remote,
 		VNI:             opts.ID,
@@ -1150,15 +1233,14 @@ func (s *Service) CreateVxlan(ctx context.Context, opts VxlanCreateOptions) erro
 		},
 		DstPort:  opts.DstPort,
 		SrcPort:  opts.SrcPort,
-		LinkType: clablinks.LinkTypeVxlanStitch,
-		Endpoint: *clablinks.NewEndpointRaw("host", opts.Link, ""),
+		LinkType: clablinks.LinkTypeVxlan,
+		Endpoint: *clablinks.NewEndpointRaw("host", vxlanIface, ""),
 	}
 
 	rp := &clablinks.ResolveParams{
 		Nodes: map[string]clablinks.Node{
-			"host": clablinks.GetHostLinkNode(),
+			"host": hostNode,
 		},
-		VxlanIfaceNameOverwrite: opts.Link,
 	}
 
 	link, err := vxlraw.Resolve(rp)
@@ -1166,14 +1248,28 @@ func (s *Service) CreateVxlan(ctx context.Context, opts VxlanCreateOptions) erro
 		return fmt.Errorf("failed to resolve VxLAN link: %w", err)
 	}
 
-	vxl, ok := link.(*clablinks.VxlanStitched)
+	vxl, ok := link.(*clablinks.LinkVxlan)
 	if !ok {
-		return fmt.Errorf("resolved link is not a VxlanStitched link")
+		return fmt.Errorf("resolved link is not a LinkVxlan link")
 	}
 
-	err = vxl.DeployWithExistingVeth(ctx)
-	if err != nil {
+	endpoints := vxl.GetEndpoints()
+	if len(endpoints) == 0 {
+		return fmt.Errorf("resolved VxLAN link has no endpoints")
+	}
+
+	if err := vxl.Deploy(ctx, endpoints[0]); err != nil {
 		return fmt.Errorf("failed to deploy VxLAN: %w", err)
+	}
+
+	if err := stitchInterfaces(vxlanIface, opts.Link); err != nil {
+		_ = vxl.Remove(ctx)
+		return fmt.Errorf("failed to stitch VxLAN to link: %w", err)
+	}
+
+	if err := stitchInterfaces(opts.Link, vxlanIface); err != nil {
+		_ = vxl.Remove(ctx)
+		return fmt.Errorf("failed to stitch link to VxLAN: %w", err)
 	}
 
 	log.Info("VxLAN tunnel created successfully",
@@ -1183,6 +1279,57 @@ func (s *Service) CreateVxlan(ctx context.Context, opts VxlanCreateOptions) erro
 	)
 
 	return nil
+}
+
+func stitchInterfaces(srcIface, dstIface string) error {
+	src, err := netlink.LinkByName(srcIface)
+	if err != nil {
+		return fmt.Errorf("failed to lookup %q: %w", srcIface, err)
+	}
+
+	dst, err := netlink.LinkByName(dstIface)
+	if err != nil {
+		return fmt.Errorf("failed to lookup %q: %w", dstIface, err)
+	}
+
+	qdisc := &netlink.Ingress{
+		QdiscAttrs: netlink.QdiscAttrs{
+			LinkIndex: src.Attrs().Index,
+			Handle:    netlink.MakeHandle(0xffff, 0),
+			Parent:    netlink.HANDLE_INGRESS,
+		},
+	}
+	if err := netlink.QdiscAdd(qdisc); err != nil && !os.IsExist(err) {
+		return err
+	}
+
+	filter := &netlink.U32{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: src.Attrs().Index,
+			Parent:    netlink.MakeHandle(0xffff, 0),
+			Protocol:  syscall.ETH_P_ALL,
+		},
+		Sel: &netlink.TcU32Sel{
+			Keys: []netlink.TcU32Key{
+				{
+					Mask: 0x0,
+					Val:  0,
+				},
+			},
+			Flags: netlink.TC_U32_TERMINAL,
+		},
+		Actions: []netlink.Action{
+			&netlink.MirredAction{
+				ActionAttrs: netlink.ActionAttrs{
+					Action: netlink.TC_ACT_STOLEN,
+				},
+				MirredAction: netlink.TCA_EGRESS_REDIR,
+				Ifindex:      dst.Attrs().Index,
+			},
+		},
+	}
+
+	return netlink.FilterAdd(filter)
 }
 
 // DeleteVxlan deletes VxLAN tunnels matching a prefix.

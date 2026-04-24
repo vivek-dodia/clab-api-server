@@ -156,4 +156,11 @@ fi
 # Ensure root (which runs the API server under sudo) can also set lab owners.
 add_user_to_group root "$SUPERUSER_GROUP"
 
+# Keep role separation intact even if these test users already existed with
+# broader group membership from a previous local setup.
+if [[ "$APIUSER_USER" != "$SUPERUSER_USER" ]]; then
+  ensure_not_in_groups "$APIUSER_USER" "$SUPERUSER_GROUP"
+fi
+ensure_not_in_groups "$UNAUTH_USER" "$SUPERUSER_GROUP" "$APIUSER_GROUP"
+
 echo "Test users/groups aligned with tests_go/.env"
