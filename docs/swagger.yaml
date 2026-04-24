@@ -1183,16 +1183,16 @@ definitions:
     type: object
 info:
   contact:
-    email: support@swagger.io
-    name: API Support
-    url: https://swagger.io/support/
-  description: This is an API server to interact with Containerlab for authenticated
-    Linux users. Runs clab commands as the API server's user. Requires PAM for authentication.
+    name: Containerlab API Server maintainers
+    url: https://github.com/srl-labs/clab-api-server/issues
+  description: |-
+    REST API for authenticated Linux users to manage Containerlab deployments, topology files, node access, captures, and host networking tools.
+
+    Most endpoints under /api/v1 require a JWT from POST /login. Send it as: Authorization: Bearer <token>.
   license:
     name: Apache 2.0
-    url: http://www.apache.org/licenses/LICENSE-2.0.html
-  termsOfService: http://swagger.io/terms/
-  title: Containerlab API
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  title: Containerlab API Server
   version: "1.0"
 paths:
   /api/v1/capture/wireshark-vnc-sessions:
@@ -1467,7 +1467,7 @@ paths:
   /api/v1/health/metrics:
     get:
       description: Returns detailed CPU, memory, and disk metrics for the API server.
-        Requires superuser privileges.
+        Requires authentication.
       produces:
       - application/json
       responses:
@@ -1477,10 +1477,6 @@ paths:
             $ref: '#/definitions/models.MetricsResponse'
         "401":
           description: Unauthorized
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        "403":
-          description: Forbidden (User is not a superuser)
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":

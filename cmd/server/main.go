@@ -33,15 +33,15 @@ var (
 )
 
 // --- Swagger annotations ---
-// @title Containerlab API
+// @title Containerlab API Server
 // @version 1.0
-// @description This is an API server to interact with Containerlab for authenticated Linux users. Runs clab commands as the API server's user. Requires PAM for authentication.
-// @termsOfService http://swagger.io/terms/
-// @contact.name API Support
-// @contact.url https://swagger.io/support/
-// @contact.email support@swagger.io
+// @description REST API for authenticated Linux users to manage Containerlab deployments, topology files, node access, captures, and host networking tools.
+// @description
+// @description Most endpoints under /api/v1 require a JWT from POST /login. Send it as: Authorization: Bearer <token>.
+// @contact.name Containerlab API Server maintainers
+// @contact.url https://github.com/srl-labs/clab-api-server/issues
 // @license.name Apache 2.0
-// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+// @license.url https://www.apache.org/licenses/LICENSE-2.0.html
 // @schemes http https
 // @securityDefinitions.apikey BearerAuth
 // @in header
@@ -65,6 +65,10 @@ func main() {
 		fmt.Printf("commit: %s\n", commit)
 		fmt.Printf("built: %s\n", date)
 		os.Exit(0)
+	}
+
+	if flag.NArg() > 0 && flag.Arg(0) == "version" {
+		os.Exit(runVersionCommand(context.Background(), flag.Args()[1:], os.Stdout, os.Stderr))
 	}
 
 	// --- Load configuration First ---

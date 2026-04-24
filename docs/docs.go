@@ -9,15 +9,13 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "http://swagger.io/terms/",
         "contact": {
-            "name": "API Support",
-            "url": "https://swagger.io/support/",
-            "email": "support@swagger.io"
+            "name": "Containerlab API Server maintainers",
+            "url": "https://github.com/srl-labs/clab-api-server/issues"
         },
         "license": {
             "name": "Apache 2.0",
-            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+            "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
         },
         "version": "{{.Version}}"
     },
@@ -402,7 +400,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns detailed CPU, memory, and disk metrics for the API server. Requires superuser privileges.",
+                "description": "Returns detailed CPU, memory, and disk metrics for the API server. Requires authentication.",
                 "produces": [
                     "application/json"
                 ],
@@ -419,12 +417,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden (User is not a superuser)",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -6738,8 +6730,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{"http", "https"},
-	Title:            "Containerlab API",
-	Description:      "This is an API server to interact with Containerlab for authenticated Linux users. Runs clab commands as the API server's user. Requires PAM for authentication.",
+	Title:            "Containerlab API Server",
+	Description:      "REST API for authenticated Linux users to manage Containerlab deployments, topology files, node access, captures, and host networking tools.\n\nMost endpoints under /api/v1 require a JWT from POST /login. Send it as: Authorization: Bearer <token>.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

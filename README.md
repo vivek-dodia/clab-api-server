@@ -76,6 +76,13 @@ This will:
 
 For post-installation steps, see the [Post-Install Configuration](#-post-install-configuration) section below.
 
+Check for a newer API server release and upgrade the installed binary:
+
+```bash
+clab-api-server version check
+sudo clab-api-server version upgrade
+```
+
 ### 3. Docker Deployment
 
 Run the API server as a Docker container with access to the host resources:
