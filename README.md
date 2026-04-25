@@ -58,8 +58,8 @@ sudo ./clab-api-server-linux-amd64
 Configure via environment variables or a `.env` file in the current directory. See [Configuration Reference](#%EF%B8%8F-configuration-reference) for available options.
 
 Once the server is running, access the interactive API documentation at:
-- Swagger UI: `http://<server_ip>:<API_PORT>/swagger/index.html`
-- ReDoc UI: `http://<server_ip>:<API_PORT>/redoc`
+- Swagger UI: `https://<server_ip>:<API_PORT>/swagger/index.html`
+- ReDoc UI: `https://<server_ip>:<API_PORT>/redoc`
 
 ### 2. Binary Installation (systemd)
 
@@ -166,9 +166,10 @@ Common flags for the start command include:
 | `GIN_MODE` | `release` | Web framework mode (`debug` or `release`) |
 | `SSH_BASE_PORT` | `2223` | Starting port for SSH proxy allocation |
 | `SSH_MAX_PORT` | `2322` | Maximum port for SSH proxy allocation |
-| `TLS_ENABLE` | `false` | Enable TLS for HTTPS |
-| `TLS_CERT_FILE` | | Path to TLS certificate when enabled |
-| `TLS_KEY_FILE` | | Path to TLS private key when enabled |
+| `TLS_ENABLE` | `true` | Enable TLS for HTTPS |
+| `TLS_AUTO_CERT` | `true` | Generate/reuse a local self-signed certificate when cert/key files are unset |
+| `TLS_CERT_FILE` | | Path to TLS certificate when overriding auto certificate generation |
+| `TLS_KEY_FILE` | | Path to TLS private key when overriding auto certificate generation |
 
 ## Authentication
 
@@ -186,37 +187,37 @@ When authenticating via the API, provide the Linux username and password to rece
 * **Library integration** – Containerlab is embedded as a Go library, not executed as a separate CLI process.
 * **Ownership** – Lab ownership is tracked via container labels.
 * **SSH sessions** – Allocated ports forward to container port 22 with automatic expiration.
-* **Security controls** – PAM for credential validation, JWT for session management, input validation, and optional TLS.
+* **Security controls** – PAM for credential validation, JWT for session management, input validation, and HTTPS by default.
 
 ## API Documentation
 
 Access interactive API documentation at:
 
 ```
-http://<server_ip>:<API_PORT>/swagger/index.html  # Swagger UI
-http://<server_ip>:<API_PORT>/redoc               # ReDoc UI
+https://<server_ip>:<API_PORT>/swagger/index.html  # Swagger UI
+https://<server_ip>:<API_PORT>/redoc               # ReDoc UI
 ```
 
 ## API Usage Example
 
 ```bash
 # Authenticate with your Linux username and password
-TOKEN=$(curl -s -X POST http://localhost:8080/login \
+TOKEN=$(curl -sk -X POST https://localhost:8080/login \
   -H "Content-Type: application/json" \
   -d '{"username":"your_linux_username","password":"your_linux_password"}' \
   | jq -r '.token')
 
 # Optional: request a custom token lifetime for this login
-TOKEN_CUSTOM=$(curl -s -X POST http://localhost:8080/login \
+TOKEN_CUSTOM=$(curl -sk -X POST https://localhost:8080/login \
   -H "Content-Type: application/json" \
   -d '{"username":"your_linux_username","password":"your_linux_password","sessionDuration":"36h"}' \
   | jq -r '.token')
 
 # List labs
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/labs
+curl -k -H "Authorization: Bearer $TOKEN" https://localhost:8080/api/v1/labs
 
 # Deploy a lab
-curl -X POST http://localhost:8080/api/v1/labs \
+curl -k -X POST https://localhost:8080/api/v1/labs \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"topologyContent":{"name":"srl01","topology":{"kinds":{"nokia_srlinux":{"type":"ixrd3","image":"ghcr.io/nokia/srlinux"}},"nodes":{"srl1":{"kind":"nokia_srlinux"},"srl2":{"kind":"nokia_srlinux"}},"links":[{"endpoints":["srl1:e1-1","srl2:e1-1"]}]}}}'
@@ -233,7 +234,7 @@ The standalone `containerlab-gui` app uses these authenticated endpoints:
 - `POST /api/v1/topologies/{labName}/file/rename` - scoped rename operation
 - `POST /api/v1/topologies/{labName}/deploy` - deploy an on-disk topology by lab name
 
-Enable browser access by setting `CORS_ALLOWED_ORIGINS` (for example `http://localhost:5174`).
+Enable browser access by setting `CORS_ALLOWED_ORIGINS` (for example `https://localhost:5173`).
 
 ## Flashpost Collection
 

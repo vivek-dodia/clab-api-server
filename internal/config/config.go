@@ -2,7 +2,9 @@
 package config
 
 import (
-	"fmt" // Import fmt
+	"errors"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/viper"
@@ -24,6 +26,7 @@ type Config struct {
 	LogLevel                     string        `mapstructure:"LOG_LEVEL"`
 	CORSAllowedOrigins           string        `mapstructure:"CORS_ALLOWED_ORIGINS"` // Comma-separated list of allowed browser origins
 	TLSEnable                    bool          `mapstructure:"TLS_ENABLE"`
+	TLSAutoCert                  bool          `mapstructure:"TLS_AUTO_CERT"`
 	TLSCertFile                  string        `mapstructure:"TLS_CERT_FILE"`
 	TLSKeyFile                   string        `mapstructure:"TLS_KEY_FILE"`
 	GinMode                      string        `mapstructure:"GIN_MODE"`
@@ -56,7 +59,8 @@ func LoadConfig(envFilePath string) error {
 	viper.SetDefault("CAPTURE_EDGESHARK_EXTRA_ENV_VARS", "")
 	viper.SetDefault("LOG_LEVEL", "info")
 	viper.SetDefault("CORS_ALLOWED_ORIGINS", "")
-	viper.SetDefault("TLS_ENABLE", false)
+	viper.SetDefault("TLS_ENABLE", true)
+	viper.SetDefault("TLS_AUTO_CERT", true)
 	viper.SetDefault("TLS_CERT_FILE", "")
 	viper.SetDefault("TLS_KEY_FILE", "")
 	viper.SetDefault("GIN_MODE", "debug")
@@ -69,11 +73,12 @@ func LoadConfig(envFilePath string) error {
 
 	// Handle file not found error specifically
 	if err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+		var configFileNotFound viper.ConfigFileNotFoundError
+		if errors.As(err, &configFileNotFound) || errors.Is(err, os.ErrNotExist) {
 			// If the default file path was used and it wasn't found, it's okay.
 			// If a specific path was provided via flag and it wasn't found, it's an error.
 			defaultPath := ".env" // The default path we'll set in main.go
-			if envFilePath != defaultPath {
+			if envFilePath != defaultPath && envFilePath != "" {
 				return fmt.Errorf("specified config file '%s' not found: %w", envFilePath, err)
 			}
 			// Otherwise (default path not found), just log a debug message and continue

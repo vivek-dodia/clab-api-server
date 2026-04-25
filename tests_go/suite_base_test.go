@@ -4,6 +4,7 @@ package tests_go
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -67,7 +68,7 @@ func TestMain(m *testing.M) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	globalCfg = TestConfig{
-		APIURL:                getEnv("API_URL", "http://127.0.0.1:8080"),
+		APIURL:                getEnv("API_URL", "https://127.0.0.1:8080"),
 		SuperuserUser:         getEnv("SUPERUSER_USER", "root"),
 		SuperuserPass:         getEnv("SUPERUSER_PASS", "rootpassword"),
 		APIUserUser:           getEnv("APIUSER_USER", "test"),
@@ -89,6 +90,12 @@ func TestMain(m *testing.M) {
 	if !strings.Contains(globalCfg.SimpleTopologyContent, "{lab_name}") {
 		fmt.Println("Error: GOTEST_SIMPLE_TOPOLOGY_CONTENT must contain '{lab_name}' placeholder.")
 		os.Exit(1)
+	}
+
+	http.DefaultClient = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // Test client accepts local self-signed certificates.
+		},
 	}
 
 	exitCode := m.Run()

@@ -23,6 +23,7 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/clab"
 	"github.com/srl-labs/clab-api-server/internal/config"
 	"github.com/srl-labs/clab-api-server/internal/templates"
+	"github.com/srl-labs/clab-api-server/internal/tlsconfig"
 )
 
 // --- Version Info ---
@@ -200,6 +201,41 @@ func main() {
 	if config.AppConfig.TLSEnable {
 		serverBaseURL = fmt.Sprintf("https://localhost:%s", config.AppConfig.APIPort)
 	}
+	tlsCertFile := config.AppConfig.TLSCertFile
+	tlsKeyFile := config.AppConfig.TLSKeyFile
+	if config.AppConfig.TLSEnable {
+		if (tlsCertFile == "") != (tlsKeyFile == "") {
+			log.Fatal("TLS is enabled but only one of TLS_CERT_FILE or TLS_KEY_FILE is set.")
+		}
+		if tlsCertFile == "" && tlsKeyFile == "" {
+			if !config.AppConfig.TLSAutoCert {
+				log.Fatal("TLS is enabled but TLS_CERT_FILE and TLS_KEY_FILE are not set, and TLS_AUTO_CERT is false.")
+			}
+
+			certPaths, err := tlsconfig.DefaultCertificatePaths("clab-api-server")
+			if err != nil {
+				log.Fatalf("Failed to resolve auto TLS certificate path: %v", err)
+			}
+			hosts := tlsconfig.DefaultServerHosts(config.AppConfig.APIServerHost)
+			generated, err := tlsconfig.EnsureSelfSignedCertificate(certPaths.CertFile, certPaths.KeyFile, hosts)
+			if err != nil {
+				log.Fatalf("Failed to prepare auto TLS certificate: %v", err)
+			}
+			tlsCertFile = certPaths.CertFile
+			tlsKeyFile = certPaths.KeyFile
+			if generated {
+				log.Warnf("Generated self-signed TLS certificate at %s. Browsers and clients must trust it or opt into insecure verification.", tlsCertFile)
+			} else {
+				log.Infof("Using existing auto TLS certificate at %s", tlsCertFile)
+			}
+		}
+		if _, err := os.Stat(tlsCertFile); os.IsNotExist(err) {
+			log.Fatalf("TLS cert file not found: %s", tlsCertFile)
+		}
+		if _, err := os.Stat(tlsKeyFile); os.IsNotExist(err) {
+			log.Fatalf("TLS key file not found: %s", tlsKeyFile)
+		}
+	}
 
 	srv := &http.Server{
 		Addr:    listenAddr,
@@ -212,18 +248,8 @@ func main() {
 		if config.AppConfig.TLSEnable {
 			protocol = "HTTPS"
 			log.Infof("Starting %s server, accessible locally at %s (and potentially other IPs)", protocol, serverBaseURL)
-			// Check TLS files before starting
-			if config.AppConfig.TLSCertFile == "" || config.AppConfig.TLSKeyFile == "" {
-				log.Fatalf("TLS is enabled but TLS_CERT_FILE or TLS_KEY_FILE is not set.")
-			}
-			if _, err := os.Stat(config.AppConfig.TLSCertFile); os.IsNotExist(err) {
-				log.Fatalf("TLS cert file not found: %s", config.AppConfig.TLSCertFile)
-			}
-			if _, err := os.Stat(config.AppConfig.TLSKeyFile); os.IsNotExist(err) {
-				log.Fatalf("TLS key file not found: %s", config.AppConfig.TLSKeyFile)
-			}
 			// Start HTTPS server
-			if err := srv.ListenAndServeTLS(config.AppConfig.TLSCertFile, config.AppConfig.TLSKeyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := srv.ListenAndServeTLS(tlsCertFile, tlsKeyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				log.Fatalf("Failed to start %s server: %v", protocol, err)
 			}
 		} else {

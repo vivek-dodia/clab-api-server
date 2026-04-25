@@ -169,7 +169,7 @@ The tests require a running Containerlab API server and appropriate user account
 The test suite can be configured using environment variables:
 
 ```
-API_URL=http://127.0.0.1:8080
+API_URL=https://127.0.0.1:8080
 SUPERUSER_USER=root
 SUPERUSER_PASS=rootpassword
 APIUSER_USER=test
