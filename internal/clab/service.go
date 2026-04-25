@@ -3,6 +3,7 @@ package clab
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -39,6 +40,7 @@ import (
 const (
 	defaultTimeout         = 5 * time.Minute
 	gracefulDestroyTimeout = 2 * time.Minute
+	imagePullTimeout       = 30 * time.Minute
 )
 
 var ErrNetemInterfaceNotFound = errors.New("netem interface not found")
@@ -235,6 +237,27 @@ type CloneTopologySourceResult struct {
 	RepoDir      string
 	RepoName     string
 	TopologyPath string
+}
+
+type RuntimeImageSummary struct {
+	ID          string
+	ShortID     string
+	RepoTags    []string
+	RepoDigests []string
+	CreatedAt   string
+	Size        string
+	VirtualSize string
+}
+
+type runtimeImageCliRecord struct {
+	ID           string `json:"ID"`
+	Repository   string `json:"Repository"`
+	Tag          string `json:"Tag"`
+	Digest       string `json:"Digest"`
+	CreatedAt    string `json:"CreatedAt"`
+	CreatedSince string `json:"CreatedSince"`
+	Size         string `json:"Size"`
+	VirtualSize  string `json:"VirtualSize"`
 }
 
 // CloneTopologySource clones a supported topology source URL and resolves the topology file path.
@@ -559,6 +582,135 @@ func (s *Service) RunContainerlabTool(ctx context.Context, opts ContainerlabTool
 	}
 
 	return s.runCommand(ctx, "containerlab", opts.Args)
+}
+
+func configuredRuntimeName() string {
+	runtimeName := strings.TrimSpace(config.AppConfig.ClabRuntime)
+	if runtimeName == "" {
+		return "docker"
+	}
+	return runtimeName
+}
+
+func shortRuntimeImageID(id string) string {
+	trimmed := strings.TrimPrefix(strings.TrimSpace(id), "sha256:")
+	if len(trimmed) <= 12 {
+		return trimmed
+	}
+	return trimmed[:12]
+}
+
+func validImageTag(repository, tag string) string {
+	repository = strings.TrimSpace(repository)
+	tag = strings.TrimSpace(tag)
+	if repository == "" || repository == "<none>" || tag == "" || tag == "<none>" {
+		return ""
+	}
+	return repository + ":" + tag
+}
+
+func validImageDigest(repository, digest string) string {
+	repository = strings.TrimSpace(repository)
+	digest = strings.TrimSpace(digest)
+	if repository == "" || repository == "<none>" || digest == "" || digest == "<none>" {
+		return ""
+	}
+	return repository + "@" + digest
+}
+
+func appendUniqueString(values []string, value string) []string {
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
+}
+
+func (s *Service) ListRuntimeImages(ctx context.Context) ([]RuntimeImageSummary, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	runtimeName := configuredRuntimeName()
+	output, err := s.runCommand(ctx, runtimeName, []string{
+		"image",
+		"ls",
+		"--all",
+		"--digests",
+		"--no-trunc",
+		"--format",
+		"{{json .}}",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	imagesByID := map[string]*RuntimeImageSummary{}
+	order := []string{}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var record runtimeImageCliRecord
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			return nil, fmt.Errorf("failed to parse %s image listing: %w", runtimeName, err)
+		}
+		id := strings.TrimSpace(record.ID)
+		if id == "" {
+			continue
+		}
+		image := imagesByID[id]
+		if image == nil {
+			image = &RuntimeImageSummary{
+				ID:          id,
+				ShortID:     shortRuntimeImageID(id),
+				RepoTags:    []string{},
+				RepoDigests: []string{},
+				CreatedAt:   strings.TrimSpace(record.CreatedAt),
+				Size:        strings.TrimSpace(record.Size),
+				VirtualSize: strings.TrimSpace(record.VirtualSize),
+			}
+			if image.CreatedAt == "" {
+				image.CreatedAt = strings.TrimSpace(record.CreatedSince)
+			}
+			imagesByID[id] = image
+			order = append(order, id)
+		}
+		image.RepoTags = appendUniqueString(image.RepoTags, validImageTag(record.Repository, record.Tag))
+		image.RepoDigests = appendUniqueString(image.RepoDigests, validImageDigest(record.Repository, record.Digest))
+	}
+
+	images := make([]RuntimeImageSummary, 0, len(order))
+	for _, id := range order {
+		images = append(images, *imagesByID[id])
+	}
+	return images, nil
+}
+
+func (s *Service) PullRuntimeImage(ctx context.Context, image string) (string, error) {
+	baseCtx := ctx
+	if _, hasDeadline := baseCtx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		baseCtx, cancel = context.WithTimeout(baseCtx, imagePullTimeout)
+		defer cancel()
+	}
+	return s.runCommand(baseCtx, configuredRuntimeName(), []string{"pull", image})
+}
+
+func (s *Service) RemoveRuntimeImage(ctx context.Context, reference string, force bool) (string, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	args := []string{"image", "rm"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, reference)
+	return s.runCommand(ctx, configuredRuntimeName(), args)
 }
 
 func (s *Service) RunFcliCommand(ctx context.Context, opts FcliRunOptions) (string, error) {

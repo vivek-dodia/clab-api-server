@@ -46,3 +46,29 @@ type CaptureCloseAllResponse struct {
 	Message string `json:"message"`
 	Closed  int    `json:"closed"`
 }
+
+type RuntimeImageSummary struct {
+	ID          string   `json:"id"`
+	ShortID     string   `json:"shortId,omitempty"`
+	RepoTags    []string `json:"repoTags"`
+	RepoDigests []string `json:"repoDigests"`
+	CreatedAt   string   `json:"createdAt,omitempty"`
+	Size        string   `json:"size,omitempty"`
+	VirtualSize string   `json:"virtualSize,omitempty"`
+}
+
+type RuntimeImagesResponse struct {
+	Runtime string                `json:"runtime"`
+	Images  []RuntimeImageSummary `json:"images"`
+}
+
+type RuntimeImagePullRequest struct {
+	Image string `json:"image" binding:"required"`
+}
+
+type RuntimeImageActionResponse struct {
+	Success bool   `json:"success"`
+	Image   string `json:"image,omitempty"`
+	Message string `json:"message,omitempty"`
+	Output  string `json:"output,omitempty"`
+}

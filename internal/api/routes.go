@@ -40,6 +40,13 @@ func SetupRoutes(router *gin.Engine) {
 		// Events stream
 		apiV1.GET("/events", StreamEventsHandler)
 
+		images := apiV1.Group("/images")
+		{
+			images.GET("", ListRuntimeImagesHandler)
+			images.POST("/pull", PullRuntimeImageHandler)
+			images.DELETE("", RemoveRuntimeImageHandler)
+		}
+
 		ui := apiV1.Group("/ui")
 		{
 			ui.GET("/custom-nodes", GetCustomNodesHandler)

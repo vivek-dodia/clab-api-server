@@ -860,6 +860,54 @@ definitions:
     required:
     - newPassword
     type: object
+  models.RuntimeImageActionResponse:
+    properties:
+      image:
+        type: string
+      message:
+        type: string
+      output:
+        type: string
+      success:
+        type: boolean
+    type: object
+  models.RuntimeImagePullRequest:
+    properties:
+      image:
+        type: string
+    required:
+    - image
+    type: object
+  models.RuntimeImageSummary:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      repoDigests:
+        items:
+          type: string
+        type: array
+      repoTags:
+        items:
+          type: string
+        type: array
+      shortId:
+        type: string
+      size:
+        type: string
+      virtualSize:
+        type: string
+    type: object
+  models.RuntimeImagesResponse:
+    properties:
+      images:
+        items:
+          $ref: '#/definitions/models.RuntimeImageSummary'
+        type: array
+      runtime:
+        type: string
+    type: object
   models.SSHAccessRequest:
     properties:
       duration:
@@ -1488,6 +1536,102 @@ paths:
       summary: Get system metrics
       tags:
       - Health
+  /api/v1/images:
+    delete:
+      parameters:
+      - description: Image reference or ID
+        in: query
+        name: reference
+        required: true
+        type: string
+      - description: Force image removal
+        in: query
+        name: force
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RuntimeImageActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a runtime image
+      tags:
+      - Images
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RuntimeImagesResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List runtime images
+      tags:
+      - Images
+  /api/v1/images/pull:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Image reference
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RuntimeImagePullRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RuntimeImageActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Pull a runtime image
+      tags:
+      - Images
   /api/v1/labs:
     get:
       description: |-
