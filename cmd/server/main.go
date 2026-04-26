@@ -238,8 +238,9 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:    listenAddr,
-		Handler: router,
+		Addr:      listenAddr,
+		Handler:   router,
+		TLSConfig: tlsconfig.LocalServerTLSConfig(),
 	}
 
 	// --- Start Server Goroutine ---
