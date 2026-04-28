@@ -451,6 +451,7 @@ func DeployLabArchiveHandler(c *gin.Context) {
 // @Param cleanup query boolean false "Remove containerlab lab artifacts after destroy"
 // @Param purgeLabDir query boolean false "Purge topology parent directory for managed lab paths (~/.clab or shared labs dir)"
 // @Param graceful query boolean false "Attempt graceful shutdown"
+// @Param gracefulTimeout query string false "Override graceful shutdown timeout when graceful=true (for example 5s or 2m)"
 // @Param keepMgmtNet query boolean false "Keep the management network"
 // @Param nodeFilter query string false "Destroy only specific nodes"
 // @Param stream query boolean false "Stream lifecycle output as NDJSON events"
@@ -477,6 +478,10 @@ func DestroyLabHandler(c *gin.Context) {
 	cleanup := c.Query("cleanup") == "true"
 	purgeLabDir := c.Query("purgeLabDir") == "true"
 	graceful := c.Query("graceful") == "true"
+	gracefulTimeout, ok := parseGracefulTimeoutQuery(c, graceful)
+	if !ok {
+		return
+	}
 	keepMgmtNet := c.Query("keepMgmtNet") == "true"
 	nodeFilter := c.Query("nodeFilter")
 
@@ -512,13 +517,14 @@ func DestroyLabHandler(c *gin.Context) {
 	}
 
 	destroyOpts := clab.DestroyOptions{
-		LabName:     labName,
-		TopoPath:    originalTopoPath,
-		Username:    username,
-		Graceful:    graceful,
-		Cleanup:     cleanup, // Keep containerlab cleanup behavior for all topology locations.
-		KeepMgmtNet: keepMgmtNet,
-		NodeFilter:  nodeFilterSlice,
+		LabName:         labName,
+		TopoPath:        originalTopoPath,
+		Username:        username,
+		Graceful:        graceful,
+		GracefulTimeout: gracefulTimeout,
+		Cleanup:         cleanup, // Keep containerlab cleanup behavior for all topology locations.
+		KeepMgmtNet:     keepMgmtNet,
+		NodeFilter:      nodeFilterSlice,
 	}
 
 	log.Infof("DestroyLab user '%s': Destroying lab '%s' (cleanup=%t, purgeLabDir=%t)...", username, labName, cleanup, purgeLabDir)
@@ -616,6 +622,7 @@ func DestroyLabHandler(c *gin.Context) {
 // @Param labName path string true "Name of the lab to redeploy"
 // @Param cleanup query boolean false "Remove containerlab lab artifacts during destroy phase"
 // @Param graceful query boolean false "Attempt graceful shutdown"
+// @Param gracefulTimeout query string false "Override graceful shutdown timeout when graceful=true (for example 5s or 2m)"
 // @Param keepMgmtNet query boolean false "Keep the management network"
 // @Param maxWorkers query int false "Limit concurrent workers"
 // @Param exportTemplate query string false "Custom Go template file for topology data export"
@@ -642,6 +649,10 @@ func RedeployLabHandler(c *gin.Context) {
 
 	cleanup := c.Query("cleanup") == "true"
 	graceful := c.Query("graceful") == "true"
+	gracefulTimeout, ok := parseGracefulTimeoutQuery(c, graceful)
+	if !ok {
+		return
+	}
 	keepMgmtNet := c.Query("keepMgmtNet") == "true"
 	maxWorkersStr := c.DefaultQuery("maxWorkers", "0")
 	skipPostDeploy := c.Query("skipPostDeploy") == "true"
@@ -683,12 +694,13 @@ func RedeployLabHandler(c *gin.Context) {
 	}
 
 	destroyOpts := clab.DestroyOptions{
-		TopoPath:    originalTopoPath,
-		Username:    username,
-		Graceful:    graceful,
-		Cleanup:     cleanup,
-		KeepMgmtNet: keepMgmtNet,
-		MaxWorkers:  uint(maxWorkers),
+		TopoPath:        originalTopoPath,
+		Username:        username,
+		Graceful:        graceful,
+		GracefulTimeout: gracefulTimeout,
+		Cleanup:         cleanup,
+		KeepMgmtNet:     keepMgmtNet,
+		MaxWorkers:      uint(maxWorkers),
 	}
 
 	deployOpts := clab.DeployOptions{
@@ -760,6 +772,25 @@ func RedeployLabHandler(c *gin.Context) {
 
 	log.Infof("RedeployLab user '%s': Lab '%s' redeployed successfully.", username, labName)
 	c.JSON(http.StatusOK, result)
+}
+
+func parseGracefulTimeoutQuery(c *gin.Context, graceful bool) (time.Duration, bool) {
+	rawTimeout, exists := c.GetQuery("gracefulTimeout")
+	if !exists {
+		return 0, true
+	}
+	if !graceful {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "'gracefulTimeout' requires graceful=true"})
+		return 0, false
+	}
+
+	timeout, err := time.ParseDuration(rawTimeout)
+	if err != nil || timeout <= 0 {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid 'gracefulTimeout' query parameter. Use a positive duration like '5s'."})
+		return 0, false
+	}
+
+	return timeout, true
 }
 
 // @Summary Inspect lab

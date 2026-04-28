@@ -26,6 +26,8 @@ type EventsSuite struct {
 	suLabName  string
 }
 
+const initialEventSettleWindow = 500 * time.Millisecond
+
 func TestEventsSuite(t *testing.T) {
 	suite.Run(t, new(EventsSuite))
 }
@@ -101,10 +103,18 @@ func (s *EventsSuite) TestEventsStreamJSONFiltersByLab() {
 	s.Require().True(expectedLabPresent, "Expected API user lab '%s' to be visible in /api/v1/labs", s.apiLabName)
 
 	eventsURL := fmt.Sprintf("%s/api/v1/events?initialState=true", s.cfg.APIURL)
-	lines, statusCode, err := s.collectEventLines(eventsURL, s.apiUserHeaders, s.streamTimeout(), 20)
+	seenExpectedLab := false
+	lines, statusCode, err := s.collectEventLinesUntil(eventsURL, s.apiUserHeaders, s.streamTimeout(), initialEventSettleWindow, func(line string) bool {
+		attrs, parseErr := parseEventAttributes(line)
+		if parseErr == nil && eventLabName(attrs) == s.apiLabName {
+			seenExpectedLab = true
+		}
+		return seenExpectedLab
+	})
 	s.Require().NoError(err, "Failed to stream events")
 	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 for events stream")
 	s.Require().NotEmpty(lines, "Expected at least one event line")
+	s.Require().True(seenExpectedLab, "Expected event stream to include API user lab '%s'", s.apiLabName)
 
 	for _, line := range lines {
 		attrs, parseErr := parseEventAttributes(line)
@@ -124,29 +134,29 @@ func (s *EventsSuite) TestEventsStreamJSONSuperuserSeesBothLabs() {
 	s.logTest("Streaming JSON events as superuser (expecting labs '%s' and '%s')", s.apiLabName, s.suLabName)
 
 	eventsURL := fmt.Sprintf("%s/api/v1/events?initialState=true", s.cfg.APIURL)
-	lines, statusCode, err := s.collectEventLines(eventsURL, s.superuserHeaders, s.streamTimeout(), 40)
-	s.Require().NoError(err, "Failed to stream events")
-	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 for events stream")
-	s.Require().NotEmpty(lines, "Expected at least one event line")
-
 	seenAPI := false
 	seenSU := false
-	for _, line := range lines {
+	lines, statusCode, err := s.collectEventLinesUntil(eventsURL, s.superuserHeaders, s.streamTimeout(), initialEventSettleWindow, func(line string) bool {
 		attrs, parseErr := parseEventAttributes(line)
-		s.Require().NoError(parseErr, "Failed to parse JSON event line: %s", line)
-		lab := eventLabName(attrs)
-		if lab == "" {
-			continue
+		if parseErr != nil {
+			return seenAPI && seenSU
 		}
+		lab := eventLabName(attrs)
 		if lab == s.apiLabName {
 			seenAPI = true
 		}
 		if lab == s.suLabName {
 			seenSU = true
 		}
-		if seenAPI && seenSU {
-			break
-		}
+		return seenAPI && seenSU
+	})
+	s.Require().NoError(err, "Failed to stream events")
+	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 for events stream")
+	s.Require().NotEmpty(lines, "Expected at least one event line")
+
+	for _, line := range lines {
+		_, parseErr := parseEventAttributes(line)
+		s.Require().NoError(parseErr, "Failed to parse JSON event line: %s", line)
 	}
 
 	s.Assert().True(seenAPI, "Superuser should see events for API user lab '%s'", s.apiLabName)
@@ -236,7 +246,7 @@ func (s *EventsSuite) TestEventsStreamJSONLifecycleMessages() {
 	}
 }
 
-func (s *EventsSuite) collectEventLines(url string, headers http.Header, timeout time.Duration, maxLines int) ([]string, int, error) {
+func (s *EventsSuite) collectEventLinesUntil(url string, headers http.Header, timeout, settleWindow time.Duration, done func(string) bool) ([]string, int, error) {
 	s.T().Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -261,7 +271,14 @@ func (s *EventsSuite) collectEventLines(url string, headers http.Header, timeout
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	lines := make([]string, 0, maxLines)
+	lines := make([]string, 0, 16)
+	conditionMet := false
+	var settleTimer *time.Timer
+	defer func() {
+		if settleTimer != nil {
+			settleTimer.Stop()
+		}
+	}()
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -269,8 +286,19 @@ func (s *EventsSuite) collectEventLines(url string, headers http.Header, timeout
 			continue
 		}
 		lines = append(lines, line)
-		if len(lines) >= maxLines {
-			break
+		if !conditionMet && done != nil {
+			conditionMet = done(line)
+		}
+		if conditionMet {
+			if settleWindow <= 0 {
+				cancel()
+				break
+			}
+			if settleTimer == nil {
+				settleTimer = time.AfterFunc(settleWindow, cancel)
+			} else {
+				settleTimer.Reset(settleWindow)
+			}
 		}
 	}
 

@@ -446,12 +446,13 @@ func (s *LabCoreSuite) TestLabRedeploy_WithOptions() {
 
 	// Redeploy with various options
 	options := map[string]string{
-		"cleanup":        "true",
-		"graceful":       "true",
-		"maxWorkers":     "2",
-		"skipPostDeploy": "true",
-		"exportTemplate": "__full",
-		"skipLabdirAcl":  "true",
+		"cleanup":         "true",
+		"graceful":        "true",
+		"gracefulTimeout": "5s",
+		"maxWorkers":      "2",
+		"skipPostDeploy":  "true",
+		"exportTemplate":  "__full",
+		"skipLabdirAcl":   "true",
 	}
 	bodyBytes, statusCode, err := s.redeployLab(userHeaders, labName, options, s.cfg.DeployTimeout)
 

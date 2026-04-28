@@ -1761,6 +1761,11 @@ paths:
         in: query
         name: graceful
         type: boolean
+      - description: Override graceful shutdown timeout when graceful=true (for example
+          5s or 2m)
+        in: query
+        name: gracefulTimeout
+        type: string
       - description: Keep the management network
         in: query
         name: keepMgmtNet
@@ -1865,6 +1870,11 @@ paths:
         in: query
         name: graceful
         type: boolean
+      - description: Override graceful shutdown timeout when graceful=true (for example
+          5s or 2m)
+        in: query
+        name: gracefulTimeout
+        type: string
       - description: Keep the management network
         in: query
         name: keepMgmtNet

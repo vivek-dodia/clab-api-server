@@ -141,14 +141,15 @@ type DeployOptions struct {
 
 // DestroyOptions contains options for destroying a lab.
 type DestroyOptions struct {
-	LabName     string
-	TopoPath    string
-	Username    string
-	Graceful    bool
-	Cleanup     bool
-	KeepMgmtNet bool
-	NodeFilter  []string
-	MaxWorkers  uint
+	LabName         string
+	TopoPath        string
+	Username        string
+	Graceful        bool
+	GracefulTimeout time.Duration
+	Cleanup         bool
+	KeepMgmtNet     bool
+	NodeFilter      []string
+	MaxWorkers      uint
 }
 
 // ListOptions contains options for listing labs/containers.
@@ -416,6 +417,9 @@ func (s *Service) Destroy(ctx context.Context, opts DestroyOptions) error {
 	clabTimeout := defaultTimeout
 	if opts.Graceful {
 		clabTimeout = gracefulDestroyTimeout
+		if opts.GracefulTimeout > 0 {
+			clabTimeout = opts.GracefulTimeout
+		}
 	}
 	var clabOpts []clabcore.ClabOption
 	clabOpts = append(clabOpts, clabcore.WithTimeout(clabTimeout))
@@ -472,6 +476,7 @@ func (s *Service) Destroy(ctx context.Context, opts DestroyOptions) error {
 		"username", opts.Username,
 		"labName", opts.LabName,
 		"graceful", opts.Graceful,
+		"gracefulTimeout", opts.GracefulTimeout,
 		"cleanup", opts.Cleanup,
 	)
 

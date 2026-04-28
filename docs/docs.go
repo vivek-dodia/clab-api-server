@@ -1043,6 +1043,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "Override graceful shutdown timeout when graceful=true (for example 5s or 2m)",
+                        "name": "gracefulTimeout",
+                        "in": "query"
+                    },
+                    {
                         "type": "boolean",
                         "description": "Keep the management network",
                         "name": "keepMgmtNet",
@@ -1156,6 +1162,12 @@ const docTemplate = `{
                         "type": "boolean",
                         "description": "Attempt graceful shutdown",
                         "name": "graceful",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Override graceful shutdown timeout when graceful=true (for example 5s or 2m)",
+                        "name": "gracefulTimeout",
                         "in": "query"
                     },
                     {

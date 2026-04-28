@@ -76,6 +76,20 @@ func (s *EndpointCoverageSuite) TestShareToolRoutesValidateAction() {
 	s.assertJSONError(bodyBytes, "Invalid gotty port")
 }
 
+func (s *EndpointCoverageSuite) TestGracefulTimeoutValidation() {
+	redeployURL := fmt.Sprintf("%s/api/v1/labs/%s?gracefulTimeout=5s", s.cfg.APIURL, s.labName)
+	bodyBytes, statusCode, err := s.doRequest("PUT", redeployURL, s.apiUserHeaders, nil, s.cfg.RequestTimeout)
+	s.Require().NoError(err)
+	s.Require().Equal(http.StatusBadRequest, statusCode, "Expected 400 when gracefulTimeout is used without graceful=true. Body: %s", string(bodyBytes))
+	s.assertJSONError(bodyBytes, "gracefulTimeout")
+
+	destroyURL := fmt.Sprintf("%s/api/v1/labs/%s?graceful=true&gracefulTimeout=0s", s.cfg.APIURL, s.labName)
+	bodyBytes, statusCode, err = s.doRequest("DELETE", destroyURL, s.apiUserHeaders, nil, s.cfg.RequestTimeout)
+	s.Require().NoError(err)
+	s.Require().Equal(http.StatusBadRequest, statusCode, "Expected 400 for nonpositive gracefulTimeout. Body: %s", string(bodyBytes))
+	s.assertJSONError(bodyBytes, "Invalid 'gracefulTimeout'")
+}
+
 func (s *EndpointCoverageSuite) TestFcliAndDrawioRoutesValidateInput() {
 	fcliURL := fmt.Sprintf("%s/api/v1/labs/%s/fcli", s.cfg.APIURL, s.labName)
 	bodyBytes, statusCode, err := s.doRequest("POST", fcliURL, s.apiUserHeaders, bytes.NewBuffer(s.mustMarshal(map[string]string{"command": ""})), s.cfg.RequestTimeout)
