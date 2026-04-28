@@ -4869,7 +4869,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Updates an existing user. Requires superuser privileges or the user's own account.",
+                "description": "Updates an existing user. Regular users may update only their own profile fields. Group and superuser status changes require superuser privileges.",
                 "consumes": [
                     "application/json"
                 ],

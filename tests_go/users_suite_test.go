@@ -390,6 +390,76 @@ func (s *UserSuite) TestUpdateUserSelf() {
 	}
 }
 
+// TestUpdateUserSelfCannotModifyPrivilegeFields verifies regular users cannot change groups or superuser status.
+func (s *UserSuite) TestUpdateUserSelfCannotModifyPrivilegeFields() {
+	testUsername := "testuser_" + s.randomSuffix(5)
+	testPassword := "Test@123456"
+	superuserGroup := s.getEnvOrDefault("GOTEST_SUPERUSER_GROUP", "clab_admins")
+	s.logTest("Testing self-update privilege field rejection for regular user (expecting 403 Forbidden)")
+
+	defer s.deleteTestUser(testUsername)
+
+	s.createTestUser(testUsername, testPassword, false)
+
+	testUserToken := s.login(testUsername, testPassword)
+	testUserHeaders := s.getAuthHeaders(testUserToken)
+
+	updateUserURL := fmt.Sprintf("%s/api/v1/users/%s", s.cfg.APIURL, testUsername)
+	testCases := []struct {
+		name    string
+		payload map[string]interface{}
+	}{
+		{
+			name: "superuser group",
+			payload: map[string]interface{}{
+				"groups": []string{superuserGroup},
+			},
+		},
+		{
+			name: "empty groups",
+			payload: map[string]interface{}{
+				"groups": []string{},
+			},
+		},
+		{
+			name: "superuser true",
+			payload: map[string]interface{}{
+				"isSuperuser": true,
+			},
+		},
+		{
+			name: "superuser false",
+			payload: map[string]interface{}{
+				"isSuperuser": false,
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		s.Run(testCase.name, func() {
+			jsonPayload, err := json.Marshal(testCase.payload)
+			s.Require().NoError(err, "Failed to marshal update user request")
+
+			bodyBytes, statusCode, err := s.doRequest("PUT", updateUserURL, testUserHeaders, bytes.NewBuffer(jsonPayload), s.cfg.RequestTimeout)
+			s.Require().NoError(err, "Failed to execute update user request")
+			s.Assert().Equal(http.StatusForbidden, statusCode, "Expected status 403 for regular user modifying privilege fields. Body: %s", string(bodyBytes))
+
+			var errResp ErrorResponse
+			err = json.Unmarshal(bodyBytes, &errResp)
+			s.Require().NoError(err, "Failed to unmarshal error response. Body: %s", string(bodyBytes))
+			s.Assert().Contains(errResp.Error, "user groups or superuser status", "Error message should mention privilege fields")
+		})
+	}
+
+	userDetails := s.getUserDetails(testUsername, s.superuserHeaders)
+	s.Assert().False(userDetails.IsSuperuser, "User should not become a superuser")
+	s.Assert().NotContains(userDetails.Groups, superuserGroup, "User should not be added to superuser group")
+
+	if !s.T().Failed() {
+		s.logSuccess("Correctly rejected regular user self-update privilege changes")
+	}
+}
+
 // TestUpdateUserSuperuser tests a superuser updating another user's information
 func (s *UserSuite) TestUpdateUserSuperuser() {
 	// Create a test user
