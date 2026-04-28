@@ -2,6 +2,8 @@
 package api
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,6 +14,38 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/auth"
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
+
+type userUpdatePayload struct {
+	models.UserUpdateRequest
+	hasGroups      bool
+	hasIsSuperuser bool
+}
+
+func (p *userUpdatePayload) UnmarshalJSON(data []byte) error {
+	type userUpdateRequest models.UserUpdateRequest
+
+	var req userUpdateRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		return err
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+
+	p.UserUpdateRequest = models.UserUpdateRequest(req)
+	for field := range fields {
+		switch {
+		case strings.EqualFold(field, "groups"):
+			p.hasGroups = true
+		case strings.EqualFold(field, "isSuperuser"):
+			p.hasIsSuperuser = true
+		}
+	}
+
+	return nil
+}
 
 // @Summary List users
 // @Description Returns a list of system users. Requires superuser privileges.
@@ -130,7 +164,7 @@ func CreateUserHandler(c *gin.Context) {
 }
 
 // @Summary Update user
-// @Description Updates an existing user. Requires superuser privileges or the user's own account.
+// @Description Updates an existing user. Regular users may update only their own profile fields. Group and superuser status changes require superuser privileges.
 // @Tags Users
 // @Security BearerAuth
 // @Accept json
@@ -160,23 +194,31 @@ func UpdateUserHandler(c *gin.Context) {
 		return
 	}
 
-	var req models.UserUpdateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var payload userUpdatePayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
 		log.Warnf("Invalid user update request from user '%s': %v", requestingUser, err)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body: " + err.Error()})
 		return
 	}
 
-	// If not superuser, ensure they're not trying to grant superuser status
-	if !isRequestingSuperuser && req.IsSuperuser {
-		log.Warnf("User '%s' attempted to grant superuser privileges", requestingUser)
-		c.JSON(http.StatusForbidden, models.ErrorResponse{Error: "You don't have permission to modify superuser status"})
+	req := payload.UserUpdateRequest
+
+	// Only superusers may modify privilege-related fields.
+	if !isRequestingSuperuser && (payload.hasGroups || payload.hasIsSuperuser) {
+		log.Warnf("User '%s' attempted to modify privilege-related user fields", requestingUser)
+		c.JSON(http.StatusForbidden, models.ErrorResponse{Error: "You don't have permission to modify user groups or superuser status"})
 		return
 	}
 
 	// Update the user
-	err := auth.UpdateUser(targetUser, req)
+	err := auth.UpdateUser(targetUser, req, isRequestingSuperuser)
 	if err != nil {
+		if errors.Is(err, auth.ErrPrivilegeUpdateForbidden) {
+			log.Warnf("User '%s' attempted to update privilege-related fields for user '%s'", requestingUser, targetUser)
+			c.JSON(http.StatusForbidden, models.ErrorResponse{Error: "You don't have permission to modify user groups or superuser status"})
+			return
+		}
+
 		// Check if user not found - using strings.Contains instead of exact match
 		if strings.Contains(err.Error(), "unknown user "+targetUser) {
 			log.Infof("User '%s' attempted to update non-existent user '%s'", requestingUser, targetUser)

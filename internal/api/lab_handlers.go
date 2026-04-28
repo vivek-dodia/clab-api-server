@@ -49,9 +49,7 @@ import (
 // @Router /api/v1/labs [post]
 func DeployLabHandler(c *gin.Context) {
 	username := c.GetString("username")
-	// Use a fresh context with timeout for long-running containerlab operations
-	// The HTTP request context can be problematic for operations that take time
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
 	defer cancel()
 
 	// --- Bind Request Body ---
@@ -272,7 +270,7 @@ func DeployLabHandler(c *gin.Context) {
 // @Router /api/v1/labs/archive [post]
 func DeployLabArchiveHandler(c *gin.Context) {
 	username := c.GetString("username")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
 	defer cancel()
 
 	labName := c.Query("labName")
@@ -442,6 +440,10 @@ func DeployLabArchiveHandler(c *gin.Context) {
 
 // @Summary Destroy lab
 // @Description Destroys a lab by name after verifying ownership.
+// @Description
+// @Description **Notes**
+// @Description - `stream=true` returns `application/x-ndjson` lifecycle events.
+// @Description - `includeLogs=true` includes captured lifecycle logs in the JSON response.
 // @Tags Labs
 // @Security BearerAuth
 // @Produce json
@@ -449,8 +451,11 @@ func DeployLabArchiveHandler(c *gin.Context) {
 // @Param cleanup query boolean false "Remove containerlab lab artifacts after destroy"
 // @Param purgeLabDir query boolean false "Purge topology parent directory for managed lab paths (~/.clab or shared labs dir)"
 // @Param graceful query boolean false "Attempt graceful shutdown"
+// @Param gracefulTimeout query string false "Override graceful shutdown timeout when graceful=true (for example 5s or 2m)"
 // @Param keepMgmtNet query boolean false "Keep the management network"
 // @Param nodeFilter query string false "Destroy only specific nodes"
+// @Param stream query boolean false "Stream lifecycle output as NDJSON events"
+// @Param includeLogs query boolean false "Include captured lifecycle logs in the JSON response"
 // @Success 200 {object} models.GenericSuccessResponse "Lab destroyed successfully"
 // @Failure 400 {object} models.ErrorResponse "Invalid lab name"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
@@ -460,7 +465,9 @@ func DeployLabArchiveHandler(c *gin.Context) {
 func DestroyLabHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	streamLogs := c.Query("stream") == "true"
+	includeLogs := c.Query("includeLogs") == "true"
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
 	defer cancel()
 
 	if !isValidLabName(labName) {
@@ -471,6 +478,10 @@ func DestroyLabHandler(c *gin.Context) {
 	cleanup := c.Query("cleanup") == "true"
 	purgeLabDir := c.Query("purgeLabDir") == "true"
 	graceful := c.Query("graceful") == "true"
+	gracefulTimeout, ok := parseGracefulTimeoutQuery(c, graceful)
+	if !ok {
+		return
+	}
 	keepMgmtNet := c.Query("keepMgmtNet") == "true"
 	nodeFilter := c.Query("nodeFilter")
 
@@ -506,26 +517,31 @@ func DestroyLabHandler(c *gin.Context) {
 	}
 
 	destroyOpts := clab.DestroyOptions{
-		LabName:     labName,
-		TopoPath:    originalTopoPath,
-		Username:    username,
-		Graceful:    graceful,
-		Cleanup:     cleanup, // Keep containerlab cleanup behavior for all topology locations.
-		KeepMgmtNet: keepMgmtNet,
-		NodeFilter:  nodeFilterSlice,
+		LabName:         labName,
+		TopoPath:        originalTopoPath,
+		Username:        username,
+		Graceful:        graceful,
+		GracefulTimeout: gracefulTimeout,
+		Cleanup:         cleanup, // Keep containerlab cleanup behavior for all topology locations.
+		KeepMgmtNet:     keepMgmtNet,
+		NodeFilter:      nodeFilterSlice,
 	}
 
 	log.Infof("DestroyLab user '%s': Destroying lab '%s' (cleanup=%t, purgeLabDir=%t)...", username, labName, cleanup, purgeLabDir)
-	if err := svc.Destroy(ctx, destroyOpts); err != nil {
-		log.Errorf("DestroyLab failed for user '%s', lab '%s': %v", username, labName, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to destroy lab '%s': %s", labName, err.Error())})
-		return
+
+	runDestroy := func() error {
+		if err := svc.Destroy(ctx, destroyOpts); err != nil {
+			return fmt.Errorf("Failed to destroy lab '%s': %s", labName, err.Error())
+		}
+		return nil
 	}
 
-	log.Infof("Lab '%s' destroyed successfully for user '%s'.", labName, username)
+	purgeDestroyedLabDir := func() {
+		// Purge topology parent directory if requested.
+		if !purgeLabDir || originalTopoPath == "" || strings.HasPrefix(originalTopoPath, "http") {
+			return
+		}
 
-	// Purge topology parent directory if requested.
-	if purgeLabDir && originalTopoPath != "" && !strings.HasPrefix(originalTopoPath, "http") {
 		targetDir := filepath.Dir(originalTopoPath)
 
 		sharedDir := os.Getenv("CLAB_SHARED_LABS_DIR")
@@ -548,7 +564,49 @@ func DestroyLabHandler(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: fmt.Sprintf("Lab '%s' destroyed successfully", labName)})
+	successMessage := fmt.Sprintf("Lab '%s' destroyed successfully", labName)
+	if streamLogs {
+		streamLifecycleCommand(c, func() error {
+			if err := runDestroy(); err != nil {
+				return err
+			}
+			purgeDestroyedLabDir()
+			return nil
+		}, "")
+		return
+	}
+
+	lifecycleLogs := []string{}
+	if includeLogs {
+		logs, destroyErr := captureLifecycleLogs(runDestroy)
+		lifecycleLogs = logs
+		if destroyErr != nil {
+			log.Errorf("DestroyLab failed for user '%s', lab '%s': %v", username, labName, destroyErr)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": destroyErr.Error(),
+				"logs":  lifecycleLogs,
+			})
+			return
+		}
+	} else {
+		if destroyErr := runDestroy(); destroyErr != nil {
+			log.Errorf("DestroyLab failed for user '%s', lab '%s': %v", username, labName, destroyErr)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: destroyErr.Error()})
+			return
+		}
+	}
+
+	log.Infof("Lab '%s' destroyed successfully for user '%s'.", labName, username)
+	purgeDestroyedLabDir()
+	if includeLogs {
+		c.JSON(http.StatusOK, gin.H{
+			"message": successMessage,
+			"logs":    lifecycleLogs,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.GenericSuccessResponse{Message: successMessage})
 }
 
 // @Summary Redeploy lab
@@ -556,17 +614,22 @@ func DestroyLabHandler(c *gin.Context) {
 // @Description
 // @Description **Notes**
 // @Description - This operation destroys the lab and then deploys it again.
+// @Description - `stream=true` returns `application/x-ndjson` lifecycle events.
+// @Description - `includeLogs=true` includes captured lifecycle logs in the JSON response.
 // @Tags Labs
 // @Security BearerAuth
 // @Produce json
 // @Param labName path string true "Name of the lab to redeploy"
 // @Param cleanup query boolean false "Remove containerlab lab artifacts during destroy phase"
 // @Param graceful query boolean false "Attempt graceful shutdown"
+// @Param gracefulTimeout query string false "Override graceful shutdown timeout when graceful=true (for example 5s or 2m)"
 // @Param keepMgmtNet query boolean false "Keep the management network"
 // @Param maxWorkers query int false "Limit concurrent workers"
 // @Param exportTemplate query string false "Custom Go template file for topology data export"
 // @Param skipPostDeploy query boolean false "Skip post-deploy actions"
 // @Param skipLabdirAcl query boolean false "Skip setting extended ACLs on lab directory"
+// @Param stream query boolean false "Stream lifecycle output as NDJSON events"
+// @Param includeLogs query boolean false "Include captured lifecycle logs in the JSON response"
 // @Success 200 {object} models.ClabInspectOutput "Redeployed lab details"
 // @Failure 400 {object} models.ErrorResponse "Invalid lab name"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
@@ -576,6 +639,8 @@ func DestroyLabHandler(c *gin.Context) {
 func RedeployLabHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
+	streamLogs := c.Query("stream") == "true"
+	includeLogs := c.Query("includeLogs") == "true"
 
 	if !isValidLabName(labName) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid characters in lab name."})
@@ -584,6 +649,10 @@ func RedeployLabHandler(c *gin.Context) {
 
 	cleanup := c.Query("cleanup") == "true"
 	graceful := c.Query("graceful") == "true"
+	gracefulTimeout, ok := parseGracefulTimeoutQuery(c, graceful)
+	if !ok {
+		return
+	}
 	keepMgmtNet := c.Query("keepMgmtNet") == "true"
 	maxWorkersStr := c.DefaultQuery("maxWorkers", "0")
 	skipPostDeploy := c.Query("skipPostDeploy") == "true"
@@ -615,7 +684,7 @@ func RedeployLabHandler(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
 	defer cancel()
 
 	// Get current owner
@@ -624,23 +693,16 @@ func RedeployLabHandler(c *gin.Context) {
 		targetOwner = info.Owner
 	}
 
-	// Destroy
 	destroyOpts := clab.DestroyOptions{
-		TopoPath:    originalTopoPath,
-		Username:    username,
-		Graceful:    graceful,
-		Cleanup:     cleanup,
-		KeepMgmtNet: keepMgmtNet,
-		MaxWorkers:  uint(maxWorkers),
+		TopoPath:        originalTopoPath,
+		Username:        username,
+		Graceful:        graceful,
+		GracefulTimeout: gracefulTimeout,
+		Cleanup:         cleanup,
+		KeepMgmtNet:     keepMgmtNet,
+		MaxWorkers:      uint(maxWorkers),
 	}
 
-	log.Infof("RedeployLab user '%s': Destroying lab '%s'...", username, labName)
-	if err := svc.Destroy(ctx, destroyOpts); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to destroy lab '%s': %s", labName, err.Error())})
-		return
-	}
-
-	// Deploy
 	deployOpts := clab.DeployOptions{
 		TopoPath:       originalTopoPath,
 		Username:       targetOwner,
@@ -651,16 +713,84 @@ func RedeployLabHandler(c *gin.Context) {
 		SkipLabDirACLs: skipLabdirAcl,
 	}
 
-	log.Infof("RedeployLab user '%s': Deploying lab '%s'...", username, labName)
-	containers, err := svc.Deploy(ctx, deployOpts)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to redeploy lab '%s': %s", labName, err.Error())})
+	runRedeploy := func() (models.ClabInspectOutput, error) {
+		log.Infof("RedeployLab user '%s': Destroying lab '%s'...", username, labName)
+		if err := svc.Destroy(ctx, destroyOpts); err != nil {
+			return nil, fmt.Errorf("Failed to destroy lab '%s': %s", labName, err.Error())
+		}
+
+		log.Infof("RedeployLab user '%s': Deploying lab '%s'...", username, labName)
+		containers, deployErr := svc.Deploy(ctx, deployOpts)
+		if deployErr != nil {
+			return nil, fmt.Errorf("Failed to redeploy lab '%s': %s", labName, deployErr.Error())
+		}
+
+		return clab.ContainersToClabInspectOutput(containers), nil
+	}
+
+	successMessage := fmt.Sprintf("Lab '%s' redeployed successfully", labName)
+	if streamLogs {
+		streamLifecycleCommand(c, func() error {
+			_, runErr := runRedeploy()
+			if runErr != nil {
+				return runErr
+			}
+			return nil
+		}, "")
+		return
+	}
+
+	if includeLogs {
+		var result models.ClabInspectOutput
+		logs, redeployErr := captureLifecycleLogs(func() error {
+			var runErr error
+			result, runErr = runRedeploy()
+			return runErr
+		})
+		if redeployErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": redeployErr.Error(),
+				"logs":  logs,
+			})
+			return
+		}
+
+		log.Infof("RedeployLab user '%s': Lab '%s' redeployed successfully.", username, labName)
+		c.JSON(http.StatusOK, gin.H{
+			"result":  result,
+			"logs":    logs,
+			"message": successMessage,
+		})
+		return
+	}
+
+	result, redeployErr := runRedeploy()
+	if redeployErr != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: redeployErr.Error()})
 		return
 	}
 
 	log.Infof("RedeployLab user '%s': Lab '%s' redeployed successfully.", username, labName)
-	result := clab.ContainersToClabInspectOutput(containers)
 	c.JSON(http.StatusOK, result)
+}
+
+func parseGracefulTimeoutQuery(c *gin.Context, graceful bool) (time.Duration, bool) {
+	rawTimeout, exists := c.GetQuery("gracefulTimeout")
+	if !exists {
+		return 0, true
+	}
+	if !graceful {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "'gracefulTimeout' requires graceful=true"})
+		return 0, false
+	}
+
+	timeout, err := time.ParseDuration(rawTimeout)
+	if err != nil || timeout <= 0 {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid 'gracefulTimeout' query parameter. Use a positive duration like '5s'."})
+		return 0, false
+	}
+
+	return timeout, true
 }
 
 // @Summary Inspect lab
@@ -695,7 +825,7 @@ func InspectLabHandler(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
 	defer cancel()
 
 	containers, err := svc.ListContainers(ctx, clab.ListOptions{LabName: labName})
@@ -759,7 +889,7 @@ func InspectInterfacesHandler(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
 	defer cancel()
 
 	containers, err := svc.ListContainers(ctx, clab.ListOptions{LabName: labName})
@@ -819,7 +949,7 @@ func ListLabsHandler(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
 	defer cancel()
 
 	containers, err := svc.ListContainers(ctx, clab.ListOptions{})
@@ -910,7 +1040,7 @@ func SaveLabConfigHandler(c *gin.Context) {
 		NodeFilter: nodeFilterSlice,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
 	defer cancel()
 
 	log.Infof("SaveLabConfig user '%s': Saving config for lab '%s'...", username, labName)
@@ -983,7 +1113,7 @@ func ExecCommandHandler(c *gin.Context) {
 		Username:      username,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
 	defer cancel()
 
 	log.Infof("ExecCommand user '%s': Executing command on lab '%s'...", username, labName)

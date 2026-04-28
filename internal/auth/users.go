@@ -3,6 +3,7 @@ package auth
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,6 +24,8 @@ const (
 	passwdBin   = "/usr/bin/passwd"
 	groupsBin   = "/usr/bin/groups"
 )
+
+var ErrPrivilegeUpdateForbidden = errors.New("privilege updates require superuser privileges")
 
 // GetAllUsers returns a list of all system users that are relevant to the API
 // Filters out system accounts or other internal users by their UID ranges
@@ -210,8 +213,12 @@ func CreateUser(req models.UserCreateRequest) error {
 	return nil
 }
 
-// UpdateUser updates the specified user's information
-func UpdateUser(username string, req models.UserUpdateRequest) error {
+// UpdateUser updates the specified user's information.
+func UpdateUser(username string, req models.UserUpdateRequest, allowPrivilegeUpdate bool) error {
+	if !allowPrivilegeUpdate && (len(req.Groups) > 0 || req.IsSuperuser) {
+		return ErrPrivilegeUpdateForbidden
+	}
+
 	// Check if user exists
 	_, err := user.Lookup(username)
 	if err != nil {

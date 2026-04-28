@@ -4,6 +4,7 @@ package tests_go
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -67,7 +68,7 @@ func TestMain(m *testing.M) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	globalCfg = TestConfig{
-		APIURL:                getEnv("API_URL", "http://127.0.0.1:8080"),
+		APIURL:                getEnv("API_URL", "https://127.0.0.1:8090"),
 		SuperuserUser:         getEnv("SUPERUSER_USER", "root"),
 		SuperuserPass:         getEnv("SUPERUSER_PASS", "rootpassword"),
 		APIUserUser:           getEnv("APIUSER_USER", "test"),
@@ -76,7 +77,7 @@ func TestMain(m *testing.M) {
 		UnauthPass:            getEnv("UNAUTH_PASS", "test2"),
 		RequestTimeout:        getEnvDuration("GOTEST_TIMEOUT_REQUEST", 15*time.Second),
 		DeployTimeout:         getEnvDuration("GOTEST_TIMEOUT_DEPLOY", 240*time.Second),
-		CleanupTimeout:        getEnvDuration("GOTEST_TIMEOUT_CLEANUP", 180*time.Second),
+		CleanupTimeout:        getEnvDuration("GOTEST_TIMEOUT_CLEANUP", 360*time.Second),
 		StabilizePause:        getEnvDuration("GOTEST_STABILIZE_PAUSE", 10*time.Second),
 		CleanupPause:          getEnvDuration("GOTEST_CLEANUP_PAUSE", 3*time.Second),
 		LabNamePrefix:         getEnv("GOTEST_LAB_NAME_PREFIX", "gotest"),
@@ -89,6 +90,12 @@ func TestMain(m *testing.M) {
 	if !strings.Contains(globalCfg.SimpleTopologyContent, "{lab_name}") {
 		fmt.Println("Error: GOTEST_SIMPLE_TOPOLOGY_CONTENT must contain '{lab_name}' placeholder.")
 		os.Exit(1)
+	}
+
+	http.DefaultClient = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // Test client accepts local self-signed certificates.
+		},
 	}
 
 	exitCode := m.Run()
@@ -237,6 +244,18 @@ func (s *BaseSuite) getAuthHeaders(token string) http.Header {
 	}
 	headers.Set("Content-Type", "application/json")
 	return headers
+}
+
+func (s *BaseSuite) loginBothUsers() (apiUserHeaders, superuserHeaders http.Header) {
+	s.T().Helper()
+
+	apiUserToken := s.login(s.cfg.APIUserUser, s.cfg.APIUserPass)
+	superuserToken := s.login(s.cfg.SuperuserUser, s.cfg.SuperuserPass)
+
+	require.NotEmpty(s.T(), apiUserToken)
+	require.NotEmpty(s.T(), superuserToken)
+
+	return s.getAuthHeaders(apiUserToken), s.getAuthHeaders(superuserToken)
 }
 
 // createLab sends the request to create/reconfigure a lab.
@@ -424,6 +443,35 @@ func (s *BaseSuite) cleanupLab(labName string, performCleanup bool) {
 	}
 	s.logDebug("Pausing for %v after cleanup...", s.cfg.CleanupPause)
 	time.Sleep(s.cfg.CleanupPause)
+}
+
+func (s *BaseSuite) firstContainerInLab(labName string, headers http.Header) ClabContainerInfo {
+	s.T().Helper()
+
+	inspectURL := fmt.Sprintf("%s/api/v1/labs/%s", s.cfg.APIURL, labName)
+	bodyBytes, statusCode, err := s.doRequest("GET", inspectURL, headers, nil, s.cfg.RequestTimeout)
+	require.NoError(s.T(), err, "Failed to inspect lab '%s'", labName)
+	require.Equal(s.T(), http.StatusOK, statusCode, "Expected 200 inspecting lab '%s'. Body: %s", labName, string(bodyBytes))
+
+	var containers []ClabContainerInfo
+	require.NoError(s.T(), json.Unmarshal(bodyBytes, &containers), "Failed to unmarshal inspect response. Body: %s", string(bodyBytes))
+	require.NotEmpty(s.T(), containers, "Expected at least one container in lab '%s'", labName)
+	require.NotEmpty(s.T(), containers[0].Name, "Expected first container in lab '%s' to have a name", labName)
+
+	return containers[0]
+}
+
+func (s *BaseSuite) assertJSONError(bodyBytes []byte, contains string) {
+	s.T().Helper()
+
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	require.NoError(s.T(), json.Unmarshal(bodyBytes, &errResp), "Failed to unmarshal error response. Body: %s", string(bodyBytes))
+	require.NotEmpty(s.T(), errResp.Error, "Expected non-empty error response. Body: %s", string(bodyBytes))
+	if contains != "" {
+		require.Contains(s.T(), errResp.Error, contains)
+	}
 }
 
 // --- Generic HTTP Request Helper (method on BaseSuite) ---

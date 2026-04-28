@@ -37,8 +37,9 @@ func ShutdownSSHManager() {
 	}
 }
 
-// @Summary Request SSH access to lab node
-// @Description Creates temporary SSH access to a lab node and returns connection details.
+// @Summary Request temporary SSH access details
+// @Description Creates temporary SSH access to a lab node and returns connection details for an external SSH client.
+// @Description This endpoint does not create a browser terminal session. For browser terminals, use `/api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions` with `protocol=ssh`.
 // @Tags SSH Access
 // @Security BearerAuth
 // @Accept json

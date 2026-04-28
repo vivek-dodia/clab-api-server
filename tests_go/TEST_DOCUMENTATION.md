@@ -169,7 +169,7 @@ The tests require a running Containerlab API server and appropriate user account
 The test suite can be configured using environment variables:
 
 ```
-API_URL=http://127.0.0.1:8080
+API_URL=https://127.0.0.1:8090
 SUPERUSER_USER=root
 SUPERUSER_PASS=rootpassword
 APIUSER_USER=test
@@ -178,7 +178,7 @@ UNAUTH_USER=test2
 UNAUTH_PASS=test2
 GOTEST_TIMEOUT_REQUEST=15s
 GOTEST_TIMEOUT_DEPLOY=240s
-GOTEST_TIMEOUT_CLEANUP=180s
+GOTEST_TIMEOUT_CLEANUP=360s
 GOTEST_STABILIZE_PAUSE=10s
 GOTEST_CLEANUP_PAUSE=3s
 GOTEST_LAB_NAME_PREFIX=gotest

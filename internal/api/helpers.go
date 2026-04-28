@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/charmbracelet/log"
 	"github.com/gin-gonic/gin"
@@ -99,6 +100,18 @@ func isValidCertName(name string) bool {
 		return false
 	}
 	return certNameRegex.MatchString(name)
+}
+
+func isValidRuntimeImageReference(reference string) bool {
+	if reference == "" || strings.TrimSpace(reference) != reference || len(reference) > 512 {
+		return false
+	}
+	for _, r := range reference {
+		if unicode.IsSpace(r) || unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // isValidDurationString checks if a string can be parsed as a duration >= 0

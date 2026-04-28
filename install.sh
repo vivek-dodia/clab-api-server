@@ -110,12 +110,12 @@ create_env() {
 # Containerlab API Server configuration
 # Edit this file, then enable + start the service.
 
-API_PORT=8080
+API_PORT=8090
 LOG_LEVEL=info
 
 # --- Authentication ---
 JWT_SECRET=please_change_me
-JWT_EXPIRATION_MINUTES=60m
+JWT_EXPIRATION=24h
 API_USER_GROUP=clab_api
 SUPERUSER_GROUP=clab_admins
 
@@ -126,8 +126,9 @@ CLAB_RUNTIME=docker
 GIN_MODE=release
 TRUSTED_PROXIES=
 
-# --- TLS (optional) ---
-#TLS_ENABLE=true
+# --- TLS ---
+TLS_ENABLE=true
+TLS_AUTO_CERT=true
 #TLS_CERT_FILE=/etc/clab-api-server/certs/server.pem
 #TLS_KEY_FILE=/etc/clab-api-server/certs/server-key.pem
 EOF

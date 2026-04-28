@@ -53,23 +53,15 @@ func HealthCheckHandler(c *gin.Context) {
 }
 
 // @Summary Get system metrics
-// @Description Returns detailed CPU, memory, and disk metrics for the API server. Requires superuser privileges.
+// @Description Returns detailed CPU, memory, and disk metrics for the API server. Requires authentication.
 // @Tags Health
 // @Security BearerAuth
 // @Produce json
 // @Success 200 {object} models.MetricsResponse "System metrics"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized"
-// @Failure 403 {object} models.ErrorResponse "Forbidden (User is not a superuser)"
 // @Failure 500 {object} models.ErrorResponse "Internal server error gathering metrics"
 // @Router /api/v1/health/metrics [get]
 func SystemMetricsHandler(c *gin.Context) {
-	username := c.GetString("username")
-
-	// --- Authorization: Superuser Only ---
-	if !requireSuperuser(c, username, "access system metrics") {
-		return
-	}
-
 	// Get metrics
 	metrics, err := gatherSystemMetrics()
 	if err != nil {

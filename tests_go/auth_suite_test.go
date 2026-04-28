@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -18,6 +20,50 @@ type AuthSuite struct {
 // TestAuthSuite runs the AuthSuite
 func TestAuthSuite(t *testing.T) {
 	suite.Run(t, new(AuthSuite))
+}
+
+func parseTokenLifetime(token string) (time.Duration, error) {
+	claims := &jwt.RegisteredClaims{}
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	if _, _, err := parser.ParseUnverified(token, claims); err != nil {
+		return 0, err
+	}
+	if claims.IssuedAt == nil || claims.ExpiresAt == nil {
+		return 0, jwt.ErrTokenMalformed
+	}
+	return claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time), nil
+}
+
+func (s *AuthSuite) loginWithSessionDuration(username, password, sessionDuration string) string {
+	s.T().Helper()
+
+	loginURL := s.cfg.APIURL + "/login"
+	payload := map[string]string{
+		"username": username,
+		"password": password,
+	}
+	if sessionDuration != "" {
+		payload["sessionDuration"] = sessionDuration
+	}
+
+	bodyBytes, statusCode, err := s.doRequest(
+		"POST",
+		loginURL,
+		s.getAuthHeaders(""),
+		bytes.NewBuffer(s.mustMarshal(payload)),
+		s.cfg.RequestTimeout,
+	)
+	s.Require().NoError(err, "Login request execution failed")
+	s.Require().Equal(http.StatusOK, statusCode, "Unexpected login status. Body: %s", string(bodyBytes))
+
+	var loginResp struct {
+		Token string `json:"token"`
+	}
+	err = json.Unmarshal(bodyBytes, &loginResp)
+	s.Require().NoError(err, "Failed to unmarshal login response. Body: %s", string(bodyBytes))
+	s.Require().NotEmpty(loginResp.Token, "Login successful but token is empty")
+
+	return loginResp.Token
 }
 
 func (s *AuthSuite) TestLoginSuperuser() {
@@ -100,4 +146,63 @@ func (s *AuthSuite) TestUnauthorizedUserLogin() {
 	if statusCode == http.StatusUnauthorized && errResp.Error != "" {
 		s.logSuccess("Unauthorized user login correctly rejected with 401 Unauthorized")
 	}
+}
+
+func (s *AuthSuite) TestLoginDefaultSessionDuration() {
+	token := s.login(s.cfg.SuperuserUser, s.cfg.SuperuserPass)
+	lifetime, err := parseTokenLifetime(token)
+
+	s.Require().NoError(err)
+	s.Assert().InDelta((24 * time.Hour).Seconds(), lifetime.Seconds(), 120, "Expected the default token lifetime to be about 24h")
+}
+
+func (s *AuthSuite) TestLoginOneDaySessionDuration() {
+	token := s.loginWithSessionDuration(s.cfg.SuperuserUser, s.cfg.SuperuserPass, "1d")
+	lifetime, err := parseTokenLifetime(token)
+
+	s.Require().NoError(err)
+	s.Assert().InDelta((24 * time.Hour).Seconds(), lifetime.Seconds(), 120, "Expected the 1d token lifetime to be about 24h")
+}
+
+func (s *AuthSuite) TestLoginSevenDaySessionDuration() {
+	token := s.loginWithSessionDuration(s.cfg.SuperuserUser, s.cfg.SuperuserPass, "7d")
+	lifetime, err := parseTokenLifetime(token)
+
+	s.Require().NoError(err)
+	s.Assert().InDelta((7 * 24 * time.Hour).Seconds(), lifetime.Seconds(), 120, "Expected the 7d token lifetime to be about 7 days")
+}
+
+func (s *AuthSuite) TestLoginCustomSessionDuration() {
+	token := s.loginWithSessionDuration(s.cfg.SuperuserUser, s.cfg.SuperuserPass, "36h")
+	lifetime, err := parseTokenLifetime(token)
+
+	s.Require().NoError(err)
+	s.Assert().InDelta((36 * time.Hour).Seconds(), lifetime.Seconds(), 120, "Expected the 36h token lifetime to be about 36 hours")
+}
+
+func (s *AuthSuite) TestInvalidSessionDurationLogin() {
+	loginURL := s.cfg.APIURL + "/login"
+	payload := map[string]string{
+		"username":        s.cfg.SuperuserUser,
+		"password":        s.cfg.SuperuserPass,
+		"sessionDuration": "forever",
+	}
+
+	bodyBytes, statusCode, err := s.doRequest(
+		"POST",
+		loginURL,
+		s.getAuthHeaders(""),
+		bytes.NewBuffer(s.mustMarshal(payload)),
+		s.cfg.RequestTimeout,
+	)
+
+	s.Require().NoError(err)
+	s.Assert().Equal(http.StatusBadRequest, statusCode, "Expected invalid session duration to return 400")
+
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	err = json.Unmarshal(bodyBytes, &errResp)
+	s.Assert().NoError(err, "Could not unmarshal error response: %v", err)
+	s.Assert().Contains(errResp.Error, "Invalid session duration")
 }

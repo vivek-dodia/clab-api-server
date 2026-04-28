@@ -9,8 +9,9 @@ import (
 
 // LoginRequest represents the payload for the login endpoint
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Username        string `json:"username" binding:"required"`
+	Password        string `json:"password" binding:"required"`
+	SessionDuration string `json:"sessionDuration,omitempty" example:"24h"`
 }
 
 // LoginResponse represents the payload returned after successful login
@@ -84,6 +85,21 @@ type ErrorResponse struct {
 // GenericSuccessResponse for simple success messages
 type GenericSuccessResponse struct {
 	Message string `json:"message"`
+}
+
+// SimpleSuccessResponse for operations that only return a boolean success flag.
+type SimpleSuccessResponse struct {
+	Success bool `json:"success" example:"true"`
+}
+
+// TopologyDocEventResponse describes a streamed topology document change event.
+type TopologyDocEventResponse struct {
+	Type         string `json:"type" example:"topology-doc"`
+	LabName      string `json:"labName" example:"mylab"`
+	Path         string `json:"path" example:"mylab.clab.yml.annotations.json"`
+	DocumentKind string `json:"documentKind" example:"annotations"`
+	Action       string `json:"action" example:"change"`
+	Revision     string `json:"revision" example:"yaml=123-456;annotations=78-910"`
 }
 
 // --- Structs for parsing `clab inspect --format json` output ---
@@ -198,6 +214,34 @@ type SaveConfigResponse struct {
 	Message string `json:"message"`
 	// Detailed output from the 'clab save' command (often from stderr).
 	Output string `json:"output"`
+}
+
+// TopologyEntry describes an editable topology file exposed to the standalone UI.
+type TopologyEntry struct {
+	LabName             string `json:"labName"`
+	YamlFileName        string `json:"yamlFileName"`
+	AnnotationsFileName string `json:"annotationsFileName"`
+	HasAnnotations      bool   `json:"hasAnnotations"`
+	DeploymentState     string `json:"deploymentState"` // undeployed (runtime state is derived from events stream)
+}
+
+// TopologyFileRenameRequest describes a scoped file rename operation inside a lab directory.
+type TopologyFileRenameRequest struct {
+	OldPath string `json:"oldPath" binding:"required" example:"configs/startup.cfg"`
+	NewPath string `json:"newPath" binding:"required" example:"configs/startup.bak.cfg"`
+}
+
+// ImportTopologyFromURLRequest describes an undeployed topology import from a remote source URL.
+type ImportTopologyFromURLRequest struct {
+	TopologySourceUrl string `json:"topologySourceUrl" binding:"required"`
+}
+
+// ImportTopologyFromURLResponse describes the result of an undeployed topology import.
+type ImportTopologyFromURLResponse struct {
+	Success  bool          `json:"success"`
+	LabName  string        `json:"labName"`
+	FileName string        `json:"fileName"`
+	Topology TopologyEntry `json:"topology"`
 }
 
 // --- Structs for Tools ---

@@ -9,21 +9,261 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "http://swagger.io/terms/",
         "contact": {
-            "name": "API Support",
-            "url": "https://swagger.io/support/",
-            "email": "support@swagger.io"
+            "name": "Containerlab API Server maintainers",
+            "url": "https://github.com/srl-labs/clab-api-server/issues"
         },
         "license": {
             "name": "Apache 2.0",
-            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+            "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
         },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/capture/wireshark-vnc-sessions": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Terminates all capture VNC sessions owned by the authenticated user. Superusers terminate all sessions.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Delete all Wireshark VNC sessions",
+                "responses": {
+                    "200": {
+                        "description": "Capture sessions terminated",
+                        "schema": {
+                            "$ref": "#/definitions/models.CaptureCloseAllResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/capture/wireshark-vnc-sessions/{sessionId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Terminates a capture VNC session and stops the corresponding Wireshark container.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Delete Wireshark VNC session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Capture session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Capture session terminated",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/capture/wireshark-vnc-sessions/{sessionId}/ready": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns whether a capture VNC session is ready and its proxied URL path.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Get Wireshark VNC session readiness",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Capture session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Readiness state",
+                        "schema": {
+                            "$ref": "#/definitions/models.CaptureWiresharkVncReadyResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/capture/wireshark-vnc-sessions/{sessionId}/vnc/{proxyPath}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Proxies noVNC HTTP assets for a capture session. WebSocket upgrades on this path are used by noVNC but are not represented in Swagger.",
+                "produces": [
+                    "text/html"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Proxy Wireshark VNC assets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Capture session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Proxy subpath under the noVNC root",
+                        "name": "proxyPath",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Proxied noVNC asset response",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "VNC proxy upstream error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/events": {
             "get": {
                 "security": [
@@ -160,7 +400,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns detailed CPU, memory, and disk metrics for the API server. Requires superuser privileges.",
+                "description": "Returns detailed CPU, memory, and disk metrics for the API server. Requires authentication.",
                 "produces": [
                     "application/json"
                 ],
@@ -181,14 +421,161 @@ const docTemplate = `{
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
-                    "403": {
-                        "description": "Forbidden (User is not a superuser)",
+                    "500": {
+                        "description": "Internal server error gathering metrics",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/images": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Images"
+                ],
+                "summary": "List runtime images",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.RuntimeImagesResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal server error gathering metrics",
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Images"
+                ],
+                "summary": "Remove a runtime image",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Image reference or ID",
+                        "name": "reference",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Force image removal",
+                        "name": "force",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.RuntimeImageActionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/images/pull": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Images"
+                ],
+                "summary": "Pull a runtime image",
+                "parameters": [
+                    {
+                        "description": "Image reference",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RuntimeImagePullRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.RuntimeImageActionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -452,6 +839,115 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/labs/topology/files": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns editable topology entries from the authenticated user's lab directory.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "List editable lab topology files",
+                "responses": {
+                    "200": {
+                        "description": "Topology entries",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.TopologyEntry"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/topology/import-from-url": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Clones a supported Git repository URL and registers it as an undeployed lab.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Import topology repository as undeployed lab",
+                "parameters": [
+                    {
+                        "description": "Topology source URL",
+                        "name": "import_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ImportTopologyFromURLRequest"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Override imported lab name",
+                        "name": "labNameOverride",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Import result",
+                        "schema": {
+                            "$ref": "#/definitions/models.ImportTopologyFromURLResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Lab already exists",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/labs/{labName}": {
             "get": {
                 "security": [
@@ -518,7 +1014,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Redeploys a lab by name.\n\n**Notes**\n- This operation destroys the lab and then deploys it again.",
+                "description": "Redeploys a lab by name.\n\n**Notes**\n- This operation destroys the lab and then deploys it again.\n- ` + "`" + `stream=true` + "`" + ` returns ` + "`" + `application/x-ndjson` + "`" + ` lifecycle events.\n- ` + "`" + `includeLogs=true` + "`" + ` includes captured lifecycle logs in the JSON response.",
                 "produces": [
                     "application/json"
                 ],
@@ -544,6 +1040,12 @@ const docTemplate = `{
                         "type": "boolean",
                         "description": "Attempt graceful shutdown",
                         "name": "graceful",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Override graceful shutdown timeout when graceful=true (for example 5s or 2m)",
+                        "name": "gracefulTimeout",
                         "in": "query"
                     },
                     {
@@ -574,6 +1076,18 @@ const docTemplate = `{
                         "type": "boolean",
                         "description": "Skip setting extended ACLs on lab directory",
                         "name": "skipLabdirAcl",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Stream lifecycle output as NDJSON events",
+                        "name": "stream",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include captured lifecycle logs in the JSON response",
+                        "name": "includeLogs",
                         "in": "query"
                     }
                 ],
@@ -616,7 +1130,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Destroys a lab by name after verifying ownership.",
+                "description": "Destroys a lab by name after verifying ownership.\n\n**Notes**\n- ` + "`" + `stream=true` + "`" + ` returns ` + "`" + `application/x-ndjson` + "`" + ` lifecycle events.\n- ` + "`" + `includeLogs=true` + "`" + ` includes captured lifecycle logs in the JSON response.",
                 "produces": [
                     "application/json"
                 ],
@@ -651,6 +1165,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "Override graceful shutdown timeout when graceful=true (for example 5s or 2m)",
+                        "name": "gracefulTimeout",
+                        "in": "query"
+                    },
+                    {
                         "type": "boolean",
                         "description": "Keep the management network",
                         "name": "keepMgmtNet",
@@ -660,6 +1180,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Destroy only specific nodes",
                         "name": "nodeFilter",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Stream lifecycle output as NDJSON events",
+                        "name": "stream",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include captured lifecycle logs in the JSON response",
+                        "name": "includeLogs",
                         "in": "query"
                     }
                 ],
@@ -684,6 +1216,294 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Lab not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/capture/packetflix": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Builds packetflix URI(s) for the provided lab interface targets (non-VNC capture mode).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Build packetflix capture URI",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Packetflix capture request",
+                        "name": "capture_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CapturePacketflixRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Packetflix capture URI payload",
+                        "schema": {
+                            "$ref": "#/definitions/models.CapturePacketflixResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Lab or container not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "EdgeShark not running",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/capture/wireshark-vnc-sessions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates one or more Wireshark noVNC capture sessions for the specified lab interface targets.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Create Wireshark VNC capture session(s)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Wireshark VNC capture request",
+                        "name": "capture_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CaptureWiresharkVncRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Created capture sessions",
+                        "schema": {
+                            "$ref": "#/definitions/models.CaptureWiresharkVncCreateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Lab or container not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "EdgeShark not running",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/deploy": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deploys an on-disk topology from the authenticated user's lab directory.\n\n**Notes**\n- ` + "`" + `path` + "`" + ` defaults to ` + "`" + `\u003clabName\u003e.clab.yml` + "`" + ` when omitted.\n- ` + "`" + `stream=true` + "`" + ` returns ` + "`" + `application/x-ndjson` + "`" + ` lifecycle events.\n- ` + "`" + `includeLogs=true` + "`" + ` includes captured lifecycle logs in the JSON response.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Deploy on-disk topology for lab",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative topology file path inside lab directory (defaults to \u003clabName\u003e.clab.yml)",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Allow overwriting an existing lab",
+                        "name": "reconfigure",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit concurrent workers",
+                        "name": "maxWorkers",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Custom Go template file for topology data export",
+                        "name": "exportTemplate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated list of node names to deploy",
+                        "name": "nodeFilter",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Skip post-deploy actions",
+                        "name": "skipPostDeploy",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Skip setting extended ACLs on lab directory",
+                        "name": "skipLabdirAcl",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Stream lifecycle output as NDJSON events",
+                        "name": "stream",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include captured lifecycle logs in the JSON response",
+                        "name": "includeLogs",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Deployed lab details",
+                        "schema": {
+                            "$ref": "#/definitions/models.ClabInspectOutput"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Topology file not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -773,6 +1593,216 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/labs/{labName}/fcli": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Runs an fcli command against the selected lab topology.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs - Tools"
+                ],
+                "summary": "Run fcli command",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "fcli command request",
+                        "name": "fcli_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.FcliCommandRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.FcliCommandResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/gotty/{action}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Executes GoTTY share action (attach, detach, reattach) for a lab.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs - Sharing"
+                ],
+                "summary": "GoTTY share action",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Action (attach|detach|reattach)",
+                        "name": "action",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "GoTTY port (attach/reattach only)",
+                        "name": "port",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ShareToolResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/graph/drawio": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generates a draw.io diagram from a lab topology and returns the generated XML content.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs - Graph"
+                ],
+                "summary": "Generate draw.io graph",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Draw.io generation options",
+                        "name": "drawio_request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/models.DrawioGenerateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.DrawioGenerateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/labs/{labName}/interfaces": {
             "get": {
                 "security": [
@@ -833,6 +1863,71 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/nodes/{nodeName}/browser-ports": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns exposed host ports for a node suitable for opening in a browser.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs - Nodes"
+                ],
+                "summary": "Get node browser ports",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Node Name",
+                        "name": "nodeName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.NodeBrowserPortsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -925,6 +2020,71 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/labs/{labName}/nodes/{nodeName}/pause": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Pauses a running node in a lab.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs - Nodes"
+                ],
+                "summary": "Pause node",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Node Name",
+                        "name": "nodeName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/labs/{labName}/nodes/{nodeName}/ssh": {
             "post": {
                 "security": [
@@ -932,7 +2092,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates temporary SSH access to a lab node and returns connection details.",
+                "description": "Creates temporary SSH access to a lab node and returns connection details for an external SSH client.\nThis endpoint does not create a browser terminal session. For browser terminals, use ` + "`" + `/api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions` + "`" + ` with ` + "`" + `protocol=ssh` + "`" + `.",
                 "consumes": [
                     "application/json"
                 ],
@@ -942,7 +2102,7 @@ const docTemplate = `{
                 "tags": [
                     "SSH Access"
                 ],
-                "summary": "Request SSH access to lab node",
+                "summary": "Request temporary SSH access details",
                 "parameters": [
                     {
                         "type": "string",
@@ -1007,6 +2167,284 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/labs/{labName}/nodes/{nodeName}/start": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a stopped node in a lab.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs - Nodes"
+                ],
+                "summary": "Start node",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Node Name",
+                        "name": "nodeName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/nodes/{nodeName}/stop": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stops a running node in a lab.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs - Nodes"
+                ],
+                "summary": "Stop node",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Node Name",
+                        "name": "nodeName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a constrained interactive terminal session for an owned lab node using one of the supported protocols: ` + "`" + `ssh` + "`" + `, ` + "`" + `shell` + "`" + `, or ` + "`" + `telnet` + "`" + `.\n\n**Protocol behavior**\n- ` + "`" + `ssh` + "`" + `: launches the server-side ` + "`" + `ssh` + "`" + ` client in a PTY directly to the node management IP and streams that terminal over WebSocket.\n- ` + "`" + `shell` + "`" + `: launches a PTY-backed ` + "`" + `docker|podman exec -it \u003ccontainer\u003e \u003cserver-selected-command\u003e` + "`" + ` session.\n- ` + "`" + `telnet` + "`" + `: launches a PTY-backed ` + "`" + `docker|podman exec -it \u003ccontainer\u003e telnet 127.0.0.1 \u003cport\u003e` + "`" + ` session.\n\n**Security notes**\n- The backend chooses the launch command for every protocol. Clients choose only the protocol and terminal size.\n- Access is limited to owned nodes unless the caller is a configured superuser.\n\n**Relationship to ` + "`" + `/api/v1/labs/{labName}/nodes/{nodeName}/ssh` + "`" + `**\n- This endpoint creates the interactive browser terminal session.\n- The separate ` + "`" + `/ssh` + "`" + ` endpoint returns temporary SSH access details for an external SSH client and is not required for browser terminals.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terminal Sessions"
+                ],
+                "summary": "Create browser terminal session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Full container name of the node (e.g., clab-my-lab-srl1)",
+                        "name": "nodeName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Terminal session creation parameters",
+                        "name": "terminal_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TerminalSessionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Created terminal session",
+                        "schema": {
+                            "$ref": "#/definitions/models.TerminalSessionInfo"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameters",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Lab or node not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too many active terminal sessions",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/nodes/{nodeName}/unpause": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Unpauses a paused node in a lab.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs - Nodes"
+                ],
+                "summary": "Unpause node",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Node Name",
+                        "name": "nodeName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/labs/{labName}/save": {
             "post": {
                 "security": [
@@ -1058,6 +2496,798 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Lab not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/sshx/{action}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Executes SSHX share action (attach, detach, reattach) for a lab.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs - Sharing"
+                ],
+                "summary": "SSHX share action",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Action (attach|detach|reattach)",
+                        "name": "action",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ShareToolResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/topology/annotations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns annotations for the specified lab. For deployed labs, the running annotations path is preferred and local files are used as fallback.",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Get lab annotations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Annotations content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid lab name",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "File not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates annotations for the specified lab. For deployed labs, writes to the running annotations path when present and otherwise writes to local files.",
+                "consumes": [
+                    "text/plain"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Update lab annotations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Annotations content",
+                        "name": "content",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Write success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Lab not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/topology/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams topology YAML/annotations change events for a single lab topology document pair as NDJSON.",
+                "produces": [
+                    "application/x-ndjson"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Stream topology document events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative topology YAML or annotations path inside lab directory",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Topology document event stream",
+                        "schema": {
+                            "$ref": "#/definitions/models.TopologyDocEventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid path",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/topology/file": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reads a file from within the specified lab directory using a scoped relative path.",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Read lab topology file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative file path inside lab directory",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "File content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid path",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "File not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Writes a file inside the specified lab directory using a scoped relative path.",
+                "consumes": [
+                    "text/plain"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Write lab topology file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative file path inside lab directory",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "File content",
+                        "name": "content",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Write success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a file inside the specified lab directory using a scoped relative path.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Delete lab topology file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative file path inside lab directory",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Delete success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid path",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "head": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Checks whether a file exists inside the specified lab directory.",
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Check lab topology file existence",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative file path inside lab directory",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "File exists"
+                    },
+                    "400": {
+                        "description": "Invalid path"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "File not found"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/topology/file/rename": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Renames or moves a file inside the specified lab directory using scoped relative paths.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Rename lab topology file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Old and new relative file paths",
+                        "name": "rename_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TopologyFileRenameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Rename success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/topology/yaml": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the topology YAML for the specified lab. For deployed labs, the running topology source path is preferred and local files are used as fallback.",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Get lab topology YAML",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Topology YAML content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid lab name",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "File not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates the topology YAML for the specified lab. For deployed labs, writes to the running topology source when present and otherwise writes to local files.",
+                "consumes": [
+                    "text/plain"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Update lab topology YAML",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Topology YAML content",
+                        "name": "content",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Write success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Lab not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/ui/icons": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the custom TopoViewer icons available for a lab, merging lab-local .clab-icons with the global ~/.clab/icons library. Lab-local icons take precedence.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "List lab custom icons",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Merged lab icon list",
+                        "schema": {
+                            "$ref": "#/definitions/models.IconListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid lab name",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/ui/icons/reconcile": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Copies used custom icons from the global ~/.clab/icons library into the lab-local .clab-icons directory and removes unused lab-local custom icons.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Reconcile lab custom icons",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Used custom icon names",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.IconReconcileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reconcile success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -1170,6 +3400,172 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/terminal-sessions/{sessionId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns metadata and lifecycle state for a terminal session.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terminal Sessions"
+                ],
+                "summary": "Get terminal session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Terminal session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Terminal session metadata",
+                        "schema": {
+                            "$ref": "#/definitions/models.TerminalSessionInfo"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Terminates a terminal session owned by the caller (or any session for a superuser).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terminal Sessions"
+                ],
+                "summary": "Terminate terminal session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Terminal session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Terminal session terminated",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/terminal-sessions/{sessionId}/stream": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upgrades the request to a WebSocket connection for terminal input, output, resize, and close events.\n\n**Protocol notes**\n- Connect with a WebSocket client to this endpoint after creating a terminal session.\n- Client messages are JSON objects with ` + "`" + `type` + "`" + ` set to ` + "`" + `input` + "`" + `, ` + "`" + `resize` + "`" + `, or ` + "`" + `close` + "`" + `.\n- Server messages are JSON objects with ` + "`" + `type` + "`" + ` set to ` + "`" + `ready` + "`" + `, ` + "`" + `output` + "`" + `, or ` + "`" + `exit` + "`" + `.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Terminal Sessions"
+                ],
+                "summary": "Stream terminal session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Terminal session ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "101": {
+                        "description": "Switching Protocols to WebSocket",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Session already attached",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "410": {
+                        "description": "Session already exited",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -1377,6 +3773,129 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal server error or clab execution failed",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tools/edgeshark/install": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Installs and starts EdgeShark services on the host runtime using compose.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Install EdgeShark",
+                "responses": {
+                    "200": {
+                        "description": "EdgeShark installed",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Superuser privileges required",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tools/edgeshark/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns whether EdgeShark is reachable and its runtime details.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Get EdgeShark status",
+                "responses": {
+                    "200": {
+                        "description": "EdgeShark status",
+                        "schema": {
+                            "$ref": "#/definitions/models.EdgeSharkStatusResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tools/edgeshark/uninstall": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stops and removes EdgeShark services managed by compose.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Capture"
+                ],
+                "summary": "Uninstall EdgeShark",
+                "responses": {
+                    "200": {
+                        "description": "EdgeShark uninstalled",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Superuser privileges required",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -1768,6 +4287,424 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/ui/custom-nodes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the authenticated user's persisted TopoViewer custom node templates. If none have been saved yet, seeded defaults matching VS Code are returned.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "List custom node templates",
+                "responses": {
+                    "200": {
+                        "description": "Custom node templates",
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the authenticated user's full TopoViewer custom node template collection.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Replace custom node templates",
+                "parameters": [
+                    {
+                        "description": "Replacement custom node template collection",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesReplaceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated custom node templates",
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates or updates a single TopoViewer custom node template for the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Save custom node template",
+                "parameters": [
+                    {
+                        "description": "Custom node template payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodeTemplate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated custom node templates",
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ui/custom-nodes/default": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets the default TopoViewer custom node template for the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Set default custom node template",
+                "parameters": [
+                    {
+                        "description": "Default custom node selection",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodeDefaultRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated custom node templates",
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Custom node not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ui/custom-nodes/{name}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a single TopoViewer custom node template for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Delete custom node template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Custom node name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated custom node templates",
+                        "schema": {
+                            "$ref": "#/definitions/models.CustomNodesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ui/icons": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the authenticated user's global custom TopoViewer icon library from ~/.clab/icons.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "List global custom icons",
+                "responses": {
+                    "200": {
+                        "description": "Global custom icons",
+                        "schema": {
+                            "$ref": "#/definitions/models.IconListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Uploads a new global custom TopoViewer icon into ~/.clab/icons for the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Upload global custom icon",
+                "parameters": [
+                    {
+                        "description": "Custom icon upload payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.IconUploadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Upload success",
+                        "schema": {
+                            "$ref": "#/definitions/models.IconUploadResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Rejected due to built-in icon name conflict",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ui/icons/{iconName}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a global custom TopoViewer icon from ~/.clab/icons for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "UI"
+                ],
+                "summary": "Delete global custom icon",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Custom icon name",
+                        "name": "iconName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Delete success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid icon name",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Icon not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users": {
             "get": {
                 "security": [
@@ -1944,7 +4881,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Updates an existing user. Requires superuser privileges or the user's own account.",
+                "description": "Updates an existing user. Regular users may update only their own profile fields. Group and superuser status changes require superuser privileges.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2356,6 +5293,150 @@ const docTemplate = `{
                 }
             }
         },
+        "models.CaptureCloseAllResponse": {
+            "type": "object",
+            "properties": {
+                "closed": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CapturePacketflixRequest": {
+            "type": "object",
+            "required": [
+                "targets"
+            ],
+            "properties": {
+                "remoteHostname": {
+                    "type": "string"
+                },
+                "targets": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/models.CaptureTarget"
+                    }
+                }
+            }
+        },
+        "models.CapturePacketflixResponse": {
+            "type": "object",
+            "properties": {
+                "captures": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.CapturePacketflixURI"
+                    }
+                }
+            }
+        },
+        "models.CapturePacketflixURI": {
+            "type": "object",
+            "properties": {
+                "containerName": {
+                    "type": "string"
+                },
+                "interfaceNames": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "packetflixUri": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CaptureTarget": {
+            "type": "object",
+            "required": [
+                "containerName",
+                "interfaceName"
+            ],
+            "properties": {
+                "containerName": {
+                    "type": "string"
+                },
+                "interfaceName": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CaptureWiresharkVncCreateResponse": {
+            "type": "object",
+            "properties": {
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.CaptureWiresharkVncSession"
+                    }
+                }
+            }
+        },
+        "models.CaptureWiresharkVncReadyResponse": {
+            "type": "object",
+            "properties": {
+                "ready": {
+                    "type": "boolean"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CaptureWiresharkVncRequest": {
+            "type": "object",
+            "required": [
+                "targets"
+            ],
+            "properties": {
+                "targets": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/models.CaptureTarget"
+                    }
+                },
+                "theme": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CaptureWiresharkVncSession": {
+            "type": "object",
+            "properties": {
+                "containerName": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "expiresAt": {
+                    "type": "string"
+                },
+                "interfaceNames": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "labName": {
+                    "type": "string"
+                },
+                "sessionId": {
+                    "type": "string"
+                },
+                "showVolumeTip": {
+                    "type": "boolean"
+                },
+                "vncPath": {
+                    "type": "string"
+                }
+            }
+        },
         "models.CertResponse": {
             "type": "object",
             "properties": {
@@ -2523,6 +5604,65 @@ const docTemplate = `{
                 }
             }
         },
+        "models.CustomIconInfo": {
+            "type": "object",
+            "properties": {
+                "dataUri": {
+                    "type": "string"
+                },
+                "format": {
+                    "type": "string",
+                    "example": "svg"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string",
+                    "example": "global"
+                }
+            }
+        },
+        "models.CustomNodeDefaultRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CustomNodeTemplate": {
+            "type": "object",
+            "additionalProperties": true
+        },
+        "models.CustomNodesReplaceRequest": {
+            "type": "object",
+            "properties": {
+                "customNodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.CustomNodeTemplate"
+                    }
+                }
+            }
+        },
+        "models.CustomNodesResponse": {
+            "type": "object",
+            "properties": {
+                "customNodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.CustomNodeTemplate"
+                    }
+                },
+                "defaultNode": {
+                    "type": "string"
+                }
+            }
+        },
         "models.DeployRequest": {
             "type": "object",
             "properties": {
@@ -2570,6 +5710,56 @@ const docTemplate = `{
                 "usedDisk": {
                     "description": "Used disk space in bytes",
                     "type": "integer"
+                }
+            }
+        },
+        "models.DrawioGenerateRequest": {
+            "type": "object",
+            "properties": {
+                "layout": {
+                    "type": "string",
+                    "example": "horizontal"
+                },
+                "theme": {
+                    "type": "string",
+                    "example": "nokia_modern"
+                }
+            }
+        },
+        "models.DrawioGenerateResponse": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "fileName": {
+                    "type": "string"
+                },
+                "layout": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.EdgeSharkStatusResponse": {
+            "type": "object",
+            "properties": {
+                "packetflixPort": {
+                    "type": "integer"
+                },
+                "running": {
+                    "type": "boolean"
+                },
+                "runtime": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
                 }
             }
         },
@@ -2673,6 +5863,28 @@ const docTemplate = `{
                 "type": "array",
                 "items": {
                     "$ref": "#/definitions/models.ClabExecInternalResult"
+                }
+            }
+        },
+        "models.FcliCommandRequest": {
+            "type": "object",
+            "required": [
+                "command"
+            ],
+            "properties": {
+                "command": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.FcliCommandResponse": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "string"
                 }
             }
         },
@@ -2824,6 +6036,89 @@ const docTemplate = `{
                 }
             }
         },
+        "models.IconListResponse": {
+            "type": "object",
+            "properties": {
+                "icons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.CustomIconInfo"
+                    }
+                }
+            }
+        },
+        "models.IconReconcileRequest": {
+            "type": "object",
+            "properties": {
+                "usedIcons": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "models.IconUploadRequest": {
+            "type": "object",
+            "required": [
+                "dataBase64",
+                "fileName"
+            ],
+            "properties": {
+                "contentType": {
+                    "type": "string",
+                    "example": "image/svg+xml"
+                },
+                "dataBase64": {
+                    "type": "string"
+                },
+                "fileName": {
+                    "type": "string",
+                    "example": "my-router.svg"
+                }
+            }
+        },
+        "models.IconUploadResponse": {
+            "type": "object",
+            "properties": {
+                "iconName": {
+                    "type": "string",
+                    "example": "my-router"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "models.ImportTopologyFromURLRequest": {
+            "type": "object",
+            "required": [
+                "topologySourceUrl"
+            ],
+            "properties": {
+                "topologySourceUrl": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ImportTopologyFromURLResponse": {
+            "type": "object",
+            "properties": {
+                "fileName": {
+                    "type": "string"
+                },
+                "labName": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "topology": {
+                    "$ref": "#/definitions/models.TopologyEntry"
+                }
+            }
+        },
         "models.InterfaceInfo": {
             "type": "object",
             "properties": {
@@ -2866,6 +6161,10 @@ const docTemplate = `{
             "properties": {
                 "password": {
                     "type": "string"
+                },
+                "sessionDuration": {
+                    "type": "string",
+                    "example": "24h"
                 },
                 "username": {
                     "type": "string"
@@ -3072,6 +6371,43 @@ const docTemplate = `{
                 }
             }
         },
+        "models.NodeBrowserPort": {
+            "type": "object",
+            "properties": {
+                "containerPort": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "hostIp": {
+                    "type": "string"
+                },
+                "hostPort": {
+                    "type": "integer"
+                },
+                "protocol": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.NodeBrowserPortsResponse": {
+            "type": "object",
+            "properties": {
+                "containerName": {
+                    "type": "string"
+                },
+                "nodeName": {
+                    "type": "string"
+                },
+                "ports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.NodeBrowserPort"
+                    }
+                }
+            }
+        },
         "models.NodeInterfaceInfo": {
             "type": "object",
             "properties": {
@@ -3098,6 +6434,80 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "newPassword": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.RuntimeImageActionResponse": {
+            "type": "object",
+            "properties": {
+                "image": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.RuntimeImagePullRequest": {
+            "type": "object",
+            "required": [
+                "image"
+            ],
+            "properties": {
+                "image": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.RuntimeImageSummary": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "repoDigests": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "repoTags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "shortId": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "string"
+                },
+                "virtualSize": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.RuntimeImagesResponse": {
+            "type": "object",
+            "properties": {
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.RuntimeImageSummary"
+                    }
+                },
+                "runtime": {
                     "type": "string"
                 }
             }
@@ -3196,6 +6606,179 @@ const docTemplate = `{
                 "version": {
                     "description": "API server version",
                     "type": "string"
+                }
+            }
+        },
+        "models.ShareToolResponse": {
+            "type": "object",
+            "properties": {
+                "link": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.SimpleSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "models.TerminalProtocol": {
+            "type": "string",
+            "enum": [
+                "ssh",
+                "shell",
+                "telnet"
+            ],
+            "x-enum-varnames": [
+                "TerminalProtocolSSH",
+                "TerminalProtocolShell",
+                "TerminalProtocolTelnet"
+            ]
+        },
+        "models.TerminalSessionInfo": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "exitCode": {
+                    "type": "integer"
+                },
+                "expiresAt": {
+                    "type": "string"
+                },
+                "labName": {
+                    "type": "string"
+                },
+                "lastActivity": {
+                    "type": "string"
+                },
+                "nodeName": {
+                    "type": "string"
+                },
+                "protocol": {
+                    "$ref": "#/definitions/models.TerminalProtocol"
+                },
+                "sessionId": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.TerminalSessionRequest": {
+            "type": "object",
+            "required": [
+                "protocol"
+            ],
+            "properties": {
+                "cols": {
+                    "description": "Cols is the requested terminal width in characters.",
+                    "type": "integer"
+                },
+                "protocol": {
+                    "description": "Protocol selects the terminal transport: ssh, shell, or telnet.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.TerminalProtocol"
+                        }
+                    ]
+                },
+                "rows": {
+                    "description": "Rows is the requested terminal height in characters.",
+                    "type": "integer"
+                },
+                "sshUsername": {
+                    "description": "SSHUsername optionally overrides the SSH username for protocol=ssh.",
+                    "type": "string"
+                },
+                "telnetPort": {
+                    "description": "TelnetPort optionally overrides the telnet destination port for protocol=telnet.",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.TopologyDocEventResponse": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "example": "change"
+                },
+                "documentKind": {
+                    "type": "string",
+                    "example": "annotations"
+                },
+                "labName": {
+                    "type": "string",
+                    "example": "mylab"
+                },
+                "path": {
+                    "type": "string",
+                    "example": "mylab.clab.yml.annotations.json"
+                },
+                "revision": {
+                    "type": "string",
+                    "example": "yaml=123-456;annotations=78-910"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "topology-doc"
+                }
+            }
+        },
+        "models.TopologyEntry": {
+            "type": "object",
+            "properties": {
+                "annotationsFileName": {
+                    "type": "string"
+                },
+                "deploymentState": {
+                    "description": "undeployed (runtime state is derived from events stream)",
+                    "type": "string"
+                },
+                "hasAnnotations": {
+                    "type": "boolean"
+                },
+                "labName": {
+                    "type": "string"
+                },
+                "yamlFileName": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.TopologyFileRenameRequest": {
+            "type": "object",
+            "required": [
+                "newPath",
+                "oldPath"
+            ],
+            "properties": {
+                "newPath": {
+                    "type": "string",
+                    "example": "configs/startup.bak.cfg"
+                },
+                "oldPath": {
+                    "type": "string",
+                    "example": "configs/startup.cfg"
                 }
             }
         },
@@ -3386,8 +6969,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{"http", "https"},
-	Title:            "Containerlab API",
-	Description:      "This is an API server to interact with Containerlab for authenticated Linux users. Runs clab commands as the API server's user. Requires PAM for authentication.",
+	Title:            "Containerlab API Server",
+	Description:      "REST API for authenticated Linux users to manage Containerlab deployments, topology files, node access, captures, and host networking tools.\n\nMost endpoints under /api/v1 require a JWT from POST /login. Send it as: Authorization: Bearer <token>.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

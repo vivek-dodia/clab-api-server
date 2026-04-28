@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"gopkg.in/yaml.v3"
 )
 
 // LabTopologySuite tests topology generation endpoints.
@@ -30,21 +31,15 @@ func (s *LabTopologySuite) SetupSuite() {
 	s.Require().NotEmpty(apiUserToken)
 }
 
-// TestGenerateTopology tests the topology generation endpoint
-func (s *LabTopologySuite) TestGenerateTopology() {
-	// Use headers obtained in SetupSuite
-	userHeaders := s.apiUserHeaders
-
-	// Generate a unique lab name for the topology definition
+func (s *LabTopologySuite) TestGenerateTopologyComplexYAML() {
 	generatedLabName := fmt.Sprintf("3-tier-clos-%s", s.randomSuffix(5))
 
 	s.logTest("Generating topology for lab '%s'", generatedLabName)
 
-	// Create the generate request payload with the CLOS configuration
 	generateRequest := map[string]interface{}{
 		"name":        generatedLabName,
 		"defaultKind": "nokia_srlinux",
-		"deploy":      true,
+		"deploy":      false,
 		"groupPrefix": "clos-tier",
 		"images": map[string]string{
 			"nokia_srlinux": "ghcr.io/nokia/srlinux:latest",
@@ -52,83 +47,129 @@ func (s *LabTopologySuite) TestGenerateTopology() {
 		"ipv4Subnet": "172.20.20.0/24",
 		"ipv6Subnet": "2001:172:20:20::/64",
 		"nodePrefix": "clos-node",
-		"outputFile": fmt.Sprintf("tests_go/tmp/%s.yml", generatedLabName),
 		"tiers": []map[string]interface{}{
 			{
-				"count": 4,
+				"count": 2,
 				"kind":  "nokia_srlinux",
 				"type":  "ixrd3",
 			},
+			{
+				"count": 1,
+				"kind":  "nokia_srlinux",
+				"type":  "ixrd2",
+			},
 		},
-	}
-
-	// Set up cleanup for the generated lab when deploy is true
-	if generateRequest["deploy"].(bool) {
-		defer s.cleanupLab(generatedLabName, true)
 	}
 
 	jsonPayload := s.mustMarshal(generateRequest)
 
 	generateURL := fmt.Sprintf("%s/api/v1/generate", s.cfg.APIURL)
-	bodyBytes, statusCode, err := s.doRequest("POST", generateURL, userHeaders, bytes.NewBuffer(jsonPayload), s.cfg.DeployTimeout)
+	bodyBytes, statusCode, err := s.doRequest("POST", generateURL, s.apiUserHeaders, bytes.NewBuffer(jsonPayload), s.cfg.RequestTimeout)
 	s.Require().NoError(err, "Failed to execute generate topology request")
 	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 generating topology for '%s'. Body: %s", generatedLabName, string(bodyBytes))
 
-	// Verify we can parse the response - this should match the actual response structure
+	var generateResponse struct {
+		Message      string `json:"message"`
+		TopologyYAML string `json:"topologyYaml"`
+	}
+	err = json.Unmarshal(bodyBytes, &generateResponse)
+	s.Require().NoError(err, "Failed to unmarshal generate topology response. Body: %s", string(bodyBytes))
+	s.Require().NotEmpty(generateResponse.TopologyYAML, "Generate response missing topologyYaml")
+	s.Assert().Contains(generateResponse.Message, "generated successfully", "Response message should indicate successful generation")
+
+	var topology struct {
+		Name     string `yaml:"name"`
+		Topology struct {
+			Kinds map[string]struct {
+				Image string `yaml:"image"`
+			} `yaml:"kinds"`
+			Nodes map[string]struct {
+				Kind  string `yaml:"kind"`
+				Type  string `yaml:"type"`
+				Group string `yaml:"group"`
+			} `yaml:"nodes"`
+			Links []struct {
+				Endpoints []string `yaml:"endpoints"`
+			} `yaml:"links"`
+		} `yaml:"topology"`
+	}
+	err = yaml.Unmarshal([]byte(generateResponse.TopologyYAML), &topology)
+	s.Require().NoError(err, "Failed to parse generated topology YAML")
+
+	s.Assert().Equal(generatedLabName, topology.Name, "Generated YAML doesn't contain the lab name")
+	s.Require().Contains(topology.Topology.Kinds, "nokia_srlinux", "Generated YAML doesn't contain the node kind")
+	s.Assert().Equal("ghcr.io/nokia/srlinux:latest", topology.Topology.Kinds["nokia_srlinux"].Image)
+	s.Require().Len(topology.Topology.Nodes, 3, "Generated YAML should contain two first-tier nodes and one second-tier node")
+	s.Require().Contains(topology.Topology.Nodes, "clos-node1-1")
+	s.Require().Contains(topology.Topology.Nodes, "clos-node1-2")
+	s.Require().Contains(topology.Topology.Nodes, "clos-node2-1")
+	s.Assert().Equal("clos-tier-1", topology.Topology.Nodes["clos-node1-1"].Group)
+	s.Assert().Equal("ixrd3", topology.Topology.Nodes["clos-node1-1"].Type)
+	s.Assert().Equal("clos-tier-2", topology.Topology.Nodes["clos-node2-1"].Group)
+	s.Assert().Equal("ixrd2", topology.Topology.Nodes["clos-node2-1"].Type)
+	s.Require().Len(topology.Topology.Links, 2, "Generated YAML should contain one link from each first-tier node to the second-tier node")
+	for _, link := range topology.Topology.Links {
+		s.Assert().Len(link.Endpoints, 2, "Generated links should have two endpoints")
+	}
+
+	if !s.T().Failed() {
+		s.logSuccess("Successfully generated topology YAML for lab '%s'", generatedLabName)
+	}
+}
+
+func (s *LabTopologySuite) TestGenerateTopologyDeploysMinimalLab() {
+	generatedLabName := fmt.Sprintf("generated-min-%s", s.randomSuffix(5))
+	defer s.cleanupLab(generatedLabName, true)
+
+	s.logTest("Generating and deploying minimal topology for lab '%s'", generatedLabName)
+
+	generateRequest := map[string]interface{}{
+		"name":        generatedLabName,
+		"defaultKind": "linux",
+		"deploy":      true,
+		"groupPrefix": "generated-tier",
+		"images": map[string]string{
+			"linux": "ghcr.io/srl-labs/network-multitool:latest",
+		},
+		"nodePrefix": "generated-node",
+		"tiers": []map[string]interface{}{
+			{
+				"count": 1,
+				"kind":  "linux",
+			},
+		},
+	}
+
+	jsonPayload := s.mustMarshal(generateRequest)
+
+	generateURL := fmt.Sprintf("%s/api/v1/generate", s.cfg.APIURL)
+	bodyBytes, statusCode, err := s.doRequest("POST", generateURL, s.apiUserHeaders, bytes.NewBuffer(jsonPayload), s.cfg.DeployTimeout)
+	s.Require().NoError(err, "Failed to execute generate-and-deploy topology request")
+	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 generating and deploying topology for '%s'. Body: %s", generatedLabName, string(bodyBytes))
+
 	var generateResponse struct {
 		Message       string                         `json:"message"`
 		DeployOutput  map[string][]ClabContainerInfo `json:"deployOutput,omitempty"`
 		SavedFilePath string                         `json:"savedFilePath,omitempty"`
 	}
-
 	err = json.Unmarshal(bodyBytes, &generateResponse)
 	s.Require().NoError(err, "Failed to unmarshal generate topology response. Body: %s", string(bodyBytes))
+	s.Assert().Contains(generateResponse.Message, "deployed successfully", "Response message should indicate successful deployment")
+	s.Assert().NotEmpty(generateResponse.DeployOutput, "Response missing deployOutput for a deployed topology")
+	s.Assert().NotEmpty(generateResponse.SavedFilePath, "Response missing savedFilePath")
+	s.Require().Contains(generateResponse.DeployOutput, generatedLabName, "Deploy output doesn't reference the lab name")
+	s.Require().NotEmpty(generateResponse.DeployOutput[generatedLabName], "Deploy output should contain at least one container")
 
-	// Verify response fields based on whether deploy was true or false
-	s.Assert().NotEmpty(generateResponse.Message, "Generate response missing message content")
-
-	if generateRequest["deploy"].(bool) {
-		// For deploy=true cases
-		s.Assert().Contains(generateResponse.Message, "deployed successfully", "Response message should indicate successful deployment")
-		s.Assert().NotEmpty(generateResponse.DeployOutput, "Response missing deployOutput for a deployed topology")
-		s.Assert().NotEmpty(generateResponse.SavedFilePath, "Response missing savedFilePath for a deployed topology")
-
-		// Verify the lab name is in the keys of DeployOutput
-		s.Assert().Contains(generateResponse.DeployOutput, generatedLabName, "Deploy output doesn't reference the lab name")
-
-		// Check if any container has the expected kind
-		foundKind := false
-		// Instead of directly checking the Group field, use JSON string inspection
-		rawJSON := string(bodyBytes)
-
-		for _, containers := range generateResponse.DeployOutput {
-			for _, container := range containers {
-				if container.Kind == "nokia_srlinux" {
-					foundKind = true
-					break
-				}
-			}
-		}
-
-		s.Assert().True(foundKind, "Deploy output doesn't reference the node kind")
-		// Check for group prefix in the raw JSON
-		s.Assert().Contains(rawJSON, `"group":"clos-tier-1"`, "Deploy output doesn't reference the group prefix")
-	} else {
-		// The test for deploy=false would check for topologyYaml field
-		var yamlResponse struct {
-			Message      string `json:"message"`
-			TopologyYAML string `json:"topologyYaml"`
-		}
-
-		// Verify the YAML contains correct configuration
-		err = json.Unmarshal(bodyBytes, &yamlResponse)
-		if err == nil && yamlResponse.TopologyYAML != "" {
-			s.Assert().Contains(yamlResponse.TopologyYAML, generatedLabName, "Generated YAML doesn't contain the lab name")
-			s.Assert().Contains(yamlResponse.TopologyYAML, "nokia_srlinux", "Generated YAML doesn't contain the node kind")
+	foundLinux := false
+	for _, container := range generateResponse.DeployOutput[generatedLabName] {
+		if container.Kind == "linux" {
+			foundLinux = true
+			break
 		}
 	}
+	s.Assert().True(foundLinux, "Deploy output doesn't reference the linux node kind")
 
 	if !s.T().Failed() {
-		s.logSuccess("Successfully generated topology for lab '%s'", generatedLabName)
+		s.logSuccess("Successfully generated and deployed topology for lab '%s'", generatedLabName)
 	}
 }

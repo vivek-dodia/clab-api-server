@@ -3,6 +3,9 @@ package auth
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,9 +31,88 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// GenerateJWT creates a new JWT for a given username
-func GenerateJWT(username string) (string, error) {
-	expirationTime := time.Now().Add(config.AppConfig.JWTExpiration)
+var loginDurationPattern = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h|d|w)`)
+
+// ResolveLoginDuration validates an optional login duration string and returns the
+// effective JWT lifetime for the newly issued token.
+func ResolveLoginDuration(requested string, defaultDuration time.Duration) (time.Duration, error) {
+	trimmed := strings.TrimSpace(requested)
+	if trimmed == "" {
+		return defaultDuration, nil
+	}
+
+	normalized, err := normalizeLoginDuration(trimmed)
+	if err != nil {
+		return 0, err
+	}
+
+	duration, err := time.ParseDuration(normalized)
+	if err != nil {
+		return 0, fmt.Errorf("invalid session duration %q: %w", requested, err)
+	}
+	if duration <= 0 {
+		return 0, fmt.Errorf("invalid session duration %q: duration must be greater than zero", requested)
+	}
+
+	return duration, nil
+}
+
+func normalizeLoginDuration(value string) (string, error) {
+	matches := loginDurationPattern.FindAllStringSubmatchIndex(value, -1)
+	if len(matches) == 0 {
+		return "", fmt.Errorf("invalid session duration %q", value)
+	}
+
+	var builder strings.Builder
+	pos := 0
+	for _, match := range matches {
+		if match[0] != pos {
+			return "", fmt.Errorf("invalid session duration %q", value)
+		}
+
+		amount := value[match[2]:match[3]]
+		unit := strings.ToLower(value[match[4]:match[5]])
+
+		switch unit {
+		case "d":
+			scaled, err := scaleLoginDurationUnit(amount, 24)
+			if err != nil {
+				return "", err
+			}
+			builder.WriteString(scaled)
+		case "w":
+			scaled, err := scaleLoginDurationUnit(amount, 7*24)
+			if err != nil {
+				return "", err
+			}
+			builder.WriteString(scaled)
+		default:
+			builder.WriteString(amount)
+			builder.WriteString(unit)
+		}
+
+		pos = match[1]
+	}
+
+	if pos != len(value) {
+		return "", fmt.Errorf("invalid session duration %q", value)
+	}
+
+	return builder.String(), nil
+}
+
+func scaleLoginDurationUnit(value string, factor float64) (string, error) {
+	amount, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return "", fmt.Errorf("invalid session duration value %q: %w", value, err)
+	}
+
+	return strconv.FormatFloat(amount*factor, 'f', -1, 64) + "h", nil
+}
+
+// GenerateJWT creates a new JWT for a given username and expiration duration.
+func GenerateJWT(username string, expiresIn time.Duration) (string, error) {
+	expirationTime := time.Now().Add(expiresIn)
 	claims := &Claims{
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{

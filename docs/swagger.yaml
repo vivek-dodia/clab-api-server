@@ -51,6 +51,100 @@ definitions:
         description: Overall CPU usage percentage
         type: number
     type: object
+  models.CaptureCloseAllResponse:
+    properties:
+      closed:
+        type: integer
+      message:
+        type: string
+    type: object
+  models.CapturePacketflixRequest:
+    properties:
+      remoteHostname:
+        type: string
+      targets:
+        items:
+          $ref: '#/definitions/models.CaptureTarget'
+        minItems: 1
+        type: array
+    required:
+    - targets
+    type: object
+  models.CapturePacketflixResponse:
+    properties:
+      captures:
+        items:
+          $ref: '#/definitions/models.CapturePacketflixURI'
+        type: array
+    type: object
+  models.CapturePacketflixURI:
+    properties:
+      containerName:
+        type: string
+      interfaceNames:
+        items:
+          type: string
+        type: array
+      packetflixUri:
+        type: string
+    type: object
+  models.CaptureTarget:
+    properties:
+      containerName:
+        type: string
+      interfaceName:
+        type: string
+    required:
+    - containerName
+    - interfaceName
+    type: object
+  models.CaptureWiresharkVncCreateResponse:
+    properties:
+      sessions:
+        items:
+          $ref: '#/definitions/models.CaptureWiresharkVncSession'
+        type: array
+    type: object
+  models.CaptureWiresharkVncReadyResponse:
+    properties:
+      ready:
+        type: boolean
+      url:
+        type: string
+    type: object
+  models.CaptureWiresharkVncRequest:
+    properties:
+      targets:
+        items:
+          $ref: '#/definitions/models.CaptureTarget'
+        minItems: 1
+        type: array
+      theme:
+        type: string
+    required:
+    - targets
+    type: object
+  models.CaptureWiresharkVncSession:
+    properties:
+      containerName:
+        type: string
+      createdAt:
+        type: string
+      expiresAt:
+        type: string
+      interfaceNames:
+        items:
+          type: string
+        type: array
+      labName:
+        type: string
+      sessionId:
+        type: string
+      showVolumeTip:
+        type: boolean
+      vncPath:
+        type: string
+    type: object
   models.CertResponse:
     properties:
       certPath:
@@ -176,6 +270,45 @@ definitions:
         $ref: '#/definitions/models.ClabContainerInfo'
       type: array
     type: object
+  models.CustomIconInfo:
+    properties:
+      dataUri:
+        type: string
+      format:
+        example: svg
+        type: string
+      name:
+        type: string
+      source:
+        example: global
+        type: string
+    type: object
+  models.CustomNodeDefaultRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  models.CustomNodeTemplate:
+    additionalProperties: true
+    type: object
+  models.CustomNodesReplaceRequest:
+    properties:
+      customNodes:
+        items:
+          $ref: '#/definitions/models.CustomNodeTemplate'
+        type: array
+    type: object
+  models.CustomNodesResponse:
+    properties:
+      customNodes:
+        items:
+          $ref: '#/definitions/models.CustomNodeTemplate'
+        type: array
+      defaultNode:
+        type: string
+    type: object
   models.DeployRequest:
     properties:
       topologyContent:
@@ -221,6 +354,39 @@ definitions:
       usedDisk:
         description: Used disk space in bytes
         type: integer
+    type: object
+  models.DrawioGenerateRequest:
+    properties:
+      layout:
+        example: horizontal
+        type: string
+      theme:
+        example: nokia_modern
+        type: string
+    type: object
+  models.DrawioGenerateResponse:
+    properties:
+      content:
+        type: string
+      fileName:
+        type: string
+      layout:
+        type: string
+      message:
+        type: string
+      output:
+        type: string
+    type: object
+  models.EdgeSharkStatusResponse:
+    properties:
+      packetflixPort:
+        type: integer
+      running:
+        type: boolean
+      runtime:
+        type: string
+      version:
+        type: string
     type: object
   models.ErrorResponse:
     properties:
@@ -295,6 +461,20 @@ definitions:
       items:
         $ref: '#/definitions/models.ClabExecInternalResult'
       type: array
+    type: object
+  models.FcliCommandRequest:
+    properties:
+      command:
+        type: string
+    required:
+    - command
+    type: object
+  models.FcliCommandResponse:
+    properties:
+      command:
+        type: string
+      output:
+        type: string
     type: object
   models.GenerateNodeTier:
     properties:
@@ -407,6 +587,61 @@ definitions:
         description: API server version
         type: string
     type: object
+  models.IconListResponse:
+    properties:
+      icons:
+        items:
+          $ref: '#/definitions/models.CustomIconInfo'
+        type: array
+    type: object
+  models.IconReconcileRequest:
+    properties:
+      usedIcons:
+        items:
+          type: string
+        type: array
+    type: object
+  models.IconUploadRequest:
+    properties:
+      contentType:
+        example: image/svg+xml
+        type: string
+      dataBase64:
+        type: string
+      fileName:
+        example: my-router.svg
+        type: string
+    required:
+    - dataBase64
+    - fileName
+    type: object
+  models.IconUploadResponse:
+    properties:
+      iconName:
+        example: my-router
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  models.ImportTopologyFromURLRequest:
+    properties:
+      topologySourceUrl:
+        type: string
+    required:
+    - topologySourceUrl
+    type: object
+  models.ImportTopologyFromURLResponse:
+    properties:
+      fileName:
+        type: string
+      labName:
+        type: string
+      success:
+        type: boolean
+      topology:
+        $ref: '#/definitions/models.TopologyEntry'
+    type: object
   models.InterfaceInfo:
     properties:
       alias:
@@ -434,6 +669,9 @@ definitions:
   models.LoginRequest:
     properties:
       password:
+        type: string
+      sessionDuration:
+        example: 24h
         type: string
       username:
         type: string
@@ -578,6 +816,30 @@ definitions:
         $ref: '#/definitions/models.NetemInterfaceInfo'
       type: array
     type: object
+  models.NodeBrowserPort:
+    properties:
+      containerPort:
+        type: integer
+      description:
+        type: string
+      hostIp:
+        type: string
+      hostPort:
+        type: integer
+      protocol:
+        type: string
+    type: object
+  models.NodeBrowserPortsResponse:
+    properties:
+      containerName:
+        type: string
+      nodeName:
+        type: string
+      ports:
+        items:
+          $ref: '#/definitions/models.NodeBrowserPort'
+        type: array
+    type: object
   models.NodeInterfaceInfo:
     properties:
       interfaces:
@@ -597,6 +859,54 @@ definitions:
         type: string
     required:
     - newPassword
+    type: object
+  models.RuntimeImageActionResponse:
+    properties:
+      image:
+        type: string
+      message:
+        type: string
+      output:
+        type: string
+      success:
+        type: boolean
+    type: object
+  models.RuntimeImagePullRequest:
+    properties:
+      image:
+        type: string
+    required:
+    - image
+    type: object
+  models.RuntimeImageSummary:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      repoDigests:
+        items:
+          type: string
+        type: array
+      repoTags:
+        items:
+          type: string
+        type: array
+      shortId:
+        type: string
+      size:
+        type: string
+      virtualSize:
+        type: string
+    type: object
+  models.RuntimeImagesResponse:
+    properties:
+      images:
+        items:
+          $ref: '#/definitions/models.RuntimeImageSummary'
+        type: array
+      runtime:
+        type: string
     type: object
   models.SSHAccessRequest:
     properties:
@@ -666,6 +976,125 @@ definitions:
       version:
         description: API server version
         type: string
+    type: object
+  models.ShareToolResponse:
+    properties:
+      link:
+        type: string
+      message:
+        type: string
+      output:
+        type: string
+    type: object
+  models.SimpleSuccessResponse:
+    properties:
+      success:
+        example: true
+        type: boolean
+    type: object
+  models.TerminalProtocol:
+    enum:
+    - ssh
+    - shell
+    - telnet
+    type: string
+    x-enum-varnames:
+    - TerminalProtocolSSH
+    - TerminalProtocolShell
+    - TerminalProtocolTelnet
+  models.TerminalSessionInfo:
+    properties:
+      createdAt:
+        type: string
+      error:
+        type: string
+      exitCode:
+        type: integer
+      expiresAt:
+        type: string
+      labName:
+        type: string
+      lastActivity:
+        type: string
+      nodeName:
+        type: string
+      protocol:
+        $ref: '#/definitions/models.TerminalProtocol'
+      sessionId:
+        type: string
+      state:
+        type: string
+      username:
+        type: string
+    type: object
+  models.TerminalSessionRequest:
+    properties:
+      cols:
+        description: Cols is the requested terminal width in characters.
+        type: integer
+      protocol:
+        allOf:
+        - $ref: '#/definitions/models.TerminalProtocol'
+        description: 'Protocol selects the terminal transport: ssh, shell, or telnet.'
+      rows:
+        description: Rows is the requested terminal height in characters.
+        type: integer
+      sshUsername:
+        description: SSHUsername optionally overrides the SSH username for protocol=ssh.
+        type: string
+      telnetPort:
+        description: TelnetPort optionally overrides the telnet destination port for
+          protocol=telnet.
+        type: integer
+    required:
+    - protocol
+    type: object
+  models.TopologyDocEventResponse:
+    properties:
+      action:
+        example: change
+        type: string
+      documentKind:
+        example: annotations
+        type: string
+      labName:
+        example: mylab
+        type: string
+      path:
+        example: mylab.clab.yml.annotations.json
+        type: string
+      revision:
+        example: yaml=123-456;annotations=78-910
+        type: string
+      type:
+        example: topology-doc
+        type: string
+    type: object
+  models.TopologyEntry:
+    properties:
+      annotationsFileName:
+        type: string
+      deploymentState:
+        description: undeployed (runtime state is derived from events stream)
+        type: string
+      hasAnnotations:
+        type: boolean
+      labName:
+        type: string
+      yamlFileName:
+        type: string
+    type: object
+  models.TopologyFileRenameRequest:
+    properties:
+      newPath:
+        example: configs/startup.bak.cfg
+        type: string
+      oldPath:
+        example: configs/startup.cfg
+        type: string
+    required:
+    - newPath
+    - oldPath
     type: object
   models.UserCreateRequest:
     properties:
@@ -802,18 +1231,177 @@ definitions:
     type: object
 info:
   contact:
-    email: support@swagger.io
-    name: API Support
-    url: https://swagger.io/support/
-  description: This is an API server to interact with Containerlab for authenticated
-    Linux users. Runs clab commands as the API server's user. Requires PAM for authentication.
+    name: Containerlab API Server maintainers
+    url: https://github.com/srl-labs/clab-api-server/issues
+  description: |-
+    REST API for authenticated Linux users to manage Containerlab deployments, topology files, node access, captures, and host networking tools.
+
+    Most endpoints under /api/v1 require a JWT from POST /login. Send it as: Authorization: Bearer <token>.
   license:
     name: Apache 2.0
-    url: http://www.apache.org/licenses/LICENSE-2.0.html
-  termsOfService: http://swagger.io/terms/
-  title: Containerlab API
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  title: Containerlab API Server
   version: "1.0"
 paths:
+  /api/v1/capture/wireshark-vnc-sessions:
+    delete:
+      description: Terminates all capture VNC sessions owned by the authenticated
+        user. Superusers terminate all sessions.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Capture sessions terminated
+          schema:
+            $ref: '#/definitions/models.CaptureCloseAllResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete all Wireshark VNC sessions
+      tags:
+      - Capture
+  /api/v1/capture/wireshark-vnc-sessions/{sessionId}:
+    delete:
+      description: Terminates a capture VNC session and stops the corresponding Wireshark
+        container.
+      parameters:
+      - description: Capture session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Capture session terminated
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Wireshark VNC session
+      tags:
+      - Capture
+  /api/v1/capture/wireshark-vnc-sessions/{sessionId}/ready:
+    get:
+      description: Returns whether a capture VNC session is ready and its proxied
+        URL path.
+      parameters:
+      - description: Capture session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Readiness state
+          schema:
+            $ref: '#/definitions/models.CaptureWiresharkVncReadyResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Wireshark VNC session readiness
+      tags:
+      - Capture
+  /api/v1/capture/wireshark-vnc-sessions/{sessionId}/vnc/{proxyPath}:
+    get:
+      description: Proxies noVNC HTTP assets for a capture session. WebSocket upgrades
+        on this path are used by noVNC but are not represented in Swagger.
+      parameters:
+      - description: Capture session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      - description: Proxy subpath under the noVNC root
+        in: path
+        name: proxyPath
+        required: true
+        type: string
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: Proxied noVNC asset response
+          schema:
+            type: string
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "502":
+          description: VNC proxy upstream error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Proxy Wireshark VNC assets
+      tags:
+      - Capture
   /api/v1/events:
     get:
       description: |-
@@ -927,7 +1515,7 @@ paths:
   /api/v1/health/metrics:
     get:
       description: Returns detailed CPU, memory, and disk metrics for the API server.
-        Requires superuser privileges.
+        Requires authentication.
       produces:
       - application/json
       responses:
@@ -939,10 +1527,6 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        "403":
-          description: Forbidden (User is not a superuser)
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
         "500":
           description: Internal server error gathering metrics
           schema:
@@ -952,6 +1536,102 @@ paths:
       summary: Get system metrics
       tags:
       - Health
+  /api/v1/images:
+    delete:
+      parameters:
+      - description: Image reference or ID
+        in: query
+        name: reference
+        required: true
+        type: string
+      - description: Force image removal
+        in: query
+        name: force
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RuntimeImageActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a runtime image
+      tags:
+      - Images
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RuntimeImagesResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List runtime images
+      tags:
+      - Images
+  /api/v1/images/pull:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Image reference
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RuntimeImagePullRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RuntimeImageActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Pull a runtime image
+      tags:
+      - Images
   /api/v1/labs:
     get:
       description: |-
@@ -1056,7 +1736,12 @@ paths:
       - Labs
   /api/v1/labs/{labName}:
     delete:
-      description: Destroys a lab by name after verifying ownership.
+      description: |-
+        Destroys a lab by name after verifying ownership.
+
+        **Notes**
+        - `stream=true` returns `application/x-ndjson` lifecycle events.
+        - `includeLogs=true` includes captured lifecycle logs in the JSON response.
       parameters:
       - description: Name of the lab to destroy
         in: path
@@ -1076,6 +1761,11 @@ paths:
         in: query
         name: graceful
         type: boolean
+      - description: Override graceful shutdown timeout when graceful=true (for example
+          5s or 2m)
+        in: query
+        name: gracefulTimeout
+        type: string
       - description: Keep the management network
         in: query
         name: keepMgmtNet
@@ -1084,6 +1774,14 @@ paths:
         in: query
         name: nodeFilter
         type: string
+      - description: Stream lifecycle output as NDJSON events
+        in: query
+        name: stream
+        type: boolean
+      - description: Include captured lifecycle logs in the JSON response
+        in: query
+        name: includeLogs
+        type: boolean
       produces:
       - application/json
       responses:
@@ -1156,6 +1854,8 @@ paths:
 
         **Notes**
         - This operation destroys the lab and then deploys it again.
+        - `stream=true` returns `application/x-ndjson` lifecycle events.
+        - `includeLogs=true` includes captured lifecycle logs in the JSON response.
       parameters:
       - description: Name of the lab to redeploy
         in: path
@@ -1170,6 +1870,11 @@ paths:
         in: query
         name: graceful
         type: boolean
+      - description: Override graceful shutdown timeout when graceful=true (for example
+          5s or 2m)
+        in: query
+        name: gracefulTimeout
+        type: string
       - description: Keep the management network
         in: query
         name: keepMgmtNet
@@ -1189,6 +1894,14 @@ paths:
       - description: Skip setting extended ACLs on lab directory
         in: query
         name: skipLabdirAcl
+        type: boolean
+      - description: Stream lifecycle output as NDJSON events
+        in: query
+        name: stream
+        type: boolean
+      - description: Include captured lifecycle logs in the JSON response
+        in: query
+        name: includeLogs
         type: boolean
       produces:
       - application/json
@@ -1216,6 +1929,202 @@ paths:
       security:
       - BearerAuth: []
       summary: Redeploy lab
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/capture/packetflix:
+    post:
+      consumes:
+      - application/json
+      description: Builds packetflix URI(s) for the provided lab interface targets
+        (non-VNC capture mode).
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Packetflix capture request
+        in: body
+        name: capture_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CapturePacketflixRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Packetflix capture URI payload
+          schema:
+            $ref: '#/definitions/models.CapturePacketflixResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Lab or container not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "503":
+          description: EdgeShark not running
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Build packetflix capture URI
+      tags:
+      - Capture
+  /api/v1/labs/{labName}/capture/wireshark-vnc-sessions:
+    post:
+      consumes:
+      - application/json
+      description: Creates one or more Wireshark noVNC capture sessions for the specified
+        lab interface targets.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Wireshark VNC capture request
+        in: body
+        name: capture_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CaptureWiresharkVncRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Created capture sessions
+          schema:
+            $ref: '#/definitions/models.CaptureWiresharkVncCreateResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Lab or container not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "503":
+          description: EdgeShark not running
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Wireshark VNC capture session(s)
+      tags:
+      - Capture
+  /api/v1/labs/{labName}/deploy:
+    post:
+      description: |-
+        Deploys an on-disk topology from the authenticated user's lab directory.
+
+        **Notes**
+        - `path` defaults to `<labName>.clab.yml` when omitted.
+        - `stream=true` returns `application/x-ndjson` lifecycle events.
+        - `includeLogs=true` includes captured lifecycle logs in the JSON response.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative topology file path inside lab directory (defaults to
+          <labName>.clab.yml)
+        in: query
+        name: path
+        type: string
+      - description: Allow overwriting an existing lab
+        in: query
+        name: reconfigure
+        type: boolean
+      - description: Limit concurrent workers
+        in: query
+        name: maxWorkers
+        type: integer
+      - description: Custom Go template file for topology data export
+        in: query
+        name: exportTemplate
+        type: string
+      - description: Comma-separated list of node names to deploy
+        in: query
+        name: nodeFilter
+        type: string
+      - description: Skip post-deploy actions
+        in: query
+        name: skipPostDeploy
+        type: boolean
+      - description: Skip setting extended ACLs on lab directory
+        in: query
+        name: skipLabdirAcl
+        type: boolean
+      - description: Stream lifecycle output as NDJSON events
+        in: query
+        name: stream
+        type: boolean
+      - description: Include captured lifecycle logs in the JSON response
+        in: query
+        name: includeLogs
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Deployed lab details
+          schema:
+            $ref: '#/definitions/models.ClabInspectOutput'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Topology file not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Deploy on-disk topology for lab
       tags:
       - Labs
   /api/v1/labs/{labName}/exec:
@@ -1267,6 +2176,142 @@ paths:
       summary: Execute command in lab
       tags:
       - Labs
+  /api/v1/labs/{labName}/fcli:
+    post:
+      consumes:
+      - application/json
+      description: Runs an fcli command against the selected lab topology.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: fcli command request
+        in: body
+        name: fcli_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.FcliCommandRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.FcliCommandResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Run fcli command
+      tags:
+      - Labs - Tools
+  /api/v1/labs/{labName}/gotty/{action}:
+    post:
+      description: Executes GoTTY share action (attach, detach, reattach) for a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Action (attach|detach|reattach)
+        in: path
+        name: action
+        required: true
+        type: string
+      - description: GoTTY port (attach/reattach only)
+        in: query
+        name: port
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ShareToolResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: GoTTY share action
+      tags:
+      - Labs - Sharing
+  /api/v1/labs/{labName}/graph/drawio:
+    post:
+      consumes:
+      - application/json
+      description: Generates a draw.io diagram from a lab topology and returns the
+        generated XML content.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Draw.io generation options
+        in: body
+        name: drawio_request
+        schema:
+          $ref: '#/definitions/models.DrawioGenerateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DrawioGenerateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate draw.io graph
+      tags:
+      - Labs - Graph
   /api/v1/labs/{labName}/interfaces:
     get:
       description: Returns interface details for nodes in a lab.
@@ -1310,6 +2355,49 @@ paths:
       summary: List lab interfaces
       tags:
       - Labs
+  /api/v1/labs/{labName}/nodes/{nodeName}/browser-ports:
+    get:
+      description: Returns exposed host ports for a node suitable for opening in a
+        browser.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.NodeBrowserPortsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get node browser ports
+      tags:
+      - Labs - Nodes
   /api/v1/labs/{labName}/nodes/{nodeName}/logs:
     get:
       description: |-
@@ -1373,12 +2461,55 @@ paths:
       summary: Get node logs
       tags:
       - Logs
+  /api/v1/labs/{labName}/nodes/{nodeName}/pause:
+    post:
+      description: Pauses a running node in a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Pause node
+      tags:
+      - Labs - Nodes
   /api/v1/labs/{labName}/nodes/{nodeName}/ssh:
     post:
       consumes:
       - application/json
-      description: Creates temporary SSH access to a lab node and returns connection
-        details.
+      description: |-
+        Creates temporary SSH access to a lab node and returns connection details for an external SSH client.
+        This endpoint does not create a browser terminal session. For browser terminals, use `/api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions` with `protocol=ssh`.
       parameters:
       - description: Lab name
         in: path
@@ -1424,9 +2555,203 @@ paths:
             $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Request SSH access to lab node
+      summary: Request temporary SSH access details
       tags:
       - SSH Access
+  /api/v1/labs/{labName}/nodes/{nodeName}/start:
+    post:
+      description: Starts a stopped node in a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Start node
+      tags:
+      - Labs - Nodes
+  /api/v1/labs/{labName}/nodes/{nodeName}/stop:
+    post:
+      description: Stops a running node in a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stop node
+      tags:
+      - Labs - Nodes
+  /api/v1/labs/{labName}/nodes/{nodeName}/terminal-sessions:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Creates a constrained interactive terminal session for an owned lab node using one of the supported protocols: `ssh`, `shell`, or `telnet`.
+
+        **Protocol behavior**
+        - `ssh`: launches the server-side `ssh` client in a PTY directly to the node management IP and streams that terminal over WebSocket.
+        - `shell`: launches a PTY-backed `docker|podman exec -it <container> <server-selected-command>` session.
+        - `telnet`: launches a PTY-backed `docker|podman exec -it <container> telnet 127.0.0.1 <port>` session.
+
+        **Security notes**
+        - The backend chooses the launch command for every protocol. Clients choose only the protocol and terminal size.
+        - Access is limited to owned nodes unless the caller is a configured superuser.
+
+        **Relationship to `/api/v1/labs/{labName}/nodes/{nodeName}/ssh`**
+        - This endpoint creates the interactive browser terminal session.
+        - The separate `/ssh` endpoint returns temporary SSH access details for an external SSH client and is not required for browser terminals.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Full container name of the node (e.g., clab-my-lab-srl1)
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      - description: Terminal session creation parameters
+        in: body
+        name: terminal_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TerminalSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Created terminal session
+          schema:
+            $ref: '#/definitions/models.TerminalSessionInfo'
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Lab or node not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "429":
+          description: Too many active terminal sessions
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create browser terminal session
+      tags:
+      - Terminal Sessions
+  /api/v1/labs/{labName}/nodes/{nodeName}/unpause:
+    post:
+      description: Unpauses a paused node in a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unpause node
+      tags:
+      - Labs - Nodes
   /api/v1/labs/{labName}/save:
     post:
       description: Saves the running configuration for nodes in a lab.
@@ -1468,6 +2793,532 @@ paths:
       summary: Save lab configuration
       tags:
       - Labs
+  /api/v1/labs/{labName}/sshx/{action}:
+    post:
+      description: Executes SSHX share action (attach, detach, reattach) for a lab.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Action (attach|detach|reattach)
+        in: path
+        name: action
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ShareToolResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: SSHX share action
+      tags:
+      - Labs - Sharing
+  /api/v1/labs/{labName}/topology/annotations:
+    get:
+      description: Returns annotations for the specified lab. For deployed labs, the
+        running annotations path is preferred and local files are used as fallback.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Annotations content
+          schema:
+            type: string
+        "400":
+          description: Invalid lab name
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: File not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get lab annotations
+      tags:
+      - Labs
+    put:
+      consumes:
+      - text/plain
+      description: Updates annotations for the specified lab. For deployed labs, writes
+        to the running annotations path when present and otherwise writes to local
+        files.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Annotations content
+        in: body
+        name: content
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Write success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Lab not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update lab annotations
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/topology/events:
+    get:
+      description: Streams topology YAML/annotations change events for a single lab
+        topology document pair as NDJSON.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative topology YAML or annotations path inside lab directory
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/x-ndjson
+      responses:
+        "200":
+          description: Topology document event stream
+          schema:
+            $ref: '#/definitions/models.TopologyDocEventResponse'
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stream topology document events
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/topology/file:
+    delete:
+      description: Deletes a file inside the specified lab directory using a scoped
+        relative path.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative file path inside lab directory
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Delete success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete lab topology file
+      tags:
+      - Labs
+    get:
+      description: Reads a file from within the specified lab directory using a scoped
+        relative path.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative file path inside lab directory
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: File content
+          schema:
+            type: string
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: File not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Read lab topology file
+      tags:
+      - Labs
+    head:
+      description: Checks whether a file exists inside the specified lab directory.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative file path inside lab directory
+        in: query
+        name: path
+        required: true
+        type: string
+      responses:
+        "200":
+          description: File exists
+        "400":
+          description: Invalid path
+        "401":
+          description: Unauthorized
+        "404":
+          description: File not found
+        "500":
+          description: Internal server error
+      security:
+      - BearerAuth: []
+      summary: Check lab topology file existence
+      tags:
+      - Labs
+    put:
+      consumes:
+      - text/plain
+      description: Writes a file inside the specified lab directory using a scoped
+        relative path.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Relative file path inside lab directory
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: File content
+        in: body
+        name: content
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Write success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Write lab topology file
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/topology/file/rename:
+    post:
+      consumes:
+      - application/json
+      description: Renames or moves a file inside the specified lab directory using
+        scoped relative paths.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Old and new relative file paths
+        in: body
+        name: rename_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TopologyFileRenameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Rename success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Rename lab topology file
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/topology/yaml:
+    get:
+      description: Returns the topology YAML for the specified lab. For deployed labs,
+        the running topology source path is preferred and local files are used as
+        fallback.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Topology YAML content
+          schema:
+            type: string
+        "400":
+          description: Invalid lab name
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: File not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get lab topology YAML
+      tags:
+      - Labs
+    put:
+      consumes:
+      - text/plain
+      description: Updates the topology YAML for the specified lab. For deployed labs,
+        writes to the running topology source when present and otherwise writes to
+        local files.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Topology YAML content
+        in: body
+        name: content
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Write success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Lab not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update lab topology YAML
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/ui/icons:
+    get:
+      description: Returns the custom TopoViewer icons available for a lab, merging
+        lab-local .clab-icons with the global ~/.clab/icons library. Lab-local icons
+        take precedence.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Merged lab icon list
+          schema:
+            $ref: '#/definitions/models.IconListResponse'
+        "400":
+          description: Invalid lab name
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List lab custom icons
+      tags:
+      - UI
+  /api/v1/labs/{labName}/ui/icons/reconcile:
+    post:
+      consumes:
+      - application/json
+      description: Copies used custom icons from the global ~/.clab/icons library
+        into the lab-local .clab-icons directory and removes unused lab-local custom
+        icons.
+      parameters:
+      - description: Lab name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Used custom icon names
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.IconReconcileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reconcile success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Reconcile lab custom icons
+      tags:
+      - UI
   /api/v1/labs/archive:
     post:
       consumes:
@@ -1538,6 +3389,77 @@ paths:
       security:
       - BearerAuth: []
       summary: Deploy lab from archive
+      tags:
+      - Labs
+  /api/v1/labs/topology/files:
+    get:
+      description: Returns editable topology entries from the authenticated user's
+        lab directory.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Topology entries
+          schema:
+            items:
+              $ref: '#/definitions/models.TopologyEntry'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List editable lab topology files
+      tags:
+      - Labs
+  /api/v1/labs/topology/import-from-url:
+    post:
+      consumes:
+      - application/json
+      description: Clones a supported Git repository URL and registers it as an undeployed
+        lab.
+      parameters:
+      - description: Topology source URL
+        in: body
+        name: import_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ImportTopologyFromURLRequest'
+      - description: Override imported lab name
+        in: query
+        name: labNameOverride
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Import result
+          schema:
+            $ref: '#/definitions/models.ImportTopologyFromURLResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Lab already exists
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Import topology repository as undeployed lab
       tags:
       - Labs
   /api/v1/ssh/sessions:
@@ -1617,6 +3539,119 @@ paths:
       summary: Terminate SSH session
       tags:
       - SSH Access
+  /api/v1/terminal-sessions/{sessionId}:
+    delete:
+      description: Terminates a terminal session owned by the caller (or any session
+        for a superuser).
+      parameters:
+      - description: Terminal session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Terminal session terminated
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Terminate terminal session
+      tags:
+      - Terminal Sessions
+    get:
+      description: Returns metadata and lifecycle state for a terminal session.
+      parameters:
+      - description: Terminal session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Terminal session metadata
+          schema:
+            $ref: '#/definitions/models.TerminalSessionInfo'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get terminal session
+      tags:
+      - Terminal Sessions
+  /api/v1/terminal-sessions/{sessionId}/stream:
+    get:
+      description: |-
+        Upgrades the request to a WebSocket connection for terminal input, output, resize, and close events.
+
+        **Protocol notes**
+        - Connect with a WebSocket client to this endpoint after creating a terminal session.
+        - Client messages are JSON objects with `type` set to `input`, `resize`, or `close`.
+        - Server messages are JSON objects with `type` set to `ready`, `output`, or `exit`.
+      parameters:
+      - description: Terminal session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "101":
+          description: Switching Protocols to WebSocket
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Session not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Session already attached
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "410":
+          description: Session already exited
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stream terminal session
+      tags:
+      - Terminal Sessions
   /api/v1/tools/certs/ca:
     post:
       consumes:
@@ -1754,6 +3789,84 @@ paths:
       summary: Disable TX checksum offload
       tags:
       - Tools
+  /api/v1/tools/edgeshark/install:
+    post:
+      description: Installs and starts EdgeShark services on the host runtime using
+        compose.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: EdgeShark installed
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Superuser privileges required
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Install EdgeShark
+      tags:
+      - Capture
+  /api/v1/tools/edgeshark/status:
+    get:
+      description: Returns whether EdgeShark is reachable and its runtime details.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: EdgeShark status
+          schema:
+            $ref: '#/definitions/models.EdgeSharkStatusResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get EdgeShark status
+      tags:
+      - Capture
+  /api/v1/tools/edgeshark/uninstall:
+    post:
+      description: Stops and removes EdgeShark services managed by compose.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: EdgeShark uninstalled
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Superuser privileges required
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Uninstall EdgeShark
+      tags:
+      - Capture
   /api/v1/tools/netem/reset:
     post:
       consumes:
@@ -2005,6 +4118,280 @@ paths:
       summary: Create VxLAN tunnel
       tags:
       - Tools - VxLAN
+  /api/v1/ui/custom-nodes:
+    get:
+      description: Returns the authenticated user's persisted TopoViewer custom node
+        templates. If none have been saved yet, seeded defaults matching VS Code are
+        returned.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Custom node templates
+          schema:
+            $ref: '#/definitions/models.CustomNodesResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List custom node templates
+      tags:
+      - UI
+    post:
+      consumes:
+      - application/json
+      description: Creates or updates a single TopoViewer custom node template for
+        the authenticated user.
+      parameters:
+      - description: Custom node template payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CustomNodeTemplate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated custom node templates
+          schema:
+            $ref: '#/definitions/models.CustomNodesResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Save custom node template
+      tags:
+      - UI
+    put:
+      consumes:
+      - application/json
+      description: Replaces the authenticated user's full TopoViewer custom node template
+        collection.
+      parameters:
+      - description: Replacement custom node template collection
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CustomNodesReplaceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated custom node templates
+          schema:
+            $ref: '#/definitions/models.CustomNodesResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Replace custom node templates
+      tags:
+      - UI
+  /api/v1/ui/custom-nodes/{name}:
+    delete:
+      description: Deletes a single TopoViewer custom node template for the authenticated
+        user.
+      parameters:
+      - description: Custom node name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated custom node templates
+          schema:
+            $ref: '#/definitions/models.CustomNodesResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete custom node template
+      tags:
+      - UI
+  /api/v1/ui/custom-nodes/default:
+    post:
+      consumes:
+      - application/json
+      description: Sets the default TopoViewer custom node template for the authenticated
+        user.
+      parameters:
+      - description: Default custom node selection
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CustomNodeDefaultRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated custom node templates
+          schema:
+            $ref: '#/definitions/models.CustomNodesResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Custom node not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set default custom node template
+      tags:
+      - UI
+  /api/v1/ui/icons:
+    get:
+      description: Returns the authenticated user's global custom TopoViewer icon
+        library from ~/.clab/icons.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Global custom icons
+          schema:
+            $ref: '#/definitions/models.IconListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List global custom icons
+      tags:
+      - UI
+    post:
+      consumes:
+      - application/json
+      description: Uploads a new global custom TopoViewer icon into ~/.clab/icons
+        for the authenticated user.
+      parameters:
+      - description: Custom icon upload payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.IconUploadRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Upload success
+          schema:
+            $ref: '#/definitions/models.IconUploadResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Rejected due to built-in icon name conflict
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload global custom icon
+      tags:
+      - UI
+  /api/v1/ui/icons/{iconName}:
+    delete:
+      description: Deletes a global custom TopoViewer icon from ~/.clab/icons for
+        the authenticated user.
+      parameters:
+      - description: Custom icon name
+        in: path
+        name: iconName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Delete success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid icon name
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Icon not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete global custom icon
+      tags:
+      - UI
   /api/v1/users:
     get:
       description: Returns a list of system users. Requires superuser privileges.
@@ -2154,8 +4541,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Updates an existing user. Requires superuser privileges or the
-        user's own account.
+      description: Updates an existing user. Regular users may update only their own
+        profile fields. Group and superuser status changes require superuser privileges.
       parameters:
       - description: Username to update
         in: path

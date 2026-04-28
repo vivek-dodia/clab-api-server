@@ -23,6 +23,7 @@ import (
 	"github.com/srl-labs/clab-api-server/internal/clab"
 	"github.com/srl-labs/clab-api-server/internal/config"
 	"github.com/srl-labs/clab-api-server/internal/templates"
+	"github.com/srl-labs/clab-api-server/internal/tlsconfig"
 )
 
 // --- Version Info ---
@@ -33,15 +34,15 @@ var (
 )
 
 // --- Swagger annotations ---
-// @title Containerlab API
+// @title Containerlab API Server
 // @version 1.0
-// @description This is an API server to interact with Containerlab for authenticated Linux users. Runs clab commands as the API server's user. Requires PAM for authentication.
-// @termsOfService http://swagger.io/terms/
-// @contact.name API Support
-// @contact.url https://swagger.io/support/
-// @contact.email support@swagger.io
+// @description REST API for authenticated Linux users to manage Containerlab deployments, topology files, node access, captures, and host networking tools.
+// @description
+// @description Most endpoints under /api/v1 require a JWT from POST /login. Send it as: Authorization: Bearer <token>.
+// @contact.name Containerlab API Server maintainers
+// @contact.url https://github.com/srl-labs/clab-api-server/issues
 // @license.name Apache 2.0
-// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+// @license.url https://www.apache.org/licenses/LICENSE-2.0.html
 // @schemes http https
 // @securityDefinitions.apikey BearerAuth
 // @in header
@@ -65,6 +66,10 @@ func main() {
 		fmt.Printf("commit: %s\n", commit)
 		fmt.Printf("built: %s\n", date)
 		os.Exit(0)
+	}
+
+	if flag.NArg() > 0 && flag.Arg(0) == "version" {
+		os.Exit(runVersionCommand(context.Background(), flag.Args()[1:], os.Stdout, os.Stderr))
 	}
 
 	// --- Load configuration First ---
@@ -112,6 +117,14 @@ func main() {
 	api.InitSSHManager()
 	log.Infof("SSH port range configured: %d - %d", config.AppConfig.SSHBasePort, config.AppConfig.SSHMaxPort)
 
+	// --- Initialize Terminal Manager ---
+	log.Info("Initializing Terminal Session Manager...")
+	api.InitTerminalManager()
+
+	// --- Initialize Capture Manager ---
+	log.Info("Initializing Capture Manager...")
+	api.InitCaptureManager()
+
 	// --- Initialize Authentication ---
 	log.Info("Initializing authentication...")
 	auth.InitAuth() // Initialize auth with server start time
@@ -152,6 +165,7 @@ func main() {
 	}
 
 	// Setup API routes
+	router.Use(api.CORSMiddleware())
 	api.SetupRoutes(router)
 
 	// Root handler (remains the same)
@@ -187,10 +201,46 @@ func main() {
 	if config.AppConfig.TLSEnable {
 		serverBaseURL = fmt.Sprintf("https://localhost:%s", config.AppConfig.APIPort)
 	}
+	tlsCertFile := config.AppConfig.TLSCertFile
+	tlsKeyFile := config.AppConfig.TLSKeyFile
+	if config.AppConfig.TLSEnable {
+		if (tlsCertFile == "") != (tlsKeyFile == "") {
+			log.Fatal("TLS is enabled but only one of TLS_CERT_FILE or TLS_KEY_FILE is set.")
+		}
+		if tlsCertFile == "" && tlsKeyFile == "" {
+			if !config.AppConfig.TLSAutoCert {
+				log.Fatal("TLS is enabled but TLS_CERT_FILE and TLS_KEY_FILE are not set, and TLS_AUTO_CERT is false.")
+			}
+
+			certPaths, err := tlsconfig.DefaultCertificatePaths("clab-api-server")
+			if err != nil {
+				log.Fatalf("Failed to resolve auto TLS certificate path: %v", err)
+			}
+			hosts := tlsconfig.DefaultServerHosts(config.AppConfig.APIServerHost)
+			generated, err := tlsconfig.EnsureSelfSignedCertificate(certPaths.CertFile, certPaths.KeyFile, hosts)
+			if err != nil {
+				log.Fatalf("Failed to prepare auto TLS certificate: %v", err)
+			}
+			tlsCertFile = certPaths.CertFile
+			tlsKeyFile = certPaths.KeyFile
+			if generated {
+				log.Warnf("Generated self-signed TLS certificate at %s. Browsers and clients must trust it or opt into insecure verification.", tlsCertFile)
+			} else {
+				log.Infof("Using existing auto TLS certificate at %s", tlsCertFile)
+			}
+		}
+		if _, err := os.Stat(tlsCertFile); os.IsNotExist(err) {
+			log.Fatalf("TLS cert file not found: %s", tlsCertFile)
+		}
+		if _, err := os.Stat(tlsKeyFile); os.IsNotExist(err) {
+			log.Fatalf("TLS key file not found: %s", tlsKeyFile)
+		}
+	}
 
 	srv := &http.Server{
-		Addr:    listenAddr,
-		Handler: router,
+		Addr:      listenAddr,
+		Handler:   router,
+		TLSConfig: tlsconfig.LocalServerTLSConfig(),
 	}
 
 	// --- Start Server Goroutine ---
@@ -199,18 +249,8 @@ func main() {
 		if config.AppConfig.TLSEnable {
 			protocol = "HTTPS"
 			log.Infof("Starting %s server, accessible locally at %s (and potentially other IPs)", protocol, serverBaseURL)
-			// Check TLS files before starting
-			if config.AppConfig.TLSCertFile == "" || config.AppConfig.TLSKeyFile == "" {
-				log.Fatalf("TLS is enabled but TLS_CERT_FILE or TLS_KEY_FILE is not set.")
-			}
-			if _, err := os.Stat(config.AppConfig.TLSCertFile); os.IsNotExist(err) {
-				log.Fatalf("TLS cert file not found: %s", config.AppConfig.TLSCertFile)
-			}
-			if _, err := os.Stat(config.AppConfig.TLSKeyFile); os.IsNotExist(err) {
-				log.Fatalf("TLS key file not found: %s", config.AppConfig.TLSKeyFile)
-			}
 			// Start HTTPS server
-			if err := srv.ListenAndServeTLS(config.AppConfig.TLSCertFile, config.AppConfig.TLSKeyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := srv.ListenAndServeTLS(tlsCertFile, tlsKeyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				log.Fatalf("Failed to start %s server: %v", protocol, err)
 			}
 		} else {
@@ -238,6 +278,8 @@ func main() {
 
 	// Shutdown SSH Manager (can run concurrently with server shutdown)
 	go api.ShutdownSSHManager() // No need to wait for this specifically unless it's critical
+	go api.ShutdownTerminalManager()
+	go api.ShutdownCaptureManager()
 
 	// Attempt graceful shutdown of the HTTP server
 	if err := srv.Shutdown(ctx); err != nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/srl-labs/clab-api-server/internal/auth"
+	"github.com/srl-labs/clab-api-server/internal/config"
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
 
@@ -31,6 +32,13 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
+	expiresIn, err := auth.ResolveLoginDuration(req.SessionDuration, config.AppConfig.JWTExpiration)
+	if err != nil {
+		log.Infof("Login failed for user '%s': Invalid session duration %q", req.Username, req.SessionDuration)
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid session duration. Use values like 12h, 36h, 7d, or 1h30m"})
+		return
+	}
+
 	valid, err := auth.ValidateCredentials(req.Username, req.Password)
 	if err != nil {
 		log.Errorf("Login failed for user '%s': Error during credential validation: %v", req.Username, err)
@@ -44,7 +52,7 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	token, err := auth.GenerateJWT(req.Username)
+	token, err := auth.GenerateJWT(req.Username, expiresIn)
 	if err != nil {
 		log.Errorf("Login successful for user '%s', but failed to generate token: %v", req.Username, err)
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate token: " + err.Error()})

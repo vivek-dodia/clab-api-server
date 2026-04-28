@@ -3,6 +3,7 @@ package clab
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -38,6 +40,7 @@ import (
 const (
 	defaultTimeout         = 5 * time.Minute
 	gracefulDestroyTimeout = 2 * time.Minute
+	imagePullTimeout       = 30 * time.Minute
 )
 
 var ErrNetemInterfaceNotFound = errors.New("netem interface not found")
@@ -48,6 +51,80 @@ type Service struct{}
 // NewService creates a new containerlab service.
 func NewService() *Service {
 	return &Service{}
+}
+
+type rootLinkNode struct {
+	shortName string
+	endpoints []clablinks.Endpoint
+	nspath    string
+}
+
+func newRootLinkNode(shortName string) (*rootLinkNode, error) {
+	currns, err := ns.GetCurrentNS()
+	if err != nil {
+		return nil, err
+	}
+	defer currns.Close()
+
+	return &rootLinkNode{
+		shortName: shortName,
+		endpoints: []clablinks.Endpoint{},
+		nspath:    currns.Path(),
+	}, nil
+}
+
+func (n *rootLinkNode) AddLinkToContainer(_ context.Context, link netlink.Link, f func(ns.NetNS) error) error {
+	netns, err := ns.GetNS(n.nspath)
+	if err != nil {
+		return err
+	}
+	defer netns.Close()
+
+	if err := netlink.LinkSetNsFd(link, int(netns.Fd())); err != nil {
+		return err
+	}
+
+	return netns.Do(f)
+}
+
+func (n *rootLinkNode) AddEndpoint(e clablinks.Endpoint) error {
+	n.endpoints = append(n.endpoints, e)
+	return nil
+}
+
+func (*rootLinkNode) GetLinkEndpointType() clablinks.LinkEndpointType {
+	return clablinks.LinkEndpointTypeHost
+}
+
+func (n *rootLinkNode) GetShortName() string {
+	return n.shortName
+}
+
+func (n *rootLinkNode) GetEndpoints() []clablinks.Endpoint {
+	return n.endpoints
+}
+
+func (n *rootLinkNode) ExecFunction(_ context.Context, f func(ns.NetNS) error) error {
+	netns, err := ns.GetNS(n.nspath)
+	if err != nil {
+		return err
+	}
+	defer netns.Close()
+
+	return netns.Do(f)
+}
+
+func (*rootLinkNode) GetState() clabnodesstate.NodeState {
+	return clabnodesstate.Deployed
+}
+
+func (n *rootLinkNode) Delete(ctx context.Context) error {
+	for _, e := range n.endpoints {
+		if err := e.GetLink().Remove(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DeployOptions contains options for deploying a lab.
@@ -64,14 +141,15 @@ type DeployOptions struct {
 
 // DestroyOptions contains options for destroying a lab.
 type DestroyOptions struct {
-	LabName     string
-	TopoPath    string
-	Username    string
-	Graceful    bool
-	Cleanup     bool
-	KeepMgmtNet bool
-	NodeFilter  []string
-	MaxWorkers  uint
+	LabName         string
+	TopoPath        string
+	Username        string
+	Graceful        bool
+	GracefulTimeout time.Duration
+	Cleanup         bool
+	KeepMgmtNet     bool
+	NodeFilter      []string
+	MaxWorkers      uint
 }
 
 // ListOptions contains options for listing labs/containers.
@@ -110,6 +188,114 @@ type InterfacesOptions struct {
 	LabName    string
 	Username   string
 	NodeFilter string
+}
+
+type NodeLifecycleAction string
+
+const (
+	NodeLifecycleActionStart   NodeLifecycleAction = "start"
+	NodeLifecycleActionStop    NodeLifecycleAction = "stop"
+	NodeLifecycleActionPause   NodeLifecycleAction = "pause"
+	NodeLifecycleActionUnpause NodeLifecycleAction = "unpause"
+)
+
+type NodeLifecycleOptions struct {
+	ContainerName string
+	Action        NodeLifecycleAction
+}
+
+type ContainerlabToolRunOptions struct {
+	Args []string
+}
+
+type DrawioGenerateOptions struct {
+	TopoPath      string
+	Runtime       string
+	Layout        string
+	Theme         string
+	Interactive   bool
+	DrawioVersion string
+}
+
+type DrawioGenerateResult struct {
+	Path   string
+	Output string
+}
+
+type FcliRunOptions struct {
+	Runtime      string
+	Network      string
+	TopologyPath string
+	CommandArgs  []string
+}
+
+type CloneTopologySourceOptions struct {
+	SourceURL string
+	Username  string
+}
+
+type CloneTopologySourceResult struct {
+	RepoDir      string
+	RepoName     string
+	TopologyPath string
+}
+
+type RuntimeImageSummary struct {
+	ID          string
+	ShortID     string
+	RepoTags    []string
+	RepoDigests []string
+	CreatedAt   string
+	Size        string
+	VirtualSize string
+}
+
+type runtimeImageCliRecord struct {
+	ID           string `json:"ID"`
+	Repository   string `json:"Repository"`
+	Tag          string `json:"Tag"`
+	Digest       string `json:"Digest"`
+	CreatedAt    string `json:"CreatedAt"`
+	CreatedSince string `json:"CreatedSince"`
+	Size         string `json:"Size"`
+	VirtualSize  string `json:"VirtualSize"`
+}
+
+// CloneTopologySource clones a supported topology source URL and resolves the topology file path.
+func (s *Service) CloneTopologySource(opts CloneTopologySourceOptions) (*CloneTopologySourceResult, error) {
+	sourceURL := strings.TrimSpace(opts.SourceURL)
+	if sourceURL == "" {
+		return nil, fmt.Errorf("topology source URL is required")
+	}
+	if strings.TrimSpace(opts.Username) == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+
+	workDir, err := s.prepareWorkDir(opts.Username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare working directory: %w", err)
+	}
+
+	normalizedURL := sourceURL
+	if clabgit.IsGitHubShortURL(normalizedURL) {
+		normalizedURL = "https://github.com/" + normalizedURL
+	}
+
+	repo, err := clabgit.NewRepo(normalizedURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse git URL: %w", err)
+	}
+
+	topoPath, err := s.processGitTopoFile(sourceURL, workDir)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CloneTopologySourceResult{
+		RepoDir:      filepath.Join(workDir, repo.GetName()),
+		RepoName:     repo.GetName(),
+		TopologyPath: topoPath,
+	}, nil
 }
 
 // Deploy deploys a lab using the containerlab library.
@@ -231,6 +417,9 @@ func (s *Service) Destroy(ctx context.Context, opts DestroyOptions) error {
 	clabTimeout := defaultTimeout
 	if opts.Graceful {
 		clabTimeout = gracefulDestroyTimeout
+		if opts.GracefulTimeout > 0 {
+			clabTimeout = opts.GracefulTimeout
+		}
 	}
 	var clabOpts []clabcore.ClabOption
 	clabOpts = append(clabOpts, clabcore.WithTimeout(clabTimeout))
@@ -287,6 +476,7 @@ func (s *Service) Destroy(ctx context.Context, opts DestroyOptions) error {
 		"username", opts.Username,
 		"labName", opts.LabName,
 		"graceful", opts.Graceful,
+		"gracefulTimeout", opts.GracefulTimeout,
 		"cleanup", opts.Cleanup,
 	)
 
@@ -348,6 +538,289 @@ func (s *Service) ListContainers(ctx context.Context, opts ListOptions) ([]clabr
 	}
 
 	return containers, nil
+}
+
+func (s *Service) RunNodeLifecycleAction(ctx context.Context, opts NodeLifecycleOptions) error {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	containerName := strings.TrimSpace(opts.ContainerName)
+	if containerName == "" {
+		return fmt.Errorf("container name is required")
+	}
+
+	rt, err := s.getContainerRuntime()
+	if err != nil {
+		return err
+	}
+
+	switch opts.Action {
+	case NodeLifecycleActionStart:
+		_, err = rt.StartContainer(
+			ctx,
+			containerName,
+			clabruntime.NewEndpointlessNode(&clabtypes.NodeConfig{LongName: containerName}),
+		)
+	case NodeLifecycleActionStop:
+		err = rt.StopContainer(ctx, containerName)
+	case NodeLifecycleActionPause:
+		err = rt.PauseContainer(ctx, containerName)
+	case NodeLifecycleActionUnpause:
+		err = rt.UnpauseContainer(ctx, containerName)
+	default:
+		return fmt.Errorf("unsupported node lifecycle action: %q", opts.Action)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to %s container %q: %w", opts.Action, containerName, err)
+	}
+
+	return nil
+}
+
+func (s *Service) RunContainerlabTool(ctx context.Context, opts ContainerlabToolRunOptions) (string, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	if len(opts.Args) == 0 {
+		return "", fmt.Errorf("at least one command argument is required")
+	}
+
+	return s.runCommand(ctx, "containerlab", opts.Args)
+}
+
+func configuredRuntimeName() string {
+	runtimeName := strings.TrimSpace(config.AppConfig.ClabRuntime)
+	if runtimeName == "" {
+		return "docker"
+	}
+	return runtimeName
+}
+
+func shortRuntimeImageID(id string) string {
+	trimmed := strings.TrimPrefix(strings.TrimSpace(id), "sha256:")
+	if len(trimmed) <= 12 {
+		return trimmed
+	}
+	return trimmed[:12]
+}
+
+func validImageTag(repository, tag string) string {
+	repository = strings.TrimSpace(repository)
+	tag = strings.TrimSpace(tag)
+	if repository == "" || repository == "<none>" || tag == "" || tag == "<none>" {
+		return ""
+	}
+	return repository + ":" + tag
+}
+
+func validImageDigest(repository, digest string) string {
+	repository = strings.TrimSpace(repository)
+	digest = strings.TrimSpace(digest)
+	if repository == "" || repository == "<none>" || digest == "" || digest == "<none>" {
+		return ""
+	}
+	return repository + "@" + digest
+}
+
+func appendUniqueString(values []string, value string) []string {
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
+}
+
+func (s *Service) ListRuntimeImages(ctx context.Context) ([]RuntimeImageSummary, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	runtimeName := configuredRuntimeName()
+	output, err := s.runCommand(ctx, runtimeName, []string{
+		"image",
+		"ls",
+		"--all",
+		"--digests",
+		"--no-trunc",
+		"--format",
+		"{{json .}}",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	imagesByID := map[string]*RuntimeImageSummary{}
+	order := []string{}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var record runtimeImageCliRecord
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			return nil, fmt.Errorf("failed to parse %s image listing: %w", runtimeName, err)
+		}
+		id := strings.TrimSpace(record.ID)
+		if id == "" {
+			continue
+		}
+		image := imagesByID[id]
+		if image == nil {
+			image = &RuntimeImageSummary{
+				ID:          id,
+				ShortID:     shortRuntimeImageID(id),
+				RepoTags:    []string{},
+				RepoDigests: []string{},
+				CreatedAt:   strings.TrimSpace(record.CreatedAt),
+				Size:        strings.TrimSpace(record.Size),
+				VirtualSize: strings.TrimSpace(record.VirtualSize),
+			}
+			if image.CreatedAt == "" {
+				image.CreatedAt = strings.TrimSpace(record.CreatedSince)
+			}
+			imagesByID[id] = image
+			order = append(order, id)
+		}
+		image.RepoTags = appendUniqueString(image.RepoTags, validImageTag(record.Repository, record.Tag))
+		image.RepoDigests = appendUniqueString(image.RepoDigests, validImageDigest(record.Repository, record.Digest))
+	}
+
+	images := make([]RuntimeImageSummary, 0, len(order))
+	for _, id := range order {
+		images = append(images, *imagesByID[id])
+	}
+	return images, nil
+}
+
+func (s *Service) PullRuntimeImage(ctx context.Context, image string) (string, error) {
+	baseCtx := ctx
+	if _, hasDeadline := baseCtx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		baseCtx, cancel = context.WithTimeout(baseCtx, imagePullTimeout)
+		defer cancel()
+	}
+	return s.runCommand(baseCtx, configuredRuntimeName(), []string{"pull", image})
+}
+
+func (s *Service) RemoveRuntimeImage(ctx context.Context, reference string, force bool) (string, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	args := []string{"image", "rm"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, reference)
+	return s.runCommand(ctx, configuredRuntimeName(), args)
+}
+
+func (s *Service) RunFcliCommand(ctx context.Context, opts FcliRunOptions) (string, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	topologyPath := strings.TrimSpace(opts.TopologyPath)
+	if topologyPath == "" {
+		return "", fmt.Errorf("topology path is required")
+	}
+
+	if len(opts.CommandArgs) == 0 {
+		return "", fmt.Errorf("fcli command is required")
+	}
+
+	runtimeName := strings.TrimSpace(opts.Runtime)
+	if runtimeName == "" {
+		runtimeName = strings.TrimSpace(config.AppConfig.ClabRuntime)
+	}
+	if runtimeName == "" {
+		runtimeName = "docker"
+	}
+
+	networkName := strings.TrimSpace(opts.Network)
+	if networkName == "" {
+		networkName = "clab"
+	}
+
+	args := []string{
+		"run",
+		"--pull", "always",
+		"--rm",
+		"--network", networkName,
+		"-v", "/etc/hosts:/etc/hosts:ro",
+		"-v", fmt.Sprintf("%s:/topo.yml", topologyPath),
+		"ghcr.io/srl-labs/nornir-srl:latest",
+		"-t", "/topo.yml",
+	}
+	args = append(args, opts.CommandArgs...)
+
+	return s.runCommand(ctx, runtimeName, args)
+}
+
+func (s *Service) GenerateDrawioFile(ctx context.Context, opts DrawioGenerateOptions) (DrawioGenerateResult, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	topoPath := strings.TrimSpace(opts.TopoPath)
+	if topoPath == "" {
+		return DrawioGenerateResult{}, fmt.Errorf("topology path is required")
+	}
+
+	runtimeName := strings.TrimSpace(opts.Runtime)
+	if runtimeName == "" {
+		runtimeName = strings.TrimSpace(config.AppConfig.ClabRuntime)
+	}
+	if runtimeName == "" {
+		runtimeName = "docker"
+	}
+
+	layout := strings.ToLower(strings.TrimSpace(opts.Layout))
+	if layout == "" {
+		layout = "horizontal"
+	}
+	if layout != "horizontal" && layout != "vertical" {
+		return DrawioGenerateResult{}, fmt.Errorf("unsupported drawio layout: %q", layout)
+	}
+
+	theme := strings.TrimSpace(opts.Theme)
+	if theme == "" {
+		theme = "nokia_modern"
+	}
+
+	args := []string{
+		"graph",
+		"-r", runtimeName,
+		"--drawio",
+	}
+
+	if drawioVersion := strings.TrimSpace(opts.DrawioVersion); drawioVersion != "" {
+		args = append(args, "--drawio-version", drawioVersion)
+	}
+
+	if opts.Interactive {
+		args = append(args, "--drawio-args", "-I")
+	} else {
+		args = append(args, "--drawio-args", fmt.Sprintf("--theme %s --layout %s", theme, layout))
+	}
+
+	args = append(args, "-t", topoPath)
+
+	output, err := s.runCommand(ctx, "containerlab", args)
+	if err != nil {
+		return DrawioGenerateResult{}, err
+	}
+
+	drawioPath := drawioOutputPathFromTopo(topoPath)
+	if _, err := os.Stat(drawioPath); err != nil {
+		return DrawioGenerateResult{}, fmt.Errorf("drawio output file not found at %q: %w", drawioPath, err)
+	}
+
+	return DrawioGenerateResult{
+		Path:   drawioPath,
+		Output: output,
+	}, nil
 }
 
 // ListContainerInterfaces lists interfaces for a specific container.
@@ -754,20 +1227,19 @@ func (s *Service) CreateVeth(ctx context.Context, opts VethCreateOptions) error 
 		return fmt.Errorf("failed to create nodes: %w", err)
 	}
 
-	// Create link brief
-	linkBrief := &clablinks.LinkBriefRaw{
-		Endpoints: []string{
-			fmt.Sprintf("%s:%s", parsedAEnd.Node, parsedAEnd.Iface),
-			fmt.Sprintf("%s:%s", parsedBEnd.Node, parsedBEnd.Iface),
+	hostNode, err := newRootLinkNode("host")
+	if err != nil {
+		return fmt.Errorf("failed to create host link node: %w", err)
+	}
+
+	linkRaw := &clablinks.LinkVEthRaw{
+		Endpoints: []*clablinks.EndpointRaw{
+			clablinks.NewEndpointRaw(parsedAEnd.Node, parsedAEnd.Iface, ""),
+			clablinks.NewEndpointRaw(parsedBEnd.Node, parsedBEnd.Iface, ""),
 		},
 		LinkCommonParams: clablinks.LinkCommonParams{
 			MTU: opts.MTU,
 		},
-	}
-
-	linkRaw, err := linkBrief.ToTypeSpecificRawLink()
-	if err != nil {
-		return fmt.Errorf("failed to convert link brief: %w", err)
 	}
 
 	// Copy nodes to links.Nodes
@@ -775,6 +1247,7 @@ func (s *Service) CreateVeth(ctx context.Context, opts VethCreateOptions) error 
 	for k, v := range clab.Nodes {
 		resolveNodes[k] = v
 	}
+	resolveNodes["host"] = hostNode
 
 	link, err := linkRaw.Resolve(&clablinks.ResolveParams{Nodes: resolveNodes})
 	if err != nil {
@@ -783,7 +1256,9 @@ func (s *Service) CreateVeth(ctx context.Context, opts VethCreateOptions) error 
 
 	// Deploy the endpoints
 	for _, ep := range link.GetEndpoints() {
-		ep.Deploy(ctx)
+		if err := ep.Deploy(ctx); err != nil {
+			return fmt.Errorf("failed to deploy endpoint %s: %w", ep, err)
+		}
 	}
 
 	log.Info("veth pair created successfully",
@@ -900,6 +1375,12 @@ func (s *Service) CreateVxlan(ctx context.Context, opts VxlanCreateOptions) erro
 		parentDevice = r.Interface.Name
 	}
 
+	hostNode, err := newRootLinkNode("host")
+	if err != nil {
+		return fmt.Errorf("failed to create host link node: %w", err)
+	}
+
+	vxlanIface := "vx-" + opts.Link
 	vxlraw := &clablinks.LinkVxlanRaw{
 		Remote:          opts.Remote,
 		VNI:             opts.ID,
@@ -909,15 +1390,14 @@ func (s *Service) CreateVxlan(ctx context.Context, opts VxlanCreateOptions) erro
 		},
 		DstPort:  opts.DstPort,
 		SrcPort:  opts.SrcPort,
-		LinkType: clablinks.LinkTypeVxlanStitch,
-		Endpoint: *clablinks.NewEndpointRaw("host", opts.Link, ""),
+		LinkType: clablinks.LinkTypeVxlan,
+		Endpoint: *clablinks.NewEndpointRaw("host", vxlanIface, ""),
 	}
 
 	rp := &clablinks.ResolveParams{
 		Nodes: map[string]clablinks.Node{
-			"host": clablinks.GetHostLinkNode(),
+			"host": hostNode,
 		},
-		VxlanIfaceNameOverwrite: opts.Link,
 	}
 
 	link, err := vxlraw.Resolve(rp)
@@ -925,14 +1405,28 @@ func (s *Service) CreateVxlan(ctx context.Context, opts VxlanCreateOptions) erro
 		return fmt.Errorf("failed to resolve VxLAN link: %w", err)
 	}
 
-	vxl, ok := link.(*clablinks.VxlanStitched)
+	vxl, ok := link.(*clablinks.LinkVxlan)
 	if !ok {
-		return fmt.Errorf("resolved link is not a VxlanStitched link")
+		return fmt.Errorf("resolved link is not a LinkVxlan link")
 	}
 
-	err = vxl.DeployWithExistingVeth(ctx)
-	if err != nil {
+	endpoints := vxl.GetEndpoints()
+	if len(endpoints) == 0 {
+		return fmt.Errorf("resolved VxLAN link has no endpoints")
+	}
+
+	if err := vxl.Deploy(ctx, endpoints[0]); err != nil {
 		return fmt.Errorf("failed to deploy VxLAN: %w", err)
+	}
+
+	if err := stitchInterfaces(vxlanIface, opts.Link); err != nil {
+		_ = vxl.Remove(ctx)
+		return fmt.Errorf("failed to stitch VxLAN to link: %w", err)
+	}
+
+	if err := stitchInterfaces(opts.Link, vxlanIface); err != nil {
+		_ = vxl.Remove(ctx)
+		return fmt.Errorf("failed to stitch link to VxLAN: %w", err)
 	}
 
 	log.Info("VxLAN tunnel created successfully",
@@ -942,6 +1436,57 @@ func (s *Service) CreateVxlan(ctx context.Context, opts VxlanCreateOptions) erro
 	)
 
 	return nil
+}
+
+func stitchInterfaces(srcIface, dstIface string) error {
+	src, err := netlink.LinkByName(srcIface)
+	if err != nil {
+		return fmt.Errorf("failed to lookup %q: %w", srcIface, err)
+	}
+
+	dst, err := netlink.LinkByName(dstIface)
+	if err != nil {
+		return fmt.Errorf("failed to lookup %q: %w", dstIface, err)
+	}
+
+	qdisc := &netlink.Ingress{
+		QdiscAttrs: netlink.QdiscAttrs{
+			LinkIndex: src.Attrs().Index,
+			Handle:    netlink.MakeHandle(0xffff, 0),
+			Parent:    netlink.HANDLE_INGRESS,
+		},
+	}
+	if err := netlink.QdiscAdd(qdisc); err != nil && !os.IsExist(err) {
+		return err
+	}
+
+	filter := &netlink.U32{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: src.Attrs().Index,
+			Parent:    netlink.MakeHandle(0xffff, 0),
+			Protocol:  syscall.ETH_P_ALL,
+		},
+		Sel: &netlink.TcU32Sel{
+			Keys: []netlink.TcU32Key{
+				{
+					Mask: 0x0,
+					Val:  0,
+				},
+			},
+			Flags: netlink.TC_U32_TERMINAL,
+		},
+		Actions: []netlink.Action{
+			&netlink.MirredAction{
+				ActionAttrs: netlink.ActionAttrs{
+					Action: netlink.TC_ACT_STOLEN,
+				},
+				MirredAction: netlink.TCA_EGRESS_REDIR,
+				Ifindex:      dst.Attrs().Index,
+			},
+		},
+	}
+
+	return netlink.FilterAdd(filter)
 }
 
 // DeleteVxlan deletes VxLAN tunnels matching a prefix.
@@ -1545,6 +2090,38 @@ func (s *Service) processGitTopoFile(topo, workDir string) (string, error) {
 	}
 
 	return topoFile, nil
+}
+
+func (s *Service) runCommand(ctx context.Context, name string, args []string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	output, err := cmd.CombinedOutput()
+	trimmed := strings.TrimSpace(string(output))
+	if err != nil {
+		if trimmed == "" {
+			return "", fmt.Errorf("command %s %s failed: %w", name, strings.Join(args, " "), err)
+		}
+		return trimmed, fmt.Errorf(
+			"command %s %s failed: %w: %s",
+			name,
+			strings.Join(args, " "),
+			err,
+			trimmed,
+		)
+	}
+
+	return trimmed, nil
+}
+
+func drawioOutputPathFromTopo(topoPath string) string {
+	lowerPath := strings.ToLower(topoPath)
+	switch {
+	case strings.HasSuffix(lowerPath, ".yaml"):
+		return topoPath[:len(topoPath)-len(".yaml")] + ".drawio"
+	case strings.HasSuffix(lowerPath, ".yml"):
+		return topoPath[:len(topoPath)-len(".yml")] + ".drawio"
+	default:
+		return topoPath + ".drawio"
+	}
 }
 
 // isGitURL checks if the given path is a GitHub or GitLab URL that needs to be cloned.
