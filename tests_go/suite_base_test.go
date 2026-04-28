@@ -665,6 +665,7 @@ type ClabContainerInfo struct {
 	IPv4Address string `json:"ipv4_address"`
 	IPv6Address string `json:"ipv6_address"`
 	LabName     string `json:"lab_name"`
+	NodeName    string `json:"nodeName"`
 	Owner       string `json:"owner"`
 	Group       string `json:"group"`
 }

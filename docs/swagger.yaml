@@ -237,6 +237,9 @@ definitions:
       name:
         description: Name of the container node (e.g., "lab01-client1")
         type: string
+      nodeName:
+        description: Topology node name from containerlab labels
+        type: string
       owner:
         description: OS user from clab inspect output (Used for authorization)
         type: string
@@ -2503,6 +2506,49 @@ paths:
       summary: Pause node
       tags:
       - Labs - Nodes
+  /api/v1/labs/{labName}/nodes/{nodeName}/restart:
+    post:
+      description: Restarts a node in a lab while preserving containerlab dataplane
+        links.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Node Name
+        in: path
+        name: nodeName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Restart node
+      tags:
+      - Labs - Nodes
   /api/v1/labs/{labName}/nodes/{nodeName}/ssh:
     post:
       consumes:
@@ -2752,6 +2798,56 @@ paths:
       summary: Unpause node
       tags:
       - Labs - Nodes
+  /api/v1/labs/{labName}/restart:
+    post:
+      description: |-
+        Restarts all nodes in a deployed lab while preserving containerlab dataplane links.
+
+        **Notes**
+        - `stream=true` returns `application/x-ndjson` lifecycle events.
+        - `includeLogs=true` includes captured lifecycle logs in the JSON response.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Stream lifecycle output as NDJSON events
+        in: query
+        name: stream
+        type: boolean
+      - description: Include captured lifecycle logs in the JSON response
+        in: query
+        name: includeLogs
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Restart lab nodes
+      tags:
+      - Labs
   /api/v1/labs/{labName}/save:
     post:
       description: Saves the running configuration for nodes in a lab.
@@ -2835,6 +2931,106 @@ paths:
       summary: SSHX share action
       tags:
       - Labs - Sharing
+  /api/v1/labs/{labName}/start:
+    post:
+      description: |-
+        Starts all nodes in a deployed lab while preserving containerlab dataplane links.
+
+        **Notes**
+        - `stream=true` returns `application/x-ndjson` lifecycle events.
+        - `includeLogs=true` includes captured lifecycle logs in the JSON response.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Stream lifecycle output as NDJSON events
+        in: query
+        name: stream
+        type: boolean
+      - description: Include captured lifecycle logs in the JSON response
+        in: query
+        name: includeLogs
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Start lab nodes
+      tags:
+      - Labs
+  /api/v1/labs/{labName}/stop:
+    post:
+      description: |-
+        Stops all nodes in a deployed lab while preserving containerlab dataplane links.
+
+        **Notes**
+        - `stream=true` returns `application/x-ndjson` lifecycle events.
+        - `includeLogs=true` includes captured lifecycle logs in the JSON response.
+      parameters:
+      - description: Lab Name
+        in: path
+        name: labName
+        required: true
+        type: string
+      - description: Stream lifecycle output as NDJSON events
+        in: query
+        name: stream
+        type: boolean
+      - description: Include captured lifecycle logs in the JSON response
+        in: query
+        name: includeLogs
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GenericSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stop lab nodes
+      tags:
+      - Labs
   /api/v1/labs/{labName}/topology/annotations:
     get:
       description: Returns annotations for the specified lab. For deployed labs, the

@@ -92,6 +92,11 @@ func SetupRoutes(router *gin.Engine) {
 				// Deploy on-disk topology file for this lab name
 				labSpecific.POST("/deploy", DeployTopologyHandler) // POST /api/v1/labs/{labName}/deploy
 
+				// Topology-aware lab node lifecycle actions
+				labSpecific.POST("/start", StartLabNodesHandler)     // POST /api/v1/labs/{labName}/start
+				labSpecific.POST("/stop", StopLabNodesHandler)       // POST /api/v1/labs/{labName}/stop
+				labSpecific.POST("/restart", RestartLabNodesHandler) // POST /api/v1/labs/{labName}/restart
+
 				// Inspect lab interfaces
 				labSpecific.GET("/interfaces", InspectInterfacesHandler) // GET /api/v1/labs/{labName}/interfaces
 
@@ -141,6 +146,7 @@ func SetupRoutes(router *gin.Engine) {
 					// Lifecycle actions
 					nodeSpecific.POST("/start", StartNodeHandler)     // POST /api/v1/labs/{labName}/nodes/{nodeName}/start
 					nodeSpecific.POST("/stop", StopNodeHandler)       // POST /api/v1/labs/{labName}/nodes/{nodeName}/stop
+					nodeSpecific.POST("/restart", RestartNodeHandler) // POST /api/v1/labs/{labName}/nodes/{nodeName}/restart
 					nodeSpecific.POST("/pause", PauseNodeHandler)     // POST /api/v1/labs/{labName}/nodes/{nodeName}/pause
 					nodeSpecific.POST("/unpause", UnpauseNodeHandler) // POST /api/v1/labs/{labName}/nodes/{nodeName}/unpause
 

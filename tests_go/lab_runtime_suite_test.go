@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ type LabRuntimeSuite struct {
 	apiUserHeaders http.Header
 	labName        string
 	containerName  string
+	nodeName       string
 }
 
 func TestLabRuntimeSuite(t *testing.T) {
@@ -31,6 +33,10 @@ func (s *LabRuntimeSuite) SetupSuite() {
 	s.labName, _ = s.setupEphemeralLab()
 	container := s.firstContainerInLab(s.labName, s.apiUserHeaders)
 	s.containerName = container.Name
+	s.nodeName = strings.TrimSpace(container.NodeName)
+	if s.nodeName == "" {
+		s.nodeName = s.containerName
+	}
 }
 
 func (s *LabRuntimeSuite) TearDownSuite() {
@@ -41,15 +47,27 @@ func (s *LabRuntimeSuite) TearDownSuite() {
 }
 
 func (s *LabRuntimeSuite) nodeURL(action string) string {
-	return fmt.Sprintf("%s/api/v1/labs/%s/nodes/%s/%s", s.cfg.APIURL, s.labName, url.PathEscape(s.containerName), action)
+	return fmt.Sprintf("%s/api/v1/labs/%s/nodes/%s/%s", s.cfg.APIURL, s.labName, url.PathEscape(s.nodeName), action)
+}
+
+func (s *LabRuntimeSuite) labURL(action string) string {
+	return fmt.Sprintf("%s/api/v1/labs/%s/%s", s.cfg.APIURL, s.labName, action)
 }
 
 func (s *LabRuntimeSuite) postNodeAction(action string) {
 	s.T().Helper()
 
-	bodyBytes, statusCode, err := s.doRequest("POST", s.nodeURL(action), s.apiUserHeaders, nil, s.cfg.RequestTimeout)
+	bodyBytes, statusCode, err := s.doRequest("POST", s.nodeURL(action), s.apiUserHeaders, nil, s.cfg.DeployTimeout)
 	s.Require().NoError(err)
 	s.Require().Equal(http.StatusOK, statusCode, "Expected 200 for node %s. Body: %s", action, string(bodyBytes))
+}
+
+func (s *LabRuntimeSuite) postLabAction(action string) {
+	s.T().Helper()
+
+	bodyBytes, statusCode, err := s.doRequest("POST", s.labURL(action), s.apiUserHeaders, nil, s.cfg.DeployTimeout)
+	s.Require().NoError(err)
+	s.Require().Equal(http.StatusOK, statusCode, "Expected 200 for lab %s. Body: %s", action, string(bodyBytes))
 }
 
 func (s *LabRuntimeSuite) TestBrowserPortsEndpoint() {
@@ -78,8 +96,21 @@ func (s *LabRuntimeSuite) TestNodeStopStartPauseUnpauseEndpoints() {
 	s.postNodeAction("start")
 	time.Sleep(500 * time.Millisecond)
 
+	s.postNodeAction("restart")
+	time.Sleep(500 * time.Millisecond)
+
 	s.postNodeAction("pause")
 	time.Sleep(500 * time.Millisecond)
 
 	s.postNodeAction("unpause")
+}
+
+func (s *LabRuntimeSuite) TestLabStartStopRestartEndpoints() {
+	s.postLabAction("stop")
+	time.Sleep(500 * time.Millisecond)
+
+	s.postLabAction("start")
+	time.Sleep(500 * time.Millisecond)
+
+	s.postLabAction("restart")
 }

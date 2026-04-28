@@ -2081,6 +2081,71 @@
                 }
             }
         },
+        "/api/v1/labs/{labName}/nodes/{nodeName}/restart": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Restarts a node in a lab while preserving containerlab dataplane links.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs - Nodes"
+                ],
+                "summary": "Restart node",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Node Name",
+                        "name": "nodeName",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/labs/{labName}/nodes/{nodeName}/ssh": {
             "post": {
                 "security": [
@@ -2441,6 +2506,76 @@
                 }
             }
         },
+        "/api/v1/labs/{labName}/restart": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Restarts all nodes in a deployed lab while preserving containerlab dataplane links.\n\n**Notes**\n- `stream=true` returns `application/x-ndjson` lifecycle events.\n- `includeLogs=true` includes captured lifecycle logs in the JSON response.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Restart lab nodes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Stream lifecycle output as NDJSON events",
+                        "name": "stream",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include captured lifecycle logs in the JSON response",
+                        "name": "includeLogs",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/labs/{labName}/save": {
             "post": {
                 "security": [
@@ -2541,6 +2676,146 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.ShareToolResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/start": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts all nodes in a deployed lab while preserving containerlab dataplane links.\n\n**Notes**\n- `stream=true` returns `application/x-ndjson` lifecycle events.\n- `includeLogs=true` includes captured lifecycle logs in the JSON response.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Start lab nodes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Stream lifecycle output as NDJSON events",
+                        "name": "stream",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include captured lifecycle logs in the JSON response",
+                        "name": "includeLogs",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/{labName}/stop": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stops all nodes in a deployed lab while preserving containerlab dataplane links.\n\n**Notes**\n- `stream=true` returns `application/x-ndjson` lifecycle events.\n- `includeLogs=true` includes captured lifecycle logs in the JSON response.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Stop lab nodes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab Name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Stream lifecycle output as NDJSON events",
+                        "name": "stream",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include captured lifecycle logs in the JSON response",
+                        "name": "includeLogs",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.GenericSuccessResponse"
                         }
                     },
                     "400": {
@@ -5551,6 +5826,10 @@
                 },
                 "name": {
                     "description": "Name of the container node (e.g., \"lab01-client1\")",
+                    "type": "string"
+                },
+                "nodeName": {
+                    "description": "Topology node name from containerlab labels",
                     "type": "string"
                 },
                 "owner": {
