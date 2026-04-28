@@ -110,7 +110,7 @@ jobs:
           sleep 5
 
       - name: Wait for API readiness
-        run: timeout 60 bash -c 'until curl -fsS http://127.0.0.1:8080/health >/dev/null; do sleep 2; done'
+        run: timeout 60 bash -c 'until curl -fsS http://127.0.0.1:8090/health >/dev/null; do sleep 2; done'
 
       - name: Run Task tests
         env:

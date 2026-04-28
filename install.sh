@@ -110,7 +110,7 @@ create_env() {
 # Containerlab API Server configuration
 # Edit this file, then enable + start the service.
 
-API_PORT=8080
+API_PORT=8090
 LOG_LEVEL=info
 
 # --- Authentication ---

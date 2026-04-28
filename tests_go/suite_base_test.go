@@ -68,7 +68,7 @@ func TestMain(m *testing.M) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	globalCfg = TestConfig{
-		APIURL:                getEnv("API_URL", "https://127.0.0.1:8080"),
+		APIURL:                getEnv("API_URL", "https://127.0.0.1:8090"),
 		SuperuserUser:         getEnv("SUPERUSER_USER", "root"),
 		SuperuserPass:         getEnv("SUPERUSER_PASS", "rootpassword"),
 		APIUserUser:           getEnv("APIUSER_USER", "test"),

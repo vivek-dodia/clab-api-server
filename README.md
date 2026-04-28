@@ -125,7 +125,7 @@ containerlab tools api-server status
 This method automatically handles Docker image pulling, container creation, and environment configuration.
 
 Common flags for the start command include:
-- `--port | -p`: Port to expose the API server on (default: 8080)
+- `--port | -p`: Port to expose the API server on (default: 8090)
 - `--host`: Host address for the API server (default: localhost)
 - `--labs-dir | -l`: Directory to mount as shared labs directory
 - `--jwt-secret`: JWT secret key for authentication
@@ -154,7 +154,7 @@ Common flags for the start command include:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `API_PORT` | `8080` | Server listening port |
+| `API_PORT` | `8090` | Server listening port |
 | `API_SERVER_HOST` | `localhost` | Hostname/IP used in SSH access URLs |
 | `JWT_SECRET` | `please_change_me` | **CRITICAL**: Secret key for JWT token generation |
 | `JWT_EXPIRATION` | `24h` | JWT token lifetime (e.g., "24h", "7d") |
@@ -202,22 +202,22 @@ https://<server_ip>:<API_PORT>/redoc               # ReDoc UI
 
 ```bash
 # Authenticate with your Linux username and password
-TOKEN=$(curl -sk -X POST https://localhost:8080/login \
+TOKEN=$(curl -sk -X POST https://localhost:8090/login \
   -H "Content-Type: application/json" \
   -d '{"username":"your_linux_username","password":"your_linux_password"}' \
   | jq -r '.token')
 
 # Optional: request a custom token lifetime for this login
-TOKEN_CUSTOM=$(curl -sk -X POST https://localhost:8080/login \
+TOKEN_CUSTOM=$(curl -sk -X POST https://localhost:8090/login \
   -H "Content-Type: application/json" \
   -d '{"username":"your_linux_username","password":"your_linux_password","sessionDuration":"36h"}' \
   | jq -r '.token')
 
 # List labs
-curl -k -H "Authorization: Bearer $TOKEN" https://localhost:8080/api/v1/labs
+curl -k -H "Authorization: Bearer $TOKEN" https://localhost:8090/api/v1/labs
 
 # Deploy a lab
-curl -k -X POST https://localhost:8080/api/v1/labs \
+curl -k -X POST https://localhost:8090/api/v1/labs \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"topologyContent":{"name":"srl01","topology":{"kinds":{"nokia_srlinux":{"type":"ixrd3","image":"ghcr.io/nokia/srlinux"}},"nodes":{"srl1":{"kind":"nokia_srlinux"},"srl2":{"kind":"nokia_srlinux"}},"links":[{"endpoints":["srl1:e1-1","srl2:e1-1"]}]}}}'
@@ -242,7 +242,7 @@ Enable browser access by setting `CORS_ALLOWED_ORIGINS` (for example `https://lo
 
 The examples folder contains a Flashpost collection that demonstrates how to use the Containerlab API. The collection provides ready-to-use requests for all API endpoints.
 
-The collection assumes that the server is running on `localhost:8080`, but you can change the server URL via a variable.
+The collection assumes that the server is running on `localhost:8090`, but you can change the server URL via a variable.
 
 To use the collection:
 
@@ -255,7 +255,7 @@ The collection makes use of the following variables:
 
 * `USER_NAME` - Linux user name that client will use for authentication with the clab api server
 * `USER_PASSWORD` - Linux user password that client will use for authentication with the clab api server
-* `baseUrl` - for example: `localhost:8080`
+* `baseUrl` - for example: `localhost:8090`
 
 ## Development
 

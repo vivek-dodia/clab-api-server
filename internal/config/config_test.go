@@ -25,6 +25,9 @@ func TestLoadConfigDefaultsEnableTLSAutoCert(t *testing.T) {
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
+	if AppConfig.APIPort != "8090" {
+		t.Fatalf("expected API_PORT default to be 8090, got %q", AppConfig.APIPort)
+	}
 	if !AppConfig.TLSEnable {
 		t.Fatal("expected TLS_ENABLE default to be true")
 	}
