@@ -2,6 +2,7 @@ package tests_go
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -123,7 +124,11 @@ func (s *TerminalSuite) TestTerminalSessionWebSocketStreamConnects() {
 	streamURL = strings.Replace(streamURL, "http://", "ws://", 1)
 	streamURL = strings.Replace(streamURL, "https://", "wss://", 1)
 
-	conn, resp, err := websocket.DefaultDialer.Dial(streamURL, s.apiUserHeaders)
+	dialer := *websocket.DefaultDialer
+	dialer.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // Test client accepts local self-signed certificates.
+	dialer.HandshakeTimeout = s.cfg.RequestTimeout
+
+	conn, resp, err := dialer.Dial(streamURL, s.apiUserHeaders)
 	if resp != nil && resp.Body != nil {
 		defer resp.Body.Close()
 	}

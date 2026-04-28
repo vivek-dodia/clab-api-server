@@ -49,9 +49,7 @@ import (
 // @Router /api/v1/labs [post]
 func DeployLabHandler(c *gin.Context) {
 	username := c.GetString("username")
-	// Use a fresh context with timeout for long-running containerlab operations
-	// The HTTP request context can be problematic for operations that take time
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
 	defer cancel()
 
 	// --- Bind Request Body ---
@@ -272,7 +270,7 @@ func DeployLabHandler(c *gin.Context) {
 // @Router /api/v1/labs/archive [post]
 func DeployLabArchiveHandler(c *gin.Context) {
 	username := c.GetString("username")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
 	defer cancel()
 
 	labName := c.Query("labName")
@@ -468,7 +466,7 @@ func DestroyLabHandler(c *gin.Context) {
 	labName := c.Param("labName")
 	streamLogs := c.Query("stream") == "true"
 	includeLogs := c.Query("includeLogs") == "true"
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
 	defer cancel()
 
 	if !isValidLabName(labName) {
@@ -675,7 +673,7 @@ func RedeployLabHandler(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
 	defer cancel()
 
 	// Get current owner
@@ -796,7 +794,7 @@ func InspectLabHandler(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
 	defer cancel()
 
 	containers, err := svc.ListContainers(ctx, clab.ListOptions{LabName: labName})
@@ -860,7 +858,7 @@ func InspectInterfacesHandler(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
 	defer cancel()
 
 	containers, err := svc.ListContainers(ctx, clab.ListOptions{LabName: labName})
@@ -920,7 +918,7 @@ func ListLabsHandler(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
 	defer cancel()
 
 	containers, err := svc.ListContainers(ctx, clab.ListOptions{})
@@ -1011,7 +1009,7 @@ func SaveLabConfigHandler(c *gin.Context) {
 		NodeFilter: nodeFilterSlice,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
 	defer cancel()
 
 	log.Infof("SaveLabConfig user '%s': Saving config for lab '%s'...", username, labName)
@@ -1084,7 +1082,7 @@ func ExecCommandHandler(c *gin.Context) {
 		Username:      username,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
 	defer cancel()
 
 	log.Infof("ExecCommand user '%s': Executing command on lab '%s'...", username, labName)

@@ -77,7 +77,7 @@ func TestMain(m *testing.M) {
 		UnauthPass:            getEnv("UNAUTH_PASS", "test2"),
 		RequestTimeout:        getEnvDuration("GOTEST_TIMEOUT_REQUEST", 15*time.Second),
 		DeployTimeout:         getEnvDuration("GOTEST_TIMEOUT_DEPLOY", 240*time.Second),
-		CleanupTimeout:        getEnvDuration("GOTEST_TIMEOUT_CLEANUP", 180*time.Second),
+		CleanupTimeout:        getEnvDuration("GOTEST_TIMEOUT_CLEANUP", 360*time.Second),
 		StabilizePause:        getEnvDuration("GOTEST_STABILIZE_PAUSE", 10*time.Second),
 		CleanupPause:          getEnvDuration("GOTEST_CLEANUP_PAUSE", 3*time.Second),
 		LabNamePrefix:         getEnv("GOTEST_LAB_NAME_PREFIX", "gotest"),
