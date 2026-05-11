@@ -120,6 +120,7 @@ type ClabContainerInfo struct {
 	IPv4Address string `json:"ipv4_address"` // Management IPv4 Address/Mask
 	IPv6Address string `json:"ipv6_address"` // Management IPv6 Address/Mask
 	LabName     string `json:"lab_name"`     // Name of the lab this node belongs to (redundant with map key but present)
+	NodeName    string `json:"nodeName"`     // Topology node name from containerlab labels
 	LabPath     string `json:"labPath"`      // Path to the topology file used (relative)
 	AbsLabPath  string `json:"absLabPath"`   // Absolute path to topology file
 	Group       string `json:"group"`        // Group assigned in topology (Might not always be present)

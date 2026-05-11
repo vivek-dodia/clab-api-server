@@ -195,12 +195,17 @@ type NodeLifecycleAction string
 const (
 	NodeLifecycleActionStart   NodeLifecycleAction = "start"
 	NodeLifecycleActionStop    NodeLifecycleAction = "stop"
+	NodeLifecycleActionRestart NodeLifecycleAction = "restart"
 	NodeLifecycleActionPause   NodeLifecycleAction = "pause"
 	NodeLifecycleActionUnpause NodeLifecycleAction = "unpause"
 )
 
 type NodeLifecycleOptions struct {
 	ContainerName string
+	LabName       string
+	TopoPath      string
+	Username      string
+	NodeNames     []string
 	Action        NodeLifecycleAction
 }
 
@@ -335,7 +340,7 @@ func (s *Service) Deploy(ctx context.Context, opts DeployOptions) ([]clabruntime
 	// Build clab options
 	clabOpts := []clabcore.ClabOption{
 		clabcore.WithTimeout(defaultTimeout),
-		clabcore.WithTopoPath(topoPath, ""),
+		clabcore.WithTopoPath(topoPath, nil),
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{
 			Timeout: defaultTimeout,
 		}),
@@ -425,9 +430,9 @@ func (s *Service) Destroy(ctx context.Context, opts DestroyOptions) error {
 	clabOpts = append(clabOpts, clabcore.WithTimeout(clabTimeout))
 
 	if opts.TopoPath != "" {
-		clabOpts = append(clabOpts, clabcore.WithTopoPath(opts.TopoPath, ""))
+		clabOpts = append(clabOpts, clabcore.WithTopoPath(opts.TopoPath, nil))
 	} else if opts.LabName != "" {
-		clabOpts = append(clabOpts, clabcore.WithTopologyFromLab(opts.LabName))
+		clabOpts = append(clabOpts, clabcore.WithTopologyFromLab(opts.LabName, nil))
 	} else {
 		return fmt.Errorf("either lab name or topology path is required")
 	}
@@ -544,6 +549,14 @@ func (s *Service) RunNodeLifecycleAction(ctx context.Context, opts NodeLifecycle
 	ctx, cancel := s.ensureTimeout(ctx)
 	defer cancel()
 
+	switch opts.Action {
+	case NodeLifecycleActionStart, NodeLifecycleActionStop, NodeLifecycleActionRestart:
+		return s.runTopologyNodeLifecycleAction(ctx, opts)
+	case NodeLifecycleActionPause, NodeLifecycleActionUnpause:
+	default:
+		return fmt.Errorf("unsupported node lifecycle action: %q", opts.Action)
+	}
+
 	containerName := strings.TrimSpace(opts.ContainerName)
 	if containerName == "" {
 		return fmt.Errorf("container name is required")
@@ -555,20 +568,10 @@ func (s *Service) RunNodeLifecycleAction(ctx context.Context, opts NodeLifecycle
 	}
 
 	switch opts.Action {
-	case NodeLifecycleActionStart:
-		_, err = rt.StartContainer(
-			ctx,
-			containerName,
-			clabruntime.NewEndpointlessNode(&clabtypes.NodeConfig{LongName: containerName}),
-		)
-	case NodeLifecycleActionStop:
-		err = rt.StopContainer(ctx, containerName)
 	case NodeLifecycleActionPause:
 		err = rt.PauseContainer(ctx, containerName)
 	case NodeLifecycleActionUnpause:
 		err = rt.UnpauseContainer(ctx, containerName)
-	default:
-		return fmt.Errorf("unsupported node lifecycle action: %q", opts.Action)
 	}
 
 	if err != nil {
@@ -576,6 +579,92 @@ func (s *Service) RunNodeLifecycleAction(ctx context.Context, opts NodeLifecycle
 	}
 
 	return nil
+}
+
+func (s *Service) RunLabLifecycleAction(ctx context.Context, opts NodeLifecycleOptions) error {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	switch opts.Action {
+	case NodeLifecycleActionStart, NodeLifecycleActionStop, NodeLifecycleActionRestart:
+		return s.runTopologyNodeLifecycleAction(ctx, opts)
+	default:
+		return fmt.Errorf("unsupported lab lifecycle action: %q", opts.Action)
+	}
+}
+
+func (s *Service) runTopologyNodeLifecycleAction(ctx context.Context, opts NodeLifecycleOptions) error {
+	workDir, err := s.prepareWorkDir(opts.Username)
+	if err != nil {
+		return fmt.Errorf("failed to prepare working directory: %w", err)
+	}
+
+	originalDir, _ := os.Getwd()
+	if chErr := os.Chdir(workDir); chErr != nil {
+		return fmt.Errorf("failed to change to work directory: %w", chErr)
+	}
+	defer func() {
+		if restoreErr := os.Chdir(originalDir); restoreErr != nil {
+			log.Warn("Failed to restore working directory", "error", restoreErr)
+		}
+	}()
+
+	clabOpts := []clabcore.ClabOption{
+		clabcore.WithTimeout(defaultTimeout),
+		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
+	}
+
+	topoPath := strings.TrimSpace(opts.TopoPath)
+	labName := strings.TrimSpace(opts.LabName)
+	switch {
+	case topoPath != "":
+		clabOpts = append(clabOpts, clabcore.WithTopoPath(topoPath, nil))
+	case labName != "":
+		clabOpts = append(clabOpts, clabcore.WithTopologyFromLab(labName, nil))
+	default:
+		return fmt.Errorf("either lab name or topology path is required")
+	}
+
+	clab, err := clabcore.NewContainerLab(clabOpts...)
+	if err != nil {
+		return fmt.Errorf("failed to create containerlab instance: %w", err)
+	}
+
+	nodeNames := cleanNodeNames(opts.NodeNames)
+	log.Info("Running topology lifecycle action",
+		"username", opts.Username,
+		"labName", opts.LabName,
+		"topoPath", opts.TopoPath,
+		"action", opts.Action,
+		"nodes", nodeNames,
+	)
+
+	switch opts.Action {
+	case NodeLifecycleActionStart:
+		err = clab.StartNodes(ctx, nodeNames)
+	case NodeLifecycleActionStop:
+		err = clab.StopNodes(ctx, nodeNames)
+	case NodeLifecycleActionRestart:
+		err = clab.RestartNodes(ctx, nodeNames)
+	default:
+		return fmt.Errorf("unsupported topology lifecycle action: %q", opts.Action)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to %s node(s): %w", opts.Action, err)
+	}
+
+	return nil
+}
+
+func cleanNodeNames(nodeNames []string) []string {
+	cleaned := make([]string, 0, len(nodeNames))
+	for _, nodeName := range nodeNames {
+		trimmed := strings.TrimSpace(nodeName)
+		if trimmed != "" {
+			cleaned = append(cleaned, trimmed)
+		}
+	}
+	return cleaned
 }
 
 func (s *Service) RunContainerlabTool(ctx context.Context, opts ContainerlabToolRunOptions) (string, error) {
@@ -894,7 +983,7 @@ func (s *Service) Exec(ctx context.Context, opts ExecOptions) (*clabexec.ExecCol
 	var clabOpts []clabcore.ClabOption
 	clabOpts = append(clabOpts, clabcore.WithTimeout(defaultTimeout))
 	if opts.TopoPath != "" {
-		clabOpts = append(clabOpts, clabcore.WithTopoPath(opts.TopoPath, ""))
+		clabOpts = append(clabOpts, clabcore.WithTopoPath(opts.TopoPath, nil))
 	}
 	clabOpts = append(clabOpts,
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
@@ -954,7 +1043,7 @@ func (s *Service) SaveConfig(ctx context.Context, opts SaveOptions) error {
 
 	clabOpts := []clabcore.ClabOption{
 		clabcore.WithTimeout(defaultTimeout),
-		clabcore.WithTopoPath(opts.TopoPath, ""),
+		clabcore.WithTopoPath(opts.TopoPath, nil),
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
 	}
 
@@ -1256,7 +1345,7 @@ func (s *Service) CreateVeth(ctx context.Context, opts VethCreateOptions) error 
 
 	// Deploy the endpoints
 	for _, ep := range link.GetEndpoints() {
-		if err := ep.Deploy(ctx); err != nil {
+		if err := ep.GetLink().Deploy(ctx, ep); err != nil {
 			return fmt.Errorf("failed to deploy endpoint %s: %w", ep, err)
 		}
 	}

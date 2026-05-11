@@ -28,6 +28,7 @@ func ContainerToClabContainerInfo(c clabruntime.GenericContainer) models.ClabCon
 		IPv4Address: c.GetContainerIPv4(),
 		IPv6Address: c.GetContainerIPv6(),
 		LabName:     c.Labels[clabconst.Containerlab],
+		NodeName:    c.Labels[clabconst.NodeName],
 		LabPath:     c.Labels[clabconst.TopoFile],
 		AbsLabPath:  c.Labels[clabconst.TopoFile],
 		Group:       c.Labels[clabconst.NodeGroup],
@@ -148,6 +149,14 @@ func GetContainerLabName(c *clabruntime.GenericContainer) string {
 		return ""
 	}
 	return c.Labels[clabconst.Containerlab]
+}
+
+// GetContainerNodeName extracts the topology node name from a container's labels.
+func GetContainerNodeName(c *clabruntime.GenericContainer) string {
+	if c == nil {
+		return ""
+	}
+	return c.Labels[clabconst.NodeName]
 }
 
 // GetContainerOwner extracts the owner from a container's labels.
