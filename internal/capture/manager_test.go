@@ -194,6 +194,57 @@ func TestEdgeSharkStatusReportsRunningVersion(t *testing.T) {
 	}
 }
 
+func TestEdgeSharkStatusFallsBackToRunningRuntimeContainer(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	runner := &fakeCommandRunner{
+		t: t,
+		responses: map[string]string{
+			commandKey("docker", edgeSharkStatusPsArgs()): "edgeshark-edgeshark-1 ghcr.io/siemens/packetflix\n",
+		},
+		errors: map[string]error{},
+	}
+
+	manager := newTestManager(t, ManagerConfig{PacketflixPort: localPortFromServer(t, server)})
+	manager.runner = runner
+
+	status, err := manager.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+	if !status.Running {
+		t.Fatalf("expected EdgeShark to be reported as running")
+	}
+	if status.Version != "" {
+		t.Fatalf("expected no version from runtime fallback, got %q", status.Version)
+	}
+}
+
+func TestEdgeSharkStatusReportsNotRunningWithoutRuntimeContainer(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	runner := &fakeCommandRunner{
+		t: t,
+		responses: map[string]string{
+			commandKey("docker", edgeSharkStatusPsArgs()): "",
+		},
+		errors: map[string]error{},
+	}
+
+	manager := newTestManager(t, ManagerConfig{PacketflixPort: localPortFromServer(t, server)})
+	manager.runner = runner
+
+	status, err := manager.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status returned error: %v", err)
+	}
+	if status.Running {
+		t.Fatalf("expected EdgeShark to be reported as not running")
+	}
+}
+
 func TestBuildPacketflixURIsRequiresRunningEdgeShark(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not ready", http.StatusServiceUnavailable)
@@ -201,6 +252,13 @@ func TestBuildPacketflixURIsRequiresRunningEdgeShark(t *testing.T) {
 	defer server.Close()
 
 	manager := newTestManager(t, ManagerConfig{PacketflixPort: localPortFromServer(t, server)})
+	manager.runner = &fakeCommandRunner{
+		t: t,
+		responses: map[string]string{
+			commandKey("docker", edgeSharkStatusPsArgs()): "",
+		},
+		errors: map[string]error{},
+	}
 	_, err := manager.BuildPacketflixURIs(context.Background(), []ContainerCaptureSpec{{
 		ContainerName:  "clab-lab-srl1",
 		InterfaceNames: []string{"eth1"},
@@ -254,9 +312,10 @@ func TestCreateWiresharkSessionsBuildsRuntimeCommand(t *testing.T) {
 	runner := &fakeCommandRunner{
 		t: t,
 		responses: map[string]string{
-			commandKey("docker", []string{"ps", "--filter", "name=edgeshark", "--format", "{{.ID}}"}): "edgeshark-container-id\n",
-			commandKey("docker", []string{"inspect", "edgeshark-container-id"}):                       `[{"NetworkSettings":{"Networks":{"edgeshark_default":{},"bridge":{}}}}]`,
-			commandKey("docker", []string{"rm", "-f", "wireshark-container-id"}):                      "wireshark-container-id\n",
+			commandKey("docker", []string{"ps", "--filter", "name=edgeshark", "--format", "{{.ID}}"}):           "edgeshark-container-id\n",
+			commandKey("docker", []string{"inspect", "edgeshark-container-id"}):                                 `[{"NetworkSettings":{"Networks":{"edgeshark_default":{},"bridge":{}}}}]`,
+			commandKey("docker", []string{"network", "connect", "edgeshark_default", "wireshark-container-id"}): "",
+			commandKey("docker", []string{"rm", "-f", "wireshark-container-id"}):                                "wireshark-container-id\n",
 		},
 	}
 	runner.responses[commandKey("docker", []string{
@@ -304,7 +363,7 @@ func TestCreateWiresharkSessionsBuildsRuntimeCommand(t *testing.T) {
 		t.Fatalf("expected ShowVolumeTip for lab directory mount")
 	}
 
-	runArgs := runner.commandArgsContaining("run", "--network", "edgeshark_default", "example/wireshark:test")
+	runArgs := runner.commandArgsContaining("run", "example/wireshark:test")
 	if runArgs == nil {
 		t.Fatalf("expected docker run command, got %#v", runner.commands)
 	}
@@ -319,6 +378,15 @@ func TestCreateWiresharkSessionsBuildsRuntimeCommand(t *testing.T) {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("expected docker run args to contain %q, got: %s", expected, joined)
 		}
+	}
+	if strings.Contains(joined, "--network") {
+		t.Fatalf("expected wireshark container to stay on the default runtime network, got: %s", joined)
+	}
+	if strings.Contains(joined, "--add-host") {
+		t.Fatalf("expected wireshark container to use edgeshark network instead of host gateway, got: %s", joined)
+	}
+	if connectArgs := runner.commandArgsContaining("network", "connect", "edgeshark_default", "wireshark-container-id"); connectArgs == nil {
+		t.Fatalf("expected docker network connect command, got %#v", runner.commands)
 	}
 }
 
