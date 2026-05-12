@@ -36,7 +36,7 @@ jobs:
     # 3 — Fast Go installer
     #---------------------------------------------------------------
     - name: Setup Go (fast)
-      uses: WillAbides/setup-go-faster@v1.14.0
+      uses: WillAbides/setup-go-faster@v1.15.0
       with:
         go-version: '1.24.x'
 
@@ -122,7 +122,7 @@ jobs:
       uses: docker/setup-qemu-action@v4
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@v4
@@ -164,7 +164,7 @@ jobs:
     # 9 — Upload binaries to the GitHub Release page
     #---------------------------------------------------------------
     - name: Upload Release Assets (Binaries)
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         files: |
           dist/clab-api-server-linux-amd64
