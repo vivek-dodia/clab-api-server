@@ -25,6 +25,7 @@ import (
 const (
 	defaultSessionSweepInterval = time.Minute
 	defaultEdgesharkComposeURL  = "https://github.com/siemens/edgeshark/raw/main/deployments/wget/docker-compose.yaml"
+	packetflixProbeTimeout      = 500 * time.Millisecond
 )
 
 var sanitizeContainerNameRx = regexp.MustCompile(`[^a-zA-Z0-9_.-]+`)
@@ -198,26 +199,79 @@ func (m *Manager) PacketflixPort() int {
 }
 
 func (m *Manager) Status(ctx context.Context) (EdgeSharkStatus, error) {
+	if status, ok, err := m.probePacketflixVersion(ctx); ok || err != nil {
+		return status, err
+	}
+	if m.packetflixPortReachable(ctx) && m.edgeSharkContainerRunning(ctx) {
+		return EdgeSharkStatus{Running: true}, nil
+	}
+	return EdgeSharkStatus{Running: false}, nil
+}
+
+func (m *Manager) probePacketflixVersion(ctx context.Context) (EdgeSharkStatus, bool, error) {
 	versionURL := fmt.Sprintf("http://127.0.0.1:%d/version", m.cfg.PacketflixPort)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, versionURL, nil)
+	probeCtx, cancel := context.WithTimeout(ctx, packetflixProbeTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, versionURL, nil)
 	if err != nil {
-		return EdgeSharkStatus{}, err
+		return EdgeSharkStatus{}, false, err
 	}
 
 	res, err := m.client.Do(req)
 	if err != nil {
-		return EdgeSharkStatus{Running: false}, nil
+		return EdgeSharkStatus{}, false, nil
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return EdgeSharkStatus{Running: false}, nil
+		return EdgeSharkStatus{}, false, nil
 	}
 	body, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
 	return EdgeSharkStatus{
 		Running: true,
 		Version: strings.TrimSpace(string(body)),
-	}, nil
+	}, true, nil
+}
+
+func (m *Manager) packetflixPortReachable(ctx context.Context) bool {
+	probeCtx, cancel := context.WithTimeout(ctx, packetflixProbeTimeout)
+	defer cancel()
+
+	conn, err := (&net.Dialer{Timeout: packetflixProbeTimeout}).DialContext(
+		probeCtx,
+		"tcp",
+		fmt.Sprintf("127.0.0.1:%d", m.cfg.PacketflixPort),
+	)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+func edgeSharkStatusPsArgs() []string {
+	return []string{"ps", "--filter", "name=edgeshark", "--format", "{{.Names}} {{.Image}}"}
+}
+
+func (m *Manager) edgeSharkContainerRunning(ctx context.Context) bool {
+	out, err := m.runner.Run(ctx, m.runtimeBinary(), edgeSharkStatusPsArgs(), nil)
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if isEdgeSharkPacketflixContainerLine(line) {
+			return true
+		}
+	}
+	return false
+}
+
+func isEdgeSharkPacketflixContainerLine(line string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(line))
+	return strings.Contains(normalized, "packetflix") ||
+		strings.Contains(normalized, "edgeshark-edgeshark") ||
+		strings.Contains(normalized, "edgeshark_edgeshark")
 }
 
 func (m *Manager) InstallEdgeShark(ctx context.Context) error {
@@ -326,6 +380,7 @@ func (m *Manager) CreateWiresharkSessions(
 
 	created := make([]*wiresharkSession, 0, len(options.Specs))
 	infos := make([]WiresharkSessionInfo, 0, len(options.Specs))
+	packetflixHost := wiresharkPacketflixHost(m.runtimeBinary(), edgesharkNetwork != "")
 
 	for _, spec := range options.Specs {
 		if len(spec.InterfaceNames) == 0 {
@@ -339,12 +394,11 @@ func (m *Manager) CreateWiresharkSessions(
 		}
 
 		packetflix := buildPacketflixURI(
-			"127.0.0.1",
+			packetflixHost,
 			m.cfg.PacketflixPort,
 			spec.ContainerName,
 			spec.InterfaceNames,
 		)
-		packetflix = adjustPacketflixHost(packetflix, edgesharkNetwork != "")
 
 		sessionID := randomSessionID()
 		containerName := buildWiresharkContainerName(
@@ -580,8 +634,8 @@ func (m *Manager) startWiresharkContainer(
 		"--name", options.containerName,
 		"-p", fmt.Sprintf("127.0.0.1:%d:5800", options.localPort),
 	}
-	if strings.TrimSpace(options.edgesharkNet) != "" {
-		args = append(args, "--network", options.edgesharkNet)
+	if strings.TrimSpace(options.edgesharkNet) == "" {
+		args = append(args, wiresharkHostGatewayRunArgs(runtime)...)
 	}
 	if strings.TrimSpace(options.labDir) != "" {
 		args = append(args, "-v", fmt.Sprintf("%s:/pcaps", options.labDir))
@@ -601,7 +655,25 @@ func (m *Manager) startWiresharkContainer(
 	if containerID == "" {
 		return "", errors.New("runtime did not return a container id")
 	}
+	if err := m.connectWiresharkContainerNetwork(ctx, containerID, options.edgesharkNet); err != nil {
+		_ = m.stopWiresharkContainer(ctx, containerID)
+		return "", err
+	}
 	return containerID, nil
+}
+
+func (m *Manager) connectWiresharkContainerNetwork(ctx context.Context, containerID, networkName string) error {
+	containerID = strings.TrimSpace(containerID)
+	networkName = strings.TrimSpace(networkName)
+	if containerID == "" || networkName == "" {
+		return nil
+	}
+	runtime := m.runtimeBinary()
+	_, err := m.runner.Run(ctx, runtime, []string{"network", "connect", networkName, containerID}, nil)
+	if err != nil {
+		return fmt.Errorf("failed connecting wireshark container to edgeshark network: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) stopWiresharkContainer(ctx context.Context, containerID string) error {
@@ -658,7 +730,21 @@ func (m *Manager) findEdgeSharkNetwork(ctx context.Context) (string, error) {
 			return networkName, nil
 		}
 	}
-	return networks[0], nil
+	for _, networkName := range networks {
+		if !isDefaultRuntimeNetworkName(networkName) {
+			return networkName, nil
+		}
+	}
+	return "", nil
+}
+
+func isDefaultRuntimeNetworkName(networkName string) bool {
+	switch strings.ToLower(strings.TrimSpace(networkName)) {
+	case "", "bridge", "host", "none", "podman":
+		return true
+	default:
+		return false
+	}
 }
 
 func extractNetworkNames(inspectObject map[string]any) []string {
@@ -970,18 +1056,23 @@ func buildPacketflixURI(
 	)
 }
 
-func adjustPacketflixHost(packetflixURI string, hasEdgeSharkNetwork bool) string {
-	if !strings.Contains(packetflixURI, "localhost") && !strings.Contains(packetflixURI, "127.0.0.1") {
-		return packetflixURI
-	}
+func wiresharkPacketflixHost(runtime string, hasEdgeSharkNetwork bool) string {
 	if hasEdgeSharkNetwork {
-		packetflixURI = strings.ReplaceAll(packetflixURI, "localhost", "edgeshark-edgeshark-1")
-		packetflixURI = strings.ReplaceAll(packetflixURI, "127.0.0.1", "edgeshark-edgeshark-1")
-		return packetflixURI
+		return "edgeshark-edgeshark-1"
 	}
-	packetflixURI = strings.ReplaceAll(packetflixURI, "localhost", "host.docker.internal")
-	packetflixURI = strings.ReplaceAll(packetflixURI, "127.0.0.1", "host.docker.internal")
-	return packetflixURI
+	switch strings.ToLower(strings.TrimSpace(runtime)) {
+	case "podman":
+		return "host.containers.internal"
+	default:
+		return "host.docker.internal"
+	}
+}
+
+func wiresharkHostGatewayRunArgs(runtime string) []string {
+	if strings.ToLower(strings.TrimSpace(runtime)) != "docker" {
+		return nil
+	}
+	return []string{"--add-host", "host.docker.internal:host-gateway"}
 }
 
 func buildWiresharkContainerName(username, containerName string, interfaceNames []string) string {
