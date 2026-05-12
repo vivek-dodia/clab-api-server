@@ -166,6 +166,7 @@ jobs:
     - name: Upload Release Assets (Binaries)
       uses: softprops/action-gh-release@v3
       with:
+        tag_name: ${{ github.event.release.tag_name }}
         files: |
           dist/clab-api-server-linux-amd64
           dist/clab-api-server-linux-arm64
