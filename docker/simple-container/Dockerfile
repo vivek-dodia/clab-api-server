@@ -46,11 +46,17 @@ RUN groupadd --system docker && \
 WORKDIR /app
 
 # ARG to specify the target architecture (automatically set by Buildx)
-ARG TARGETARCH=amd64
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in \
+      amd64|arm64) ;; \
+      "") echo "TARGETARCH must be set by Buildx" >&2; exit 1 ;; \
+      *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac
 
 # Copy the correct pre-built binary based on the target architecture
 COPY dist/clab-api-server-linux-${TARGETARCH} /usr/local/bin/clab-api-server
-RUN chmod +x /usr/local/bin/clab-api-server
+RUN chmod +x /usr/local/bin/clab-api-server && \
+    /usr/local/bin/clab-api-server -v
 
 # Copy the example .env file to provide configuration
 COPY .env.example /app/.env

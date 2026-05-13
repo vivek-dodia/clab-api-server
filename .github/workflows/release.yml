@@ -59,6 +59,7 @@ jobs:
         for i in {1..5}; do \
           sudo apt-get install -y --no-install-recommends \
             build-essential \
+            file \
             gcc-aarch64-linux-gnu \
             linux-libc-dev:arm64 \
             libpam0g-dev \
@@ -116,6 +117,17 @@ jobs:
         chmod +x dist/clab-api-server-linux-*
 
     #---------------------------------------------------------------
+    # 9 — Verify release binary architectures before packaging
+    #---------------------------------------------------------------
+    - name: Verify release binary architectures
+      run: |
+        set -euxo pipefail
+        file dist/clab-api-server-linux-amd64 | tee /tmp/clab-api-server-linux-amd64.file
+        file dist/clab-api-server-linux-arm64 | tee /tmp/clab-api-server-linux-arm64.file
+        grep -q 'x86-64' /tmp/clab-api-server-linux-amd64.file
+        grep -q 'ARM aarch64' /tmp/clab-api-server-linux-arm64.file
+
+    #---------------------------------------------------------------
     # Docker Buildx Setup and Login
     #---------------------------------------------------------------
     - name: Set up QEMU
@@ -161,7 +173,18 @@ jobs:
         cache-to: type=gha,mode=max
 
     #---------------------------------------------------------------
-    # 9 — Upload binaries to the GitHub Release page
+    # 10 — Verify pushed multi-arch image
+    #---------------------------------------------------------------
+    - name: Verify pushed multi-arch image
+      run: |
+        set -euxo pipefail
+        image="ghcr.io/${REPO_LOWER}/clab-api-server:${{ github.event.release.tag_name }}"
+        docker buildx imagetools inspect "$image" | tee /tmp/clab-api-server-image.txt
+        grep -q 'linux/amd64' /tmp/clab-api-server-image.txt
+        grep -q 'linux/arm64' /tmp/clab-api-server-image.txt
+
+    #---------------------------------------------------------------
+    # 11 — Upload binaries to the GitHub Release page
     #---------------------------------------------------------------
     - name: Upload Release Assets (Binaries)
       uses: softprops/action-gh-release@v3

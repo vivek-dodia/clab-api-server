@@ -13,6 +13,109 @@ permissions:
   contents: read
 
 jobs:
+  container-image-arch:
+    name: Container image architecture
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: WillAbides/setup-go-faster@v1.15.0
+        with:
+          go-version: "1.24.x"
+
+      - name: Cache Go modules
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-container-image-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Configure apt and install cross tool-chain
+        run: |
+          set -euxo pipefail
+          sudo dpkg --add-architecture arm64
+          sudo sed -Ei 's|http://azure\.archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+          sudo sed -Ei 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+          sudo tee /etc/apt/sources.list.d/arm64-ports.list > /dev/null <<'EOF'
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse
+          EOF
+          for i in {1..5}; do sudo apt-get update -qq && break || sleep 5; done
+          for i in {1..5}; do \
+            sudo apt-get install -y --no-install-recommends \
+              build-essential \
+              file \
+              gcc-aarch64-linux-gnu \
+              linux-libc-dev:arm64 \
+              libpam0g-dev \
+              libpam0g-dev:arm64 \
+            && break || { sudo apt-get -y --fix-broken install || true; sleep 5; }; \
+          done
+
+      - name: Build release binaries
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+          go build -trimpath -o dist/clab-api-server-linux-amd64 ./cmd/server
+          CC=aarch64-linux-gnu-gcc \
+          PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
+          CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
+          go build -trimpath -o dist/clab-api-server-linux-arm64 ./cmd/server
+          chmod +x dist/clab-api-server-linux-*
+
+      - name: Verify release binary architectures
+        run: |
+          set -euxo pipefail
+          file dist/clab-api-server-linux-amd64 | tee /tmp/clab-api-server-linux-amd64.file
+          file dist/clab-api-server-linux-arm64 | tee /tmp/clab-api-server-linux-arm64.file
+          grep -q 'x86-64' /tmp/clab-api-server-linux-amd64.file
+          grep -q 'ARM aarch64' /tmp/clab-api-server-linux-arm64.file
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and smoke test amd64 image
+        run: |
+          set -euxo pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            --load \
+            -t clab-api-server-ci:amd64 \
+            -f ./docker/simple-container/Dockerfile \
+            .
+          docker run --rm \
+            --platform linux/amd64 \
+            --entrypoint /usr/local/bin/clab-api-server \
+            clab-api-server-ci:amd64 \
+            -v
+
+      - name: Build and smoke test arm64 image
+        run: |
+          set -euxo pipefail
+          docker buildx build \
+            --platform linux/arm64 \
+            --load \
+            -t clab-api-server-ci:arm64 \
+            -f ./docker/simple-container/Dockerfile \
+            .
+          docker run --rm \
+            --platform linux/arm64 \
+            --entrypoint /usr/local/bin/clab-api-server \
+            clab-api-server-ci:arm64 \
+            -v
+
   tests-go:
     name: API + containerlab tests
     runs-on: ubuntu-24.04
