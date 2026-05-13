@@ -20,6 +20,13 @@ A standalone RESTful API server for managing [Containerlab](https://containerlab
 * **Standalone Topology Editing:** File-scoped topology endpoints for browser UI integration
 * **Documentation:** Embedded Swagger UI and ReDoc for API exploration
 
+
+The latest Api endpoints documentation is published to GitHub Pages:
+
+```
+https://srl-labs.github.io/clab-api-server/
+```
+
 ---
 
 ## Prerequisites
