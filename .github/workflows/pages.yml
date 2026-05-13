@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - docs/swagger.json
-      - docs/swagger.yaml
-      - docs-site/**
-      - .github/workflows/pages.yml
   workflow_dispatch:
 
 permissions:
@@ -39,6 +34,7 @@ jobs:
           cp docs-site/index.html public/index.html
           cp docs/swagger.json public/swagger.json
           cp docs/swagger.yaml public/swagger.yaml
+          touch public/.nojekyll
 
       - name: Configure Pages
         uses: actions/configure-pages@v6
