@@ -4185,7 +4185,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Resets (removes) netem impairments from a specific interface of a containerlab node. Requires superuser privileges.",
+                "description": "Resets (removes) netem impairments from a specific interface of a containerlab node owned by the authenticated user. Superusers may operate on any node.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4226,14 +4226,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
-                    "403": {
-                        "description": "Forbidden (User is not a superuser)",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
                     "404": {
-                        "description": "Container or interface not found",
+                        "description": "Container or interface not found, or container not owned by user",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -4254,7 +4248,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Sets netem impairments (delay, jitter, loss, rate limiting, corruption) on a specific interface of a containerlab node. Requires superuser privileges.",
+                "description": "Sets netem impairments (delay, jitter, loss, rate limiting, corruption) on a specific interface of a containerlab node owned by the authenticated user. Superusers may operate on any node.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4295,14 +4289,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
-                    "403": {
-                        "description": "Forbidden (User is not a superuser)",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
                     "404": {
-                        "description": "Container or interface not found",
+                        "description": "Container or interface not found, or container not owned by user",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -4323,7 +4311,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Lists netem impairments for a given containerlab node. Requires superuser privileges.",
+                "description": "Lists netem impairments for a containerlab node owned by the authenticated user. Superusers may inspect any node.",
                 "produces": [
                     "application/json"
                 ],
@@ -4359,14 +4347,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
-                    "403": {
-                        "description": "Forbidden (User is not a superuser)",
-                        "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
-                        }
-                    },
                     "404": {
-                        "description": "Container not found",
+                        "description": "Container not found, or container not owned by user",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }

@@ -214,7 +214,7 @@ func SetupRoutes(router *gin.Engine) {
 				vxlan.DELETE("", DeleteVxlanHandler) // DELETE /api/v1/tools/vxlan
 			}
 
-			// Netem Tools (Superuser Only)
+			// Netem Tools (Lab Owners + Superusers)
 			netem := tools.Group("/netem")
 			{
 				netem.POST("/set", SetNetemHandler)     // POST /api/v1/tools/netem/set

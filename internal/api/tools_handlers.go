@@ -629,7 +629,7 @@ func DeleteVxlanHandler(c *gin.Context) {
 // --- Netem Handlers ---
 
 // @Summary Set link impairments (netem)
-// @Description Sets netem impairments (delay, jitter, loss, rate limiting, corruption) on a specific interface of a containerlab node. Requires superuser privileges.
+// @Description Sets netem impairments (delay, jitter, loss, rate limiting, corruption) on a specific interface of a containerlab node owned by the authenticated user. Superusers may operate on any node.
 // @Tags Tools - Netem
 // @Security BearerAuth
 // @Accept json
@@ -638,27 +638,21 @@ func DeleteVxlanHandler(c *gin.Context) {
 // @Success 200 {object} models.GenericSuccessResponse "Impairments set successfully"
 // @Failure 400 {object} models.ErrorResponse "Invalid input parameters"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized (JWT)"
-// @Failure 403 {object} models.ErrorResponse "Forbidden (User is not a superuser)"
-// @Failure 404 {object} models.ErrorResponse "Container or interface not found"
+// @Failure 404 {object} models.ErrorResponse "Container or interface not found, or container not owned by user"
 // @Failure 500 {object} models.ErrorResponse "Internal server error"
 // @Router /api/v1/tools/netem/set [post]
 func SetNetemHandler(c *gin.Context) {
 	username := c.GetString("username")
 
-	// --- Authorization: Superuser Only ---
-	if !requireSuperuser(c, username, "use netem set") {
-		return
-	}
-
 	var req models.NetemSetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Warnf("SetNetem failed for superuser '%s': Invalid request body: %v", username, err)
+		log.Warnf("SetNetem failed for user '%s': Invalid request body: %v", username, err)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body: " + err.Error()})
 		return
 	}
 
 	if !isValidContainerName(req.ContainerName) {
-		log.Warnf("SetNetem failed for superuser '%s': Invalid container name format '%s'", username, req.ContainerName)
+		log.Warnf("SetNetem failed for user '%s': Invalid container name format '%s'", username, req.ContainerName)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid container name format."})
 		return
 	}
@@ -710,7 +704,7 @@ func SetNetemHandler(c *gin.Context) {
 	}
 
 	svc := GetClabService()
-	log.Infof("Superuser '%s' setting netem impairments: container=%s interface=%s", username, req.ContainerName, iface)
+	log.Infof("User '%s' setting netem impairments: container=%s interface=%s", username, req.ContainerName, iface)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -730,7 +724,7 @@ func SetNetemHandler(c *gin.Context) {
 			return
 		}
 
-		log.Errorf("SetNetem failed for superuser '%s' (container '%s', interface '%s'): %v", username, req.ContainerName, iface, err)
+		log.Errorf("SetNetem failed for user '%s' (container '%s', interface '%s'): %v", username, req.ContainerName, iface, err)
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error: fmt.Sprintf("Failed to set netem impairments for container '%s' interface '%s': %s", req.ContainerName, iface, err.Error()),
 		})
@@ -743,7 +737,7 @@ func SetNetemHandler(c *gin.Context) {
 }
 
 // @Summary Show link impairments (netem)
-// @Description Lists netem impairments for a given containerlab node. Requires superuser privileges.
+// @Description Lists netem impairments for a containerlab node owned by the authenticated user. Superusers may inspect any node.
 // @Tags Tools - Netem
 // @Security BearerAuth
 // @Produce json
@@ -751,17 +745,11 @@ func SetNetemHandler(c *gin.Context) {
 // @Success 200 {object} models.NetemShowResponse "Netem impairments"
 // @Failure 400 {object} models.ErrorResponse "Invalid input parameters"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized (JWT)"
-// @Failure 403 {object} models.ErrorResponse "Forbidden (User is not a superuser)"
-// @Failure 404 {object} models.ErrorResponse "Container not found"
+// @Failure 404 {object} models.ErrorResponse "Container not found, or container not owned by user"
 // @Failure 500 {object} models.ErrorResponse "Internal server error"
 // @Router /api/v1/tools/netem/show [get]
 func ShowNetemHandler(c *gin.Context) {
 	username := c.GetString("username")
-
-	// --- Authorization: Superuser Only ---
-	if !requireSuperuser(c, username, "use netem show") {
-		return
-	}
 
 	containerName := c.Query("containerName")
 	if !isValidContainerName(containerName) {
@@ -775,14 +763,14 @@ func ShowNetemHandler(c *gin.Context) {
 	}
 
 	svc := GetClabService()
-	log.Infof("Superuser '%s' showing netem impairments: container=%s", username, containerName)
+	log.Infof("User '%s' showing netem impairments: container=%s", username, containerName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	impairments, err := svc.ShowNetem(ctx, containerName)
 	if err != nil {
-		log.Errorf("ShowNetem failed for superuser '%s' (container '%s'): %v", username, containerName, err)
+		log.Errorf("ShowNetem failed for user '%s' (container '%s'): %v", username, containerName, err)
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error: fmt.Sprintf("Failed to show netem impairments for container '%s': %s", containerName, err.Error()),
 		})
@@ -812,7 +800,7 @@ func ShowNetemHandler(c *gin.Context) {
 }
 
 // @Summary Reset link impairments (netem)
-// @Description Resets (removes) netem impairments from a specific interface of a containerlab node. Requires superuser privileges.
+// @Description Resets (removes) netem impairments from a specific interface of a containerlab node owned by the authenticated user. Superusers may operate on any node.
 // @Tags Tools - Netem
 // @Security BearerAuth
 // @Accept json
@@ -821,27 +809,21 @@ func ShowNetemHandler(c *gin.Context) {
 // @Success 200 {object} models.GenericSuccessResponse "Impairments reset successfully"
 // @Failure 400 {object} models.ErrorResponse "Invalid input parameters"
 // @Failure 401 {object} models.ErrorResponse "Unauthorized (JWT)"
-// @Failure 403 {object} models.ErrorResponse "Forbidden (User is not a superuser)"
-// @Failure 404 {object} models.ErrorResponse "Container or interface not found"
+// @Failure 404 {object} models.ErrorResponse "Container or interface not found, or container not owned by user"
 // @Failure 500 {object} models.ErrorResponse "Internal server error"
 // @Router /api/v1/tools/netem/reset [post]
 func ResetNetemHandler(c *gin.Context) {
 	username := c.GetString("username")
 
-	// --- Authorization: Superuser Only ---
-	if !requireSuperuser(c, username, "use netem reset") {
-		return
-	}
-
 	var req models.NetemResetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Warnf("ResetNetem failed for superuser '%s': Invalid request body: %v", username, err)
+		log.Warnf("ResetNetem failed for user '%s': Invalid request body: %v", username, err)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body: " + err.Error()})
 		return
 	}
 
 	if !isValidContainerName(req.ContainerName) {
-		log.Warnf("ResetNetem failed for superuser '%s': Invalid container name format '%s'", username, req.ContainerName)
+		log.Warnf("ResetNetem failed for user '%s': Invalid container name format '%s'", username, req.ContainerName)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid container name format."})
 		return
 	}
@@ -862,7 +844,7 @@ func ResetNetemHandler(c *gin.Context) {
 	}
 
 	svc := GetClabService()
-	log.Infof("Superuser '%s' resetting netem impairments: container=%s interface=%s", username, req.ContainerName, iface)
+	log.Infof("User '%s' resetting netem impairments: container=%s interface=%s", username, req.ContainerName, iface)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -874,7 +856,7 @@ func ResetNetemHandler(c *gin.Context) {
 			return
 		}
 
-		log.Errorf("ResetNetem failed for superuser '%s' (container '%s', interface '%s'): %v", username, req.ContainerName, iface, err)
+		log.Errorf("ResetNetem failed for user '%s' (container '%s', interface '%s'): %v", username, req.ContainerName, iface, err)
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error: fmt.Sprintf("Failed to reset netem impairments for container '%s' interface '%s': %s", req.ContainerName, iface, err.Error()),
 		})

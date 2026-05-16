@@ -40,12 +40,12 @@ func (s *NetemSuite) SetupSuite() {
 	s.Require().NotEmpty(s.superuserToken)
 }
 
-func (s *NetemSuite) TestNetemForbiddenForAPIUser() {
-	labName, userHeaders := s.setupEphemeralLab()
+func (s *NetemSuite) TestNetemRejectsNonOwner() {
+	labName, superuserHeaders := s.setupSuperuserLab()
 	defer s.cleanupLab(labName, true)
 
 	inspectURL := fmt.Sprintf("%s/api/v1/labs/%s", s.cfg.APIURL, labName)
-	bodyBytes, statusCode, err := s.doRequest("GET", inspectURL, userHeaders, nil, s.cfg.RequestTimeout)
+	bodyBytes, statusCode, err := s.doRequest("GET", inspectURL, superuserHeaders, nil, s.cfg.RequestTimeout)
 	s.Require().NoError(err)
 	s.Require().Equal(http.StatusOK, statusCode, "Expected status 200 inspecting lab '%s'. Body: %s", labName, string(bodyBytes))
 
@@ -68,10 +68,10 @@ func (s *NetemSuite) TestNetemForbiddenForAPIUser() {
 
 	respBody, respStatus, reqErr := s.doRequest("POST", setURL, s.apiUserHeaders, bytes.NewBuffer(reqBody), s.cfg.RequestTimeout)
 	s.Require().NoError(reqErr)
-	s.Require().Equal(http.StatusForbidden, respStatus, "Expected 403 when non-superuser calls netem set. Body: %s", string(respBody))
+	s.Require().Equal(http.StatusNotFound, respStatus, "Expected 404 when non-owner calls netem set. Body: %s", string(respBody))
 }
 
-func (s *NetemSuite) TestNetemSetShowReset() {
+func (s *NetemSuite) TestNetemSetShowResetForLabOwner() {
 	labName, userHeaders := s.setupEphemeralLab()
 	defer s.cleanupLab(labName, true)
 
@@ -104,7 +104,7 @@ func (s *NetemSuite) TestNetemSetShowReset() {
 	}
 	setReqBody := s.mustMarshal(setPayload)
 
-	setRespBody, setStatus, setErr := s.doRequest("POST", setURL, s.superuserHeaders, bytes.NewBuffer(setReqBody), s.cfg.RequestTimeout)
+	setRespBody, setStatus, setErr := s.doRequest("POST", setURL, userHeaders, bytes.NewBuffer(setReqBody), s.cfg.RequestTimeout)
 	s.Require().NoError(setErr)
 	s.Require().Equal(http.StatusOK, setStatus, "Expected 200 when setting netem. Body: %s", string(setRespBody))
 
@@ -112,7 +112,7 @@ func (s *NetemSuite) TestNetemSetShowReset() {
 
 	// --- Show impairments ---
 	showURL := fmt.Sprintf("%s/api/v1/tools/netem/show?containerName=%s", s.cfg.APIURL, containerName)
-	showBody, showStatus, showErr := s.doRequest("GET", showURL, s.superuserHeaders, nil, s.cfg.RequestTimeout)
+	showBody, showStatus, showErr := s.doRequest("GET", showURL, userHeaders, nil, s.cfg.RequestTimeout)
 	s.Require().NoError(showErr)
 	s.Require().Equal(http.StatusOK, showStatus, "Expected 200 when showing netem. Body: %s", string(showBody))
 
@@ -155,14 +155,14 @@ func (s *NetemSuite) TestNetemSetShowReset() {
 	}
 	resetReqBody := s.mustMarshal(resetPayload)
 
-	resetRespBody, resetStatus, resetErr := s.doRequest("POST", resetURL, s.superuserHeaders, bytes.NewBuffer(resetReqBody), s.cfg.RequestTimeout)
+	resetRespBody, resetStatus, resetErr := s.doRequest("POST", resetURL, userHeaders, bytes.NewBuffer(resetReqBody), s.cfg.RequestTimeout)
 	s.Require().NoError(resetErr)
 	s.Require().Equal(http.StatusOK, resetStatus, "Expected 200 when resetting netem. Body: %s", string(resetRespBody))
 
 	time.Sleep(500 * time.Millisecond)
 
 	// --- Show again, ensure interface entry is gone ---
-	showBody2, showStatus2, showErr2 := s.doRequest("GET", showURL, s.superuserHeaders, nil, s.cfg.RequestTimeout)
+	showBody2, showStatus2, showErr2 := s.doRequest("GET", showURL, userHeaders, nil, s.cfg.RequestTimeout)
 	s.Require().NoError(showErr2)
 	s.Require().Equal(http.StatusOK, showStatus2, "Expected 200 when showing netem after reset. Body: %s", string(showBody2))
 

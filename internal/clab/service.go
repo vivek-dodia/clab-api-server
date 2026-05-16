@@ -1658,7 +1658,7 @@ func (s *Service) SetNetem(ctx context.Context, opts NetemSetOptions) error {
 	}()
 
 	err = nodeNS.Do(func(_ ns.NetNS) error {
-		netemIfLink, err := netlink.LinkByName(clablinks.SanitizeInterfaceName(opts.Interface))
+		netemIfLink, err := resolveNetemLink(opts.Interface)
 		if err != nil {
 			var lnf netlink.LinkNotFoundError
 			if errors.As(err, &lnf) {
@@ -1702,6 +1702,30 @@ func (s *Service) SetNetem(ctx context.Context, opts NetemSetOptions) error {
 	return nil
 }
 
+func resolveNetemLink(iface string) (netlink.Link, error) {
+	netemIfLink, err := netlink.LinkByName(clablinks.SanitizeInterfaceName(iface))
+	if err == nil {
+		return netemIfLink, nil
+	}
+
+	var lnf netlink.LinkNotFoundError
+	if !errors.As(err, &lnf) {
+		return nil, err
+	}
+
+	links, listErr := netlink.LinkList()
+	if listErr != nil {
+		return nil, listErr
+	}
+	for _, link := range links {
+		if link.Attrs().Alias == iface {
+			return link, nil
+		}
+	}
+
+	return nil, err
+}
+
 // ResetNetem removes netem impairments from a specific interface in a container's network namespace.
 func (s *Service) ResetNetem(ctx context.Context, containerName, iface string) error {
 	ctx, cancel := s.ensureTimeout(ctx)
@@ -1734,7 +1758,7 @@ func (s *Service) ResetNetem(ctx context.Context, containerName, iface string) e
 	}()
 
 	return nodeNS.Do(func(_ ns.NetNS) error {
-		netemIfLink, err := netlink.LinkByName(clablinks.SanitizeInterfaceName(iface))
+		netemIfLink, err := resolveNetemLink(iface)
 		if err != nil {
 			var lnf netlink.LinkNotFoundError
 			if errors.As(err, &lnf) {

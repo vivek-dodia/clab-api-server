@@ -4068,7 +4068,8 @@ paths:
       consumes:
       - application/json
       description: Resets (removes) netem impairments from a specific interface of
-        a containerlab node. Requires superuser privileges.
+        a containerlab node owned by the authenticated user. Superusers may operate
+        on any node.
       parameters:
       - description: Netem Reset Parameters
         in: body
@@ -4091,12 +4092,9 @@ paths:
           description: Unauthorized (JWT)
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        "403":
-          description: Forbidden (User is not a superuser)
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
         "404":
-          description: Container or interface not found
+          description: Container or interface not found, or container not owned by
+            user
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
@@ -4113,7 +4111,8 @@ paths:
       consumes:
       - application/json
       description: Sets netem impairments (delay, jitter, loss, rate limiting, corruption)
-        on a specific interface of a containerlab node. Requires superuser privileges.
+        on a specific interface of a containerlab node owned by the authenticated
+        user. Superusers may operate on any node.
       parameters:
       - description: Netem Set Parameters
         in: body
@@ -4136,12 +4135,9 @@ paths:
           description: Unauthorized (JWT)
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        "403":
-          description: Forbidden (User is not a superuser)
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
         "404":
-          description: Container or interface not found
+          description: Container or interface not found, or container not owned by
+            user
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
@@ -4155,8 +4151,8 @@ paths:
       - Tools - Netem
   /api/v1/tools/netem/show:
     get:
-      description: Lists netem impairments for a given containerlab node. Requires
-        superuser privileges.
+      description: Lists netem impairments for a containerlab node owned by the authenticated
+        user. Superusers may inspect any node.
       parameters:
       - description: Container/node name
         in: query
@@ -4178,12 +4174,8 @@ paths:
           description: Unauthorized (JWT)
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        "403":
-          description: Forbidden (User is not a superuser)
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
         "404":
-          description: Container not found
+          description: Container not found, or container not owned by user
           schema:
             $ref: '#/definitions/models.ErrorResponse'
         "500":
