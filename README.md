@@ -120,7 +120,7 @@ Then run it with your own process management:
 sudo clab-api-server -env-file /path/to/clab-api-server.env
 ```
 
-Configure via environment variables or a `.env` file. See [Configuration Reference](#configuration-reference) for available options.
+Configure via environment variables or a `.env` file. See [`.env.example`](./.env.example) and the [Configuration Reference](#configuration-reference) for available options.
 
 ### 4. Docker Deployment
 
