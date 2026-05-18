@@ -12,7 +12,7 @@ require (
 	github.com/containernetworking/plugins v1.9.1
 	github.com/creack/pty v1.1.24
 	github.com/florianl/go-tc v0.4.8
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gorilla/websocket v1.5.3
