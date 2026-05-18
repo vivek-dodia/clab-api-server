@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -51,6 +52,60 @@ type Service struct{}
 // NewService creates a new containerlab service.
 func NewService() *Service {
 	return &Service{}
+}
+
+var containerlabInitMu sync.Mutex
+
+func newContainerLab(opts ...clabcore.ClabOption) (*clabcore.CLab, error) {
+	containerlabInitMu.Lock()
+	defer containerlabInitMu.Unlock()
+
+	return clabcore.NewContainerLab(opts...)
+}
+
+func newContainerLabForOwner(owner string, opts ...clabcore.ClabOption) (*clabcore.CLab, error) {
+	containerlabInitMu.Lock()
+	defer containerlabInitMu.Unlock()
+
+	restoreOwnerEnv := setProcessOwnerEnv(owner)
+	defer restoreOwnerEnv()
+
+	return clabcore.NewContainerLab(opts...)
+}
+
+func setProcessOwnerEnv(owner string) func() {
+	owner = strings.TrimSpace(owner)
+	if owner == "" {
+		return func() {}
+	}
+
+	sudoUser, sudoUserSet := os.LookupEnv("SUDO_USER")
+	userEnv, userSet := os.LookupEnv("USER")
+	sudoUID, sudoUIDSet := os.LookupEnv("SUDO_UID")
+	sudoGID, sudoGIDSet := os.LookupEnv("SUDO_GID")
+
+	// containerlab falls back to SUDO_USER/USER when its owner option is ignored.
+	_ = os.Setenv("SUDO_USER", owner)
+	_ = os.Setenv("USER", owner)
+	if usr, err := user.Lookup(owner); err == nil {
+		_ = os.Setenv("SUDO_UID", usr.Uid)
+		_ = os.Setenv("SUDO_GID", usr.Gid)
+	}
+
+	return func() {
+		restoreEnv("SUDO_USER", sudoUser, sudoUserSet)
+		restoreEnv("USER", userEnv, userSet)
+		restoreEnv("SUDO_UID", sudoUID, sudoUIDSet)
+		restoreEnv("SUDO_GID", sudoGID, sudoGIDSet)
+	}
+}
+
+func restoreEnv(key, value string, wasSet bool) {
+	if wasSet {
+		_ = os.Setenv(key, value)
+		return
+	}
+	_ = os.Unsetenv(key)
 }
 
 type rootLinkNode struct {
@@ -344,7 +399,6 @@ func (s *Service) Deploy(ctx context.Context, opts DeployOptions) ([]clabruntime
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{
 			Timeout: defaultTimeout,
 		}),
-		clabcore.WithLabOwner(opts.Username),
 	}
 
 	if len(opts.NodeFilter) > 0 {
@@ -358,7 +412,7 @@ func (s *Service) Deploy(ctx context.Context, opts DeployOptions) ([]clabruntime
 	)
 
 	// Create containerlab instance
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLabForOwner(opts.Username, clabOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
@@ -383,8 +437,20 @@ func (s *Service) Deploy(ctx context.Context, opts DeployOptions) ([]clabruntime
 		"reconfigure", opts.Reconfigure,
 	)
 
-	// Deploy the lab
-	containers, err := clab.Deploy(ctx, deployOpts)
+	// Deploy the lab with the same owner env used during containerlab initialization. containerlab
+	// uses these uid/gid env vars for ownership of deploy-time files it creates.
+	var containers []clabruntime.GenericContainer
+	err = func() error {
+		containerlabInitMu.Lock()
+		defer containerlabInitMu.Unlock()
+
+		restoreOwnerEnv := setProcessOwnerEnv(opts.Username)
+		defer restoreOwnerEnv()
+
+		var deployErr error
+		containers, deployErr = clab.Deploy(ctx, deployOpts)
+		return deployErr
+	}()
 	if err != nil {
 		return nil, fmt.Errorf("deployment failed: %w", err)
 	}
@@ -451,7 +517,7 @@ func (s *Service) Destroy(ctx context.Context, opts DestroyOptions) error {
 		"username", opts.Username,
 	)
 
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLab(clabOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
@@ -509,7 +575,7 @@ func (s *Service) ListContainers(ctx context.Context, opts ListOptions) ([]clabr
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
 	}
 
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLab(clabOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
@@ -625,7 +691,7 @@ func (s *Service) runTopologyNodeLifecycleAction(ctx context.Context, opts NodeL
 		return fmt.Errorf("either lab name or topology path is required")
 	}
 
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLab(clabOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
@@ -922,7 +988,7 @@ func (s *Service) ListContainerInterfaces(ctx context.Context, container *clabru
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
 	}
 
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLab(clabOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
@@ -945,7 +1011,7 @@ func (s *Service) ListContainersInterfaces(ctx context.Context, containers []cla
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
 	}
 
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLab(clabOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
@@ -989,7 +1055,7 @@ func (s *Service) Exec(ctx context.Context, opts ExecOptions) (*clabexec.ExecCol
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
 	)
 
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLab(clabOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
@@ -1051,7 +1117,7 @@ func (s *Service) SaveConfig(ctx context.Context, opts SaveOptions) error {
 		clabOpts = append(clabOpts, clabcore.WithNodeFilter(opts.NodeFilter))
 	}
 
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLab(clabOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
@@ -1226,7 +1292,7 @@ func (s *Service) DisableTxOffload(ctx context.Context, opts DisableTxOffloadOpt
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
 	}
 
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLab(clabOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
@@ -1305,7 +1371,7 @@ func (s *Service) CreateVeth(ctx context.Context, opts VethCreateOptions) error 
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
 	}
 
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLab(clabOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
@@ -1836,7 +1902,7 @@ func (s *Service) getContainerRuntime() (clabruntime.ContainerRuntime, error) {
 		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{Timeout: defaultTimeout}),
 	}
 
-	clab, err := clabcore.NewContainerLab(clabOpts...)
+	clab, err := newContainerLab(clabOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create containerlab instance: %w", err)
 	}
