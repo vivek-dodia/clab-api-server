@@ -733,35 +733,98 @@ func resolveLabNodeContainer(
 
 func scoreNodeMatch(labName, containerName, requestedNodeName string) int {
 	normalizedContainer := strings.ToLower(strings.TrimSpace(containerName))
-	normalizedRequested := strings.ToLower(strings.TrimSpace(requestedNodeName))
-	if normalizedContainer == "" || normalizedRequested == "" {
+	requestedCandidates := nodeNameCandidates(labName, requestedNodeName)
+	containerCandidates := nodeNameCandidates(labName, containerName)
+	if normalizedContainer == "" || len(requestedCandidates) == 0 {
 		return 0
 	}
 
-	if normalizedContainer == normalizedRequested {
+	if containsString(requestedCandidates, normalizedContainer) {
 		return 100
 	}
 
-	shortName := stripContainerPrefix(labName, normalizedContainer)
-	if shortName == normalizedRequested {
-		return 90
-	}
-	if strings.HasPrefix(shortName, normalizedRequested+"-") {
-		return 80
-	}
-	if strings.HasSuffix(normalizedContainer, "-"+normalizedRequested) {
-		return 70
+	for _, requested := range requestedCandidates {
+		if containsString(containerCandidates, requested) {
+			return 90
+		}
+		for _, candidate := range containerCandidates {
+			if strings.HasPrefix(candidate, requested+"-") {
+				return 80
+			}
+		}
+		if strings.HasSuffix(normalizedContainer, "-"+requested) {
+			return 70
+		}
 	}
 
 	return 0
 }
 
-func stripContainerPrefix(labName, containerName string) string {
-	prefix := fmt.Sprintf("clab-%s-", strings.ToLower(strings.TrimSpace(labName)))
-	if strings.HasPrefix(strings.ToLower(containerName), prefix) {
-		return containerName[len(prefix):]
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
 	}
-	return containerName
+	return false
+}
+
+func nodeNameCandidates(labName, value string) []string {
+	candidates := make([]string, 0, 2)
+	seen := map[string]struct{}{}
+	add := func(candidate string) {
+		normalized := strings.ToLower(strings.TrimSpace(candidate))
+		if normalized == "" {
+			return
+		}
+		if _, exists := seen[normalized]; exists {
+			return
+		}
+		candidates = append(candidates, normalized)
+		seen[normalized] = struct{}{}
+	}
+
+	add(value)
+	add(stripContainerPrefix(labName, value))
+
+	return candidates
+}
+
+func stripContainerPrefix(labName, containerName string) string {
+	trimmed := strings.TrimSpace(containerName)
+	normalizedLab := strings.ToLower(strings.TrimSpace(labName))
+	if trimmed == "" || normalizedLab == "" {
+		return trimmed
+	}
+
+	normalizedName := strings.ToLower(trimmed)
+	defaultPrefix := fmt.Sprintf("clab-%s-", normalizedLab)
+	if strings.HasPrefix(normalizedName, defaultPrefix) {
+		return trimmed[len(defaultPrefix):]
+	}
+
+	labPrefix := normalizedLab + "-"
+	if strings.HasPrefix(normalizedName, labPrefix) {
+		return trimmed[len(labPrefix):]
+	}
+
+	labSegment := "-" + normalizedLab + "-"
+	if segmentIndex := strings.LastIndex(normalizedName, labSegment); segmentIndex >= 0 {
+		return trimmed[segmentIndex+len(labSegment):]
+	}
+
+	return trimmed
+}
+
+func hasDifferentDefaultContainerlabPrefix(labName, containerName string) bool {
+	normalizedName := strings.ToLower(strings.TrimSpace(containerName))
+	normalizedLab := strings.ToLower(strings.TrimSpace(labName))
+	if normalizedName == "" || normalizedLab == "" {
+		return false
+	}
+
+	expectedPrefix := fmt.Sprintf("clab-%s-", normalizedLab)
+	return strings.HasPrefix(normalizedName, "clab-") && !strings.HasPrefix(normalizedName, expectedPrefix)
 }
 
 func readMgmtNetworkFromTopologyFile(topoPath string) string {

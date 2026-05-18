@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
+	"github.com/srl-labs/clab-api-server/internal/clab"
 	"github.com/srl-labs/clab-api-server/internal/config"
 	"github.com/srl-labs/clab-api-server/internal/models"
 	termsvc "github.com/srl-labs/clab-api-server/internal/terminal"
@@ -80,13 +82,13 @@ func ShutdownTerminalManager() {
 func RequestTerminalSessionHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
-	containerName := c.Param("nodeName")
+	requestedNodeName := strings.TrimSpace(c.Param("nodeName"))
 
 	if !isValidLabName(labName) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid lab name format."})
 		return
 	}
-	if !isValidContainerName(containerName) {
+	if !isResolvableContainerReference(requestedNodeName) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid container name format."})
 		return
 	}
@@ -103,20 +105,42 @@ func RequestTerminalSessionHandler(c *gin.Context) {
 		return
 	}
 
-	expectedPrefix := "clab-" + labName + "-"
-	if !strings.HasPrefix(containerName, expectedPrefix) {
+	svc := GetClabService()
+	if svc == nil {
+		err := fmt.Errorf("containerlab service not initialized")
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	container, err := resolveLabNodeContainer(ctx, svc, labName, requestedNodeName)
+	if err != nil {
+		if hasDifferentDefaultContainerlabPrefix(labName, requestedNodeName) {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error: fmt.Sprintf("Container '%s' does not belong to lab '%s'", requestedNodeName, labName),
+			})
+			return
+		}
+		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	containerInfo := clab.ContainerToClabContainerInfo(*container)
+
+	if containerInfo.LabName != labName {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error: fmt.Sprintf("Container '%s' does not belong to lab '%s'", containerName, labName),
+			Error: fmt.Sprintf("Container '%s' does not belong to lab '%s'", requestedNodeName, labName),
 		})
 		return
 	}
-
-	containerInfo, err := verifyContainerOwnership(c, username, containerName)
-	if err != nil {
+	if !isSuperuser(username) && containerInfo.Owner != username {
+		err := fmt.Errorf("container '%s' not found or not owned by user", requestedNodeName)
+		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	shortNodeName := strings.TrimPrefix(containerName, expectedPrefix)
+	shortNodeName := resolveTopologyNodeName(labName, container)
 	sessionInfo, err := terminalManager.CreateSession(termsvc.CreateSessionOptions{
 		Username:      username,
 		LabName:       labName,

@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/srl-labs/clab-api-server/internal/capture"
+	"github.com/srl-labs/clab-api-server/internal/clab"
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
 
@@ -75,15 +76,12 @@ func buildCaptureSpecs(
 		return nil, false
 	}
 
-	specs := make([]capture.ContainerCaptureSpec, 0, len(targets))
-	indexByContainer := make(map[string]int, len(targets))
-	seenInterfacesByContainer := make(map[string]map[string]struct{}, len(targets))
-
+	normalizedTargets := make([]models.CaptureTarget, 0, len(targets))
 	for _, target := range targets {
 		containerName := strings.TrimSpace(target.ContainerName)
 		ifaceName := strings.TrimSpace(target.InterfaceName)
 
-		if !isValidContainerName(containerName) {
+		if !isResolvableContainerReference(containerName) {
 			c.JSON(http.StatusBadRequest, models.ErrorResponse{
 				Error: fmt.Sprintf("Invalid container name format: %q", containerName),
 			})
@@ -96,12 +94,32 @@ func buildCaptureSpecs(
 			return nil, false
 		}
 
+		normalizedTargets = append(normalizedTargets, models.CaptureTarget{
+			ContainerName: containerName,
+			InterfaceName: ifaceName,
+		})
+	}
+
+	containers, ok := listCaptureLabContainers(c, labName)
+	if !ok {
+		return nil, false
+	}
+
+	specs := make([]capture.ContainerCaptureSpec, 0, len(targets))
+	indexByContainer := make(map[string]int, len(targets))
+	seenInterfacesByContainer := make(map[string]map[string]struct{}, len(targets))
+
+	for _, target := range normalizedTargets {
+		containerInfo, ok := resolveCaptureContainer(c, username, labName, target.ContainerName, containers)
+		if !ok {
+			return nil, false
+		}
+
+		containerName := containerInfo.Name
+		ifaceName := target.InterfaceName
+
 		specIdx, exists := indexByContainer[containerName]
 		if !exists {
-			containerInfo, err := verifyContainerOwnership(c, username, containerName)
-			if err != nil {
-				return nil, false
-			}
 			if containerInfo.LabName != labName {
 				c.JSON(http.StatusBadRequest, models.ErrorResponse{
 					Error: fmt.Sprintf("Container '%s' does not belong to lab '%s'", containerName, labName),
@@ -137,6 +155,99 @@ func buildCaptureSpecs(
 		return nil, false
 	}
 	return filtered, true
+}
+
+func isResolvableContainerReference(name string) bool {
+	if name == "" || len(name) > 256 {
+		return false
+	}
+	return !strings.ContainsAny(name, " \t\r\n/\\")
+}
+
+func listCaptureLabContainers(c *gin.Context, labName string) ([]models.ClabContainerInfo, bool) {
+	svc := GetClabService()
+	if svc == nil {
+		err := fmt.Errorf("containerlab service not initialized")
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
+		return nil, false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	containers, err := svc.ListContainers(ctx, clab.ListOptions{LabName: labName})
+	if err != nil {
+		errMsg := strings.ToLower(err.Error())
+		if strings.Contains(errMsg, "no containerlab labs found") || strings.Contains(errMsg, "no containers found") {
+			notFound := fmt.Errorf("lab '%s' not found", labName)
+			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: notFound.Error()})
+			return nil, false
+		}
+		wrapped := fmt.Errorf("failed to inspect lab '%s' for capture targets: %w", labName, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: wrapped.Error()})
+		return nil, false
+	}
+
+	infos := make([]models.ClabContainerInfo, 0, len(containers))
+	for _, container := range containers {
+		infos = append(infos, clab.ContainerToClabContainerInfo(container))
+	}
+	if len(infos) == 0 {
+		err := fmt.Errorf("lab '%s' not found", labName)
+		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: err.Error()})
+		return nil, false
+	}
+	return infos, true
+}
+
+func resolveCaptureContainer(
+	c *gin.Context,
+	username string,
+	labName string,
+	requestedName string,
+	containers []models.ClabContainerInfo,
+) (*models.ClabContainerInfo, bool) {
+	var best *models.ClabContainerInfo
+	bestScore := 0
+	requestedCandidates := nodeNameCandidates(labName, requestedName)
+
+	for idx := range containers {
+		containerInfo := &containers[idx]
+		if containerInfo.Name == requestedName || containerInfo.ContainerID == requestedName {
+			best = containerInfo
+			bestScore = 100
+			break
+		}
+
+		score := scoreNodeMatch(labName, containerInfo.Name, requestedName)
+		if containsString(requestedCandidates, strings.ToLower(strings.TrimSpace(containerInfo.NodeName))) && score < 95 {
+			score = 95
+		}
+		if score > bestScore {
+			best = containerInfo
+			bestScore = score
+		}
+	}
+
+	if best == nil || bestScore == 0 {
+		err := fmt.Errorf("container '%s' not found", requestedName)
+		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: err.Error()})
+		return nil, false
+	}
+
+	if !isSuperuser(username) && best.Owner != username {
+		err := fmt.Errorf("container '%s' not found or not owned by user", requestedName)
+		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: err.Error()})
+		return nil, false
+	}
+
+	if best.Name == "" || !isValidContainerName(best.Name) {
+		err := fmt.Errorf("resolved invalid container name for capture target %q", requestedName)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
+		return nil, false
+	}
+
+	return best, true
 }
 
 // GetEdgeSharkStatusHandler returns current edgeshark availability.
