@@ -60,6 +60,15 @@ Install the latest release. The installer selects the correct `amd64` or `arm64`
 curl -fsSL https://raw.githubusercontent.com/srl-labs/clab-api-server/main/install.sh | sudo bash -s -- install
 ```
 
+If the host needs a proxy to reach GitHub or other external endpoints, export the standard proxy variables and preserve them for the root-side installer:
+
+```bash
+export HTTP_PROXY=http://proxy.example.com:8080
+export HTTPS_PROXY=http://proxy.example.com:8080
+export NO_PROXY=localhost,127.0.0.1
+curl -fsSL https://raw.githubusercontent.com/srl-labs/clab-api-server/main/install.sh | sudo -E bash -s -- install
+```
+
 This will:
 - Download the binary to `/usr/local/bin/clab-api-server`
 - Create a default configuration at `/etc/clab-api-server/clab-api-server.env`
@@ -74,6 +83,8 @@ sudoedit /etc/clab-api-server/clab-api-server.env
 sudo usermod -aG clab_api <username>
 sudo systemctl enable --now clab-api-server
 ```
+
+For proxy environments, also add `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` to `/etc/clab-api-server/clab-api-server.env` before starting the service. If you used `install --start`, restart `clab-api-server` after editing the file.
 
 For an immediate start with the generated defaults, use `install --start`.
 
@@ -121,6 +132,8 @@ sudo clab-api-server -env-file /path/to/clab-api-server.env
 ```
 
 Configure via environment variables or a `.env` file. See [`.env.example`](./.env.example) and the [Configuration Reference](#configuration-reference) for available options.
+
+If using proxy environment variables with a direct `sudo` run, preserve them with `sudo -E`.
 
 ### 4. Docker Deployment
 
