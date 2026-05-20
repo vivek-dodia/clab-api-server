@@ -183,6 +183,8 @@ func StreamTopologyFileEventsHandler(c *gin.Context) {
 	writer := bufio.NewWriter(c.Writer)
 	lastRevision := ""
 	lastEventAt := time.Time{}
+	heartbeat := time.NewTicker(ndjsonStreamHeartbeatInterval)
+	defer heartbeat.Stop()
 	matchesTrackedDoc := func(name string) bool {
 		clean := filepath.Clean(name)
 		return clean == filepath.Clean(set.yamlAbsPath) || clean == filepath.Clean(set.annotationsAbsPath)
@@ -192,21 +194,18 @@ func StreamTopologyFileEventsHandler(c *gin.Context) {
 		select {
 		case <-c.Request.Context().Done():
 			return
+		case <-heartbeat.C:
+			if !writeNDJSONHeartbeat(writer, flusher) {
+				return
+			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return
 			}
 			payload, _ := json.Marshal(gin.H{"type": "error", "error": err.Error()})
-			if _, writeErr := writer.Write(payload); writeErr != nil {
+			if !writeNDJSONLine(writer, flusher, string(payload)) {
 				return
 			}
-			if err := writer.WriteByte('\n'); err != nil {
-				return
-			}
-			if err := writer.Flush(); err != nil {
-				return
-			}
-			flusher.Flush()
 		case event, ok := <-watcher.Events:
 			if !ok {
 				return
@@ -226,16 +225,9 @@ func StreamTopologyFileEventsHandler(c *gin.Context) {
 			if err != nil {
 				continue
 			}
-			if _, err := writer.Write(payload); err != nil {
+			if !writeNDJSONLine(writer, flusher, string(payload)) {
 				return
 			}
-			if err := writer.WriteByte('\n'); err != nil {
-				return
-			}
-			if err := writer.Flush(); err != nil {
-				return
-			}
-			flusher.Flush()
 			lastRevision = docEvent.Revision
 			lastEventAt = time.Now()
 		}

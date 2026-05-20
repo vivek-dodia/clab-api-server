@@ -102,6 +102,15 @@ type TopologyDocEventResponse struct {
 	Revision     string `json:"revision" example:"yaml=123-456;annotations=78-910"`
 }
 
+// WorkspaceFileEventResponse describes a streamed workspace filesystem change event.
+type WorkspaceFileEventResponse struct {
+	Type       string `json:"type" example:"workspace-file"`
+	Path       string `json:"path" example:"lab1/configs/startup.cfg"`
+	ParentPath string `json:"parentPath" example:"lab1/configs"`
+	Kind       string `json:"kind,omitempty" example:"file"`
+	Action     string `json:"action" example:"delete"`
+}
+
 // --- Structs for parsing `clab inspect --format json` output ---
 
 // ClabInspectOutput matches the top-level structure of `clab inspect --all --format json`
@@ -230,6 +239,27 @@ type TopologyEntry struct {
 type TopologyFileRenameRequest struct {
 	OldPath string `json:"oldPath" binding:"required" example:"configs/startup.cfg"`
 	NewPath string `json:"newPath" binding:"required" example:"configs/startup.bak.cfg"`
+}
+
+// WorkspaceFileEntry describes one file or directory inside the user's editable lab workspace.
+type WorkspaceFileEntry struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Kind        string `json:"kind"` // file or directory
+	Size        int64  `json:"size"`
+	ModifiedAt  string `json:"modifiedAt"`
+	HasChildren bool   `json:"hasChildren"`
+}
+
+// WorkspaceFileRenameRequest describes a scoped workspace file rename operation.
+type WorkspaceFileRenameRequest struct {
+	OldPath string `json:"oldPath" binding:"required" example:"lab1/configs/startup.cfg"`
+	NewPath string `json:"newPath" binding:"required" example:"lab1/configs/startup.bak.cfg"`
+}
+
+// WorkspaceDirectoryRequest describes a scoped workspace directory creation operation.
+type WorkspaceDirectoryRequest struct {
+	Path string `json:"path" binding:"required" example:"lab1/configs"`
 }
 
 // ImportTopologyFromURLRequest describes an undeployed topology import from a remote source URL.

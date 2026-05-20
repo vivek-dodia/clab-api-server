@@ -1232,6 +1232,60 @@ definitions:
     - link
     - remote
     type: object
+  models.WorkspaceDirectoryRequest:
+    properties:
+      path:
+        example: lab1/configs
+        type: string
+    required:
+    - path
+    type: object
+  models.WorkspaceFileEntry:
+    properties:
+      hasChildren:
+        type: boolean
+      kind:
+        description: file or directory
+        type: string
+      modifiedAt:
+        type: string
+      name:
+        type: string
+      path:
+        type: string
+      size:
+        type: integer
+    type: object
+  models.WorkspaceFileEventResponse:
+    properties:
+      action:
+        example: delete
+        type: string
+      kind:
+        example: file
+        type: string
+      parentPath:
+        example: lab1/configs
+        type: string
+      path:
+        example: lab1/configs/startup.cfg
+        type: string
+      type:
+        example: workspace-file
+        type: string
+    type: object
+  models.WorkspaceFileRenameRequest:
+    properties:
+      newPath:
+        example: lab1/configs/startup.bak.cfg
+        type: string
+      oldPath:
+        example: lab1/configs/startup.cfg
+        type: string
+    required:
+    - newPath
+    - oldPath
+    type: object
 info:
   contact:
     name: Containerlab API Server maintainers
@@ -3656,6 +3710,259 @@ paths:
       security:
       - BearerAuth: []
       summary: Import topology repository as undeployed lab
+      tags:
+      - Labs
+  /api/v1/labs/workspace/directory:
+    post:
+      consumes:
+      - application/json
+      description: Creates a directory inside the authenticated user's editable lab
+        workspace root.
+      parameters:
+      - description: Directory path
+        in: body
+        name: directory_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.WorkspaceDirectoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Directory create success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create lab workspace directory
+      tags:
+      - Labs
+  /api/v1/labs/workspace/events:
+    get:
+      description: Streams create/change/delete/rename events inside the authenticated
+        user's editable lab workspace root as NDJSON.
+      produces:
+      - application/x-ndjson
+      responses:
+        "200":
+          description: Workspace file event stream
+          schema:
+            $ref: '#/definitions/models.WorkspaceFileEventResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Stream lab workspace file events
+      tags:
+      - Labs
+  /api/v1/labs/workspace/file:
+    delete:
+      description: Deletes a file or directory inside the authenticated user's editable
+        lab workspace root. Directories with children require recursive=true.
+      parameters:
+      - description: Relative file path inside the workspace root
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: Delete non-empty directories recursively
+        in: query
+        name: recursive
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Delete success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete lab workspace file
+      tags:
+      - Labs
+    get:
+      description: Reads a text or binary file from the authenticated user's editable
+        lab workspace root.
+      parameters:
+      - description: Relative file path inside the workspace root
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: File content
+          schema:
+            type: string
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: File not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Read lab workspace file
+      tags:
+      - Labs
+    put:
+      consumes:
+      - text/plain
+      description: Writes a file inside the authenticated user's editable lab workspace
+        root.
+      parameters:
+      - description: Relative file path inside the workspace root
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: File content
+        in: body
+        name: content
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Write success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Write lab workspace file
+      tags:
+      - Labs
+  /api/v1/labs/workspace/file/rename:
+    post:
+      consumes:
+      - application/json
+      description: Renames or moves a file inside the authenticated user's editable
+        lab workspace root.
+      parameters:
+      - description: Old and new relative file paths
+        in: body
+        name: rename_request
+        required: true
+        schema:
+          $ref: '#/definitions/models.WorkspaceFileRenameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Rename success
+          schema:
+            $ref: '#/definitions/models.SimpleSuccessResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Rename lab workspace file
+      tags:
+      - Labs
+  /api/v1/labs/workspace/tree:
+    get:
+      description: Lists files and folders inside the authenticated user's editable
+        lab workspace root.
+      parameters:
+      - description: Relative directory path inside the workspace root
+        in: query
+        name: path
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Workspace entries
+          schema:
+            items:
+              $ref: '#/definitions/models.WorkspaceFileEntry'
+            type: array
+        "400":
+          description: Invalid path
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Directory not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List lab workspace files
       tags:
       - Labs
   /api/v1/ssh/sessions:

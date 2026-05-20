@@ -77,6 +77,15 @@ func SetupRoutes(router *gin.Engine) {
 			labs.GET("/topology/files", ListTopologiesHandler) // GET /api/v1/labs/topology/files
 			labs.POST("/topology/import-from-url", ImportTopologyFromURLHandler)
 
+			// File explorer operations scoped to the authenticated user's lab workspace root.
+			labs.GET("/workspace/events", StreamWorkspaceEventsHandler)
+			labs.GET("/workspace/tree", ListWorkspaceTreeHandler)           // GET /api/v1/labs/workspace/tree?path=...
+			labs.GET("/workspace/file", GetWorkspaceFileHandler)            // GET /api/v1/labs/workspace/file?path=...
+			labs.PUT("/workspace/file", PutWorkspaceFileHandler)            // PUT /api/v1/labs/workspace/file?path=...
+			labs.DELETE("/workspace/file", DeleteWorkspaceFileHandler)      // DELETE /api/v1/labs/workspace/file?path=...
+			labs.POST("/workspace/file/rename", RenameWorkspaceFileHandler) // POST /api/v1/labs/workspace/file/rename
+			labs.POST("/workspace/directory", CreateWorkspaceDirectoryHandler)
+
 			// Actions on a specific lab by name
 			labSpecific := labs.Group("/:labName")
 			{
