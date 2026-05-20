@@ -43,6 +43,33 @@ var (
 		"cloud":       {},
 		"client":      {},
 	}
+	deprecatedSRLinuxTypeAliases = map[string]string{
+		"ixsa1":    "ixs-a1",
+		"ixrd1":    "ixr-d1",
+		"ixrd2":    "ixr-d2",
+		"ixrd3":    "ixr-d3",
+		"ixrd2l":   "ixr-d2l",
+		"ixrd3l":   "ixr-d3l",
+		"ixrd4":    "ixr-d4",
+		"ixrd5":    "ixr-d5",
+		"ixrh2":    "ixr-h2",
+		"ixrh3":    "ixr-h3",
+		"ixrh4":    "ixr-h4",
+		"ixrh432d": "ixr-h4-32d",
+		"ixrh5":    "ixr-h5",
+		"ixrh532d": "ixr-h5-32d",
+		"ixrh564d": "ixr-h5-64d",
+		"ixrh564o": "ixr-h5-64o",
+		"ixr6":     "ixr-6",
+		"ixr6e":    "ixr-6e",
+		"ixr10":    "ixr-10",
+		"ixr10e":   "ixr-10e",
+		"ixr18e":   "ixr-18e",
+		"sxr1x44s": "sxr-1x-44s",
+		"sxr1d32d": "sxr-1d-32d",
+		"ixrx1b":   "ixr-x1b",
+		"ixrx3b":   "ixr-x3b",
+	}
 )
 
 func defaultCustomNodes() []models.CustomNodeTemplate {
@@ -50,7 +77,7 @@ func defaultCustomNodes() []models.CustomNodeTemplate {
 		{
 			"name":             "SRLinux Latest",
 			"kind":             "nokia_srlinux",
-			"type":             "ixrd1",
+			"type":             "ixr-d1",
 			"image":            "ghcr.io/nokia/srlinux:latest",
 			"icon":             "router",
 			"baseName":         "srl",
@@ -89,6 +116,11 @@ func normalizeCustomNodes(nodes []models.CustomNodeTemplate) []models.CustomNode
 	normalized := cloneCustomNodes(nodes)
 	defaultSeen := false
 	for _, node := range normalized {
+		if customNodeString(node, "kind") == "nokia_srlinux" {
+			if normalizedType, ok := deprecatedSRLinuxTypeAliases[customNodeString(node, "type")]; ok {
+				node["type"] = normalizedType
+			}
+		}
 		if customNodeBool(node, "setDefault") {
 			if defaultSeen {
 				node["setDefault"] = false
