@@ -192,29 +192,59 @@ func StreamEventsHandler(c *gin.Context) {
 	scanner := bufio.NewScanner(streamReader)
 	scanner.Buffer(make([]byte, 0, 64*1024), eventsScannerMaxBytes)
 
-	c.Stream(func(w io.Writer) bool {
+	scanLines := make(chan string)
+	scanErrCh := make(chan error, 1)
+	go func() {
+		defer close(scanLines)
+		defer func() {
+			scanErrCh <- scanner.Err()
+		}()
 		for scanner.Scan() {
-			line := scanner.Text()
+			select {
+			case scanLines <- scanner.Text():
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	writer := bufio.NewWriter(c.Writer)
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return
+	}
+	heartbeat := time.NewTicker(ndjsonStreamHeartbeatInterval)
+	defer heartbeat.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-heartbeat.C:
+			if !writeNDJSONHeartbeat(writer, flusher) {
+				return
+			}
+		case line, ok := <-scanLines:
+			if !ok {
+				cancel()
+				if err := <-streamErrCh; err != nil && ctx.Err() == nil {
+					log.Warnf("StreamEvents user '%s': Events stream ended with error: %v", username, err)
+				}
+				if err := <-scanErrCh; err != nil && ctx.Err() == nil {
+					log.Errorf("StreamEvents user '%s': Scanner error: %v", username, err)
+				}
+				return
+			}
 			if !isSuperuserUser {
 				labName, ok := extractLabFromEventLine(line)
 				if !ok || !allowedLab(labName) {
 					continue
 				}
 			}
-			if _, err := io.WriteString(w, line+"\n"); err != nil {
-				return false
+			if !writeNDJSONLine(writer, flusher, line) {
+				return
 			}
-			return true
 		}
-		return false
-	})
-
-	cancel()
-	if err := <-streamErrCh; err != nil && ctx.Err() == nil {
-		log.Warnf("StreamEvents user '%s': Events stream ended with error: %v", username, err)
-	}
-	if err := scanner.Err(); err != nil && ctx.Err() == nil {
-		log.Errorf("StreamEvents user '%s': Scanner error: %v", username, err)
 	}
 }
 

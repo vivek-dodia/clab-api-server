@@ -944,6 +944,393 @@
                 }
             }
         },
+        "/api/v1/labs/workspace/directory": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a directory inside the authenticated user's editable lab workspace root.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Create lab workspace directory",
+                "parameters": [
+                    {
+                        "description": "Directory path",
+                        "name": "directory_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.WorkspaceDirectoryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Directory create success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid path",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/workspace/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams create/change/delete/rename events inside the authenticated user's editable lab workspace root as NDJSON.",
+                "produces": [
+                    "application/x-ndjson"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Stream lab workspace file events",
+                "responses": {
+                    "200": {
+                        "description": "Workspace file event stream",
+                        "schema": {
+                            "$ref": "#/definitions/models.WorkspaceFileEventResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/workspace/file": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reads a text or binary file from the authenticated user's editable lab workspace root.",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Read lab workspace file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Relative file path inside the workspace root",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "File content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid path",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "File not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Writes a file inside the authenticated user's editable lab workspace root.",
+                "consumes": [
+                    "text/plain"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Write lab workspace file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Relative file path inside the workspace root",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "File content",
+                        "name": "content",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Write success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid path",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a file or directory inside the authenticated user's editable lab workspace root. Directories with children require recursive=true.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Delete lab workspace file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Relative file path inside the workspace root",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Delete non-empty directories recursively",
+                        "name": "recursive",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Delete success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid path",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/workspace/file/rename": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Renames or moves a file inside the authenticated user's editable lab workspace root.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Rename lab workspace file",
+                "parameters": [
+                    {
+                        "description": "Old and new relative file paths",
+                        "name": "rename_request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.WorkspaceFileRenameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Rename success",
+                        "schema": {
+                            "$ref": "#/definitions/models.SimpleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/labs/workspace/tree": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lists files and folders inside the authenticated user's editable lab workspace root.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "List lab workspace files",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Relative directory path inside the workspace root",
+                        "name": "path",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Workspace entries",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.WorkspaceFileEntry"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid path",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Directory not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/labs/{labName}": {
             "get": {
                 "security": [
@@ -7206,6 +7593,84 @@
                     "description": "Remote VTEP IP address.",
                     "type": "string",
                     "example": "10.0.0.20"
+                }
+            }
+        },
+        "models.WorkspaceDirectoryRequest": {
+            "type": "object",
+            "required": [
+                "path"
+            ],
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "example": "lab1/configs"
+                }
+            }
+        },
+        "models.WorkspaceFileEntry": {
+            "type": "object",
+            "properties": {
+                "hasChildren": {
+                    "type": "boolean"
+                },
+                "kind": {
+                    "description": "file or directory",
+                    "type": "string"
+                },
+                "modifiedAt": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.WorkspaceFileEventResponse": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "example": "delete"
+                },
+                "kind": {
+                    "type": "string",
+                    "example": "file"
+                },
+                "parentPath": {
+                    "type": "string",
+                    "example": "lab1/configs"
+                },
+                "path": {
+                    "type": "string",
+                    "example": "lab1/configs/startup.cfg"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "workspace-file"
+                }
+            }
+        },
+        "models.WorkspaceFileRenameRequest": {
+            "type": "object",
+            "required": [
+                "newPath",
+                "oldPath"
+            ],
+            "properties": {
+                "newPath": {
+                    "type": "string",
+                    "example": "lab1/configs/startup.bak.cfg"
+                },
+                "oldPath": {
+                    "type": "string",
+                    "example": "lab1/configs/startup.cfg"
                 }
             }
         }
