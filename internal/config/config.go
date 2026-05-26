@@ -34,6 +34,7 @@ type Config struct {
 	APIServerHost                string        `mapstructure:"API_SERVER_HOST"` // Host/IP/FQDN used for SSH access commands
 	SSHBasePort                  int           `mapstructure:"SSH_BASE_PORT"`   // Base port for SSH proxy allocation
 	SSHMaxPort                   int           `mapstructure:"SSH_MAX_PORT"`    // Maximum port for SSH proxy allocation
+	TerminalMaxSessionsPerUser   int           `mapstructure:"TERMINAL_MAX_SESSIONS_PER_USER"`
 }
 
 var AppConfig Config
@@ -68,6 +69,7 @@ func LoadConfig(envFilePath string) error {
 	viper.SetDefault("API_SERVER_HOST", "")
 	viper.SetDefault("SSH_BASE_PORT", 2223) // Default base port for SSH proxy
 	viper.SetDefault("SSH_MAX_PORT", 2322)  // Default max port for SSH proxy (allows 100 sessions)
+	viper.SetDefault("TERMINAL_MAX_SESSIONS_PER_USER", 128)
 
 	err := viper.ReadInConfig()
 

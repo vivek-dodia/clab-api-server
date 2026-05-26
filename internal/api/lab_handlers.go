@@ -161,6 +161,14 @@ func DeployLabHandler(c *gin.Context) {
 
 	// --- Pre-Deployment Check ---
 	if effectiveLabName != "<determined_by_clab_from_url>" {
+		releaseLabOperation, ok := beginLabOperationOrConflict(c, effectiveLabName, "deploy")
+		if !ok {
+			return
+		}
+		defer releaseLabOperation()
+	}
+
+	if effectiveLabName != "<determined_by_clab_from_url>" {
 		labInfo, exists, checkErr := getLabInfo(ctx, username, effectiveLabName)
 		if checkErr != nil {
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Error checking lab '%s' status: %s", effectiveLabName, checkErr.Error())})
@@ -303,6 +311,12 @@ func DeployLabArchiveHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid 'maxWorkers' query parameter."})
 		return
 	}
+
+	releaseLabOperation, ok := beginLabOperationOrConflict(c, labName, "deploy")
+	if !ok {
+		return
+	}
+	defer releaseLabOperation()
 
 	// Pre-check for existing lab
 	labInfo, exists, checkErr := getLabInfo(ctx, username, labName)
@@ -490,6 +504,12 @@ func DestroyLabHandler(c *gin.Context) {
 		return
 	}
 
+	releaseLabOperation, ok := beginLabOperationOrConflict(c, labName, "destroy")
+	if !ok {
+		return
+	}
+	defer releaseLabOperation()
+
 	originalTopoPath, ownerCheckErr := verifyLabOwnership(c, username, labName)
 	if ownerCheckErr != nil {
 		return
@@ -532,6 +552,9 @@ func DestroyLabHandler(c *gin.Context) {
 	runDestroy := func() error {
 		if err := svc.Destroy(ctx, destroyOpts); err != nil {
 			return fmt.Errorf("Failed to destroy lab '%s': %s", labName, err.Error())
+		}
+		if err := ensureLabDestroyed(ctx, svc, labName); err != nil {
+			return err
 		}
 		return nil
 	}
@@ -668,6 +691,12 @@ func RedeployLabHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid 'maxWorkers' query parameter."})
 		return
 	}
+
+	releaseLabOperation, ok := beginLabOperationOrConflict(c, labName, "redeploy")
+	if !ok {
+		return
+	}
+	defer releaseLabOperation()
 
 	originalTopoPath, ownerCheckErr := verifyLabOwnership(c, username, labName)
 	if ownerCheckErr != nil {

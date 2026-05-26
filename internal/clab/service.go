@@ -1838,8 +1838,57 @@ func (s *Service) ResetNetem(ctx context.Context, containerName, iface string) e
 			return fmt.Errorf("%w: %s", ErrNetemInterfaceNotFound, netemIfLink.Attrs().Name)
 		}
 
-		return clabnetem.DeleteImpairments(tcnl, netemIfIface)
+		qdiscs, qdiscErr := clabnetem.Impairments(tcnl)
+		if qdiscErr == nil && !hasNetemQdisc(qdiscs, netemIfIface.Index) {
+			log.Debug("netem reset skipped because interface has no netem qdisc",
+				"container", containerName,
+				"interface", iface,
+			)
+			return nil
+		}
+		if qdiscErr != nil {
+			log.Debug("failed to pre-check netem qdiscs before reset",
+				"container", containerName,
+				"interface", iface,
+				"err", qdiscErr,
+			)
+		}
+
+		if err := clabnetem.DeleteImpairments(tcnl, netemIfIface); err != nil {
+			if isNetemAlreadyClearError(err) {
+				log.Debug("netem reset delete raced with already-cleared qdisc",
+					"container", containerName,
+					"interface", iface,
+					"err", err,
+				)
+				return nil
+			}
+			return err
+		}
+
+		return nil
 	})
+}
+
+func hasNetemQdisc(qdiscs []gotc.Object, ifaceIndex int) bool {
+	for idx := range qdiscs {
+		if int(qdiscs[idx].Ifindex) == ifaceIndex && qdiscs[idx].Attribute.Kind == "netem" {
+			return true
+		}
+	}
+	return false
+}
+
+func isNetemAlreadyClearError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "invalid argument") ||
+		strings.Contains(message, "no such file") ||
+		strings.Contains(message, "not found") ||
+		strings.Contains(message, "could not find qdisc") ||
+		strings.Contains(message, "cannot find qdisc")
 }
 
 // ShowNetem returns the current netem impairments for interfaces that have netem qdisc set.

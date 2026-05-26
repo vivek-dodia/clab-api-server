@@ -698,10 +698,15 @@ func SetNetemHandler(c *gin.Context) {
 		return
 	}
 
-	_, ownerErr := verifyContainerOwnership(c, username, req.ContainerName)
+	containerInfo, ownerErr := verifyContainerOwnership(c, username, req.ContainerName)
 	if ownerErr != nil {
 		return
 	}
+	releaseLabOperation, ok := beginLabOperationOrConflict(c, containerInfo.LabName, "netem")
+	if !ok {
+		return
+	}
+	defer releaseLabOperation()
 
 	svc := GetClabService()
 	log.Infof("User '%s' setting netem impairments: container=%s interface=%s", username, req.ContainerName, iface)
@@ -757,10 +762,15 @@ func ShowNetemHandler(c *gin.Context) {
 		return
 	}
 
-	_, ownerErr := verifyContainerOwnership(c, username, containerName)
+	containerInfo, ownerErr := verifyContainerOwnership(c, username, containerName)
 	if ownerErr != nil {
 		return
 	}
+	releaseLabOperation, ok := beginLabOperationOrConflict(c, containerInfo.LabName, "netem")
+	if !ok {
+		return
+	}
+	defer releaseLabOperation()
 
 	svc := GetClabService()
 	log.Infof("User '%s' showing netem impairments: container=%s", username, containerName)
@@ -838,10 +848,15 @@ func ResetNetemHandler(c *gin.Context) {
 		return
 	}
 
-	_, ownerErr := verifyContainerOwnership(c, username, req.ContainerName)
+	containerInfo, ownerErr := verifyContainerOwnership(c, username, req.ContainerName)
 	if ownerErr != nil {
 		return
 	}
+	releaseLabOperation, ok := beginLabOperationOrConflict(c, containerInfo.LabName, "netem")
+	if !ok {
+		return
+	}
+	defer releaseLabOperation()
 
 	svc := GetClabService()
 	log.Infof("User '%s' resetting netem impairments: container=%s interface=%s", username, req.ContainerName, iface)

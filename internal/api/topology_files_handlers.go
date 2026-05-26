@@ -434,6 +434,12 @@ func DeployTopologyHandler(c *gin.Context) {
 		return
 	}
 
+	releaseLabOperation, ok := beginLabOperationOrConflict(c, labName, "deploy")
+	if !ok {
+		return
+	}
+	defer releaseLabOperation()
+
 	requestedPath := strings.TrimSpace(c.Query("path"))
 	topologyPath := ""
 	if requestedPath != "" {
@@ -461,7 +467,7 @@ func DeployTopologyHandler(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
 	defer cancel()
 
 	labInfo, exists, checkErr := getLabInfo(ctx, username, labName)
@@ -491,7 +497,7 @@ func DeployTopologyHandler(c *gin.Context) {
 		nodeFilterSlice = strings.Split(nodeFilter, ",")
 	}
 
-	deployCtx, deployCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	deployCtx, deployCancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
 	defer deployCancel()
 
 	deployOptions := clab.DeployOptions{

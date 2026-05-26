@@ -39,7 +39,7 @@ func InitTerminalManager() {
 		termsvc.DefaultCleanupTick,
 		termsvc.DefaultSessionTTL,
 		termsvc.DefaultIdleTimeout,
-		termsvc.DefaultMaxSessionsPerUser,
+		config.AppConfig.TerminalMaxSessionsPerUser,
 	)
 }
 

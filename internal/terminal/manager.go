@@ -25,7 +25,7 @@ const (
 	DefaultCleanupTick        = time.Minute
 	DefaultSessionTTL         = time.Hour
 	DefaultIdleTimeout        = 15 * time.Minute
-	DefaultMaxSessionsPerUser = 6
+	DefaultMaxSessionsPerUser = 128
 	DefaultTerminalCols       = 120
 	DefaultTerminalRows       = 36
 	DefaultTelnetPort         = 5000
@@ -72,6 +72,7 @@ type CreateSessionOptions struct {
 type Manager struct {
 	mu          sync.RWMutex
 	sessions    map[string]*Session
+	pending     map[string]int
 	cleanupTick time.Duration
 	sessionTTL  time.Duration
 	idleTimeout time.Duration
@@ -118,6 +119,7 @@ func NewManager(cleanupTick, sessionTTL, idleTimeout time.Duration, maxPerUser i
 
 	m := &Manager{
 		sessions:    make(map[string]*Session),
+		pending:     make(map[string]int),
 		cleanupTick: cleanupTick,
 		sessionTTL:  sessionTTL,
 		idleTimeout: idleTimeout,
@@ -174,11 +176,16 @@ func (m *Manager) CreateSession(opts CreateSessionOptions) (*models.TerminalSess
 		return nil, err
 	}
 
+	username := strings.TrimSpace(opts.Username)
+	if err := m.reserveUserSessionCapacity(username); err != nil {
+		return nil, err
+	}
+
 	now := time.Now().UTC()
 	session := &Session{
 		manager:      m,
 		id:           newSessionID(),
-		username:     strings.TrimSpace(opts.Username),
+		username:     username,
 		labName:      strings.TrimSpace(opts.LabName),
 		nodeName:     strings.TrimSpace(opts.NodeName),
 		protocol:     protocol,
@@ -198,6 +205,7 @@ func (m *Manager) CreateSession(opts CreateSessionOptions) (*models.TerminalSess
 		Rows: uint16(rows),
 	})
 	if err != nil {
+		m.releaseUserSessionCapacity(username)
 		return nil, fmt.Errorf("failed to start terminal session: %w", err)
 	}
 
@@ -205,12 +213,7 @@ func (m *Manager) CreateSession(opts CreateSessionOptions) (*models.TerminalSess
 	session.ptyFile = ptmx
 
 	m.mu.Lock()
-	if m.countSessionsForUserLocked(session.username) >= m.maxPerUser {
-		m.mu.Unlock()
-		_ = ptmx.Close()
-		_ = cmd.Process.Kill()
-		return nil, ErrTooManySessions
-	}
+	m.releaseUserSessionCapacityLocked(session.username)
 	m.sessions[session.id] = session
 	m.mu.Unlock()
 
@@ -227,6 +230,30 @@ func (m *Manager) CreateSession(opts CreateSessionOptions) (*models.TerminalSess
 
 	info := session.Snapshot()
 	return &info, nil
+}
+
+func (m *Manager) reserveUserSessionCapacity(username string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.countSessionsForUserLocked(username)+m.pending[username] >= m.maxPerUser {
+		return ErrTooManySessions
+	}
+	m.pending[username]++
+	return nil
+}
+
+func (m *Manager) releaseUserSessionCapacity(username string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.releaseUserSessionCapacityLocked(username)
+}
+
+func (m *Manager) releaseUserSessionCapacityLocked(username string) {
+	if m.pending[username] <= 1 {
+		delete(m.pending, username)
+		return
+	}
+	m.pending[username]--
 }
 
 func (m *Manager) GetSessionInfo(sessionID, username string, allowAll bool) (*models.TerminalSessionInfo, error) {
