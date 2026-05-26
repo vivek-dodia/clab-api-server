@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
+	termsvc "github.com/srl-labs/clab-api-server/internal/terminal"
 )
 
 func TestLoadConfigDefaultsEnableTLSAutoCert(t *testing.T) {
@@ -33,5 +34,36 @@ func TestLoadConfigDefaultsEnableTLSAutoCert(t *testing.T) {
 	}
 	if !AppConfig.TLSAutoCert {
 		t.Fatal("expected TLS_AUTO_CERT default to be true")
+	}
+	if AppConfig.TerminalMaxSessionsPerUser != termsvc.DefaultMaxSessionsPerUser {
+		t.Fatalf(
+			"expected TERMINAL_MAX_SESSIONS_PER_USER default to be %d, got %d",
+			termsvc.DefaultMaxSessionsPerUser,
+			AppConfig.TerminalMaxSessionsPerUser,
+		)
+	}
+}
+
+func TestLoadConfigTerminalMaxSessionsPerUserOverride(t *testing.T) {
+	originalWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWd)
+		viper.Reset()
+	})
+
+	t.Setenv("TERMINAL_MAX_SESSIONS_PER_USER", "150")
+	viper.Reset()
+	if err := LoadConfig(".env"); err != nil {
+		t.Fatalf("LoadConfig returned error: %v", err)
+	}
+
+	if AppConfig.TerminalMaxSessionsPerUser != 150 {
+		t.Fatalf("expected TERMINAL_MAX_SESSIONS_PER_USER to be 150, got %d", AppConfig.TerminalMaxSessionsPerUser)
 	}
 }

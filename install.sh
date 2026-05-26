@@ -135,6 +135,9 @@ SUPERUSER_GROUP=clab_admins
 # Containerlab
 CLAB_RUNTIME=docker
 
+# Browser terminal sessions
+TERMINAL_MAX_SESSIONS_PER_USER=128
+
 # Browser access. Example: https://localhost:5173,https://ui.example.com
 CORS_ALLOWED_ORIGINS=
 

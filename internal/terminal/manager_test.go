@@ -3,9 +3,20 @@ package terminal
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
+
+func newTestManager(t *testing.T, maxPerUser int) *Manager {
+	t.Helper()
+	m := NewManager(time.Hour, time.Hour, time.Hour, maxPerUser)
+	t.Cleanup(func() {
+		close(m.stopCh)
+		<-m.stoppedCh
+	})
+	return m
+}
 
 func TestResolveLaunchCommandShellAllowlist(t *testing.T) {
 	command, err := resolveLaunchCommand(models.TerminalProtocolShell, CreateSessionOptions{
@@ -109,5 +120,43 @@ func TestSanitizeTerminalSizeClampsInvalidValues(t *testing.T) {
 	}
 	if rows != DefaultTerminalRows {
 		t.Fatalf("unexpected rows: got %d want %d", rows, DefaultTerminalRows)
+	}
+}
+
+func TestNewManagerDefaultsMaxSessionsPerUser(t *testing.T) {
+	m := newTestManager(t, 0)
+	if m.maxPerUser != DefaultMaxSessionsPerUser {
+		t.Fatalf("unexpected maxPerUser: got %d want %d", m.maxPerUser, DefaultMaxSessionsPerUser)
+	}
+	if m.maxPerUser != 128 {
+		t.Fatalf("unexpected default session limit: got %d want 128", m.maxPerUser)
+	}
+}
+
+func TestNewManagerUsesConfiguredMaxSessionsPerUser(t *testing.T) {
+	m := newTestManager(t, 150)
+	if m.maxPerUser != 150 {
+		t.Fatalf("unexpected maxPerUser: got %d want 150", m.maxPerUser)
+	}
+}
+
+func TestReserveUserSessionCapacityRejectsAtConfiguredLimit(t *testing.T) {
+	m := newTestManager(t, 2)
+	m.sessions["active"] = &Session{username: "alice", state: "ready"}
+
+	if err := m.reserveUserSessionCapacity("alice"); err != nil {
+		t.Fatalf("reserve below limit returned unexpected error: %v", err)
+	}
+	if err := m.reserveUserSessionCapacity("alice"); err != ErrTooManySessions {
+		t.Fatalf("reserve at limit returned %v, want %v", err, ErrTooManySessions)
+	}
+}
+
+func TestReserveUserSessionCapacityIgnoresClosedSessions(t *testing.T) {
+	m := newTestManager(t, 1)
+	m.sessions["closed"] = &Session{username: "alice", state: "closed"}
+
+	if err := m.reserveUserSessionCapacity("alice"); err != nil {
+		t.Fatalf("reserve with only closed sessions returned unexpected error: %v", err)
 	}
 }
