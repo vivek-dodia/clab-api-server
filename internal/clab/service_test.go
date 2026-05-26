@@ -6,6 +6,7 @@ import (
 	"os/user"
 	"testing"
 
+	gotc "github.com/florianl/go-tc"
 	clabcore "github.com/srl-labs/containerlab/core"
 )
 
@@ -114,6 +115,44 @@ func TestSetProcessOwnerEnvSetsSudoIDsForExistingUser(t *testing.T) {
 	}
 	if got := os.Getenv("SUDO_GID"); got != current.Gid {
 		t.Fatalf("SUDO_GID = %q, want %q", got, current.Gid)
+	}
+}
+
+func TestHasNetemQdisc(t *testing.T) {
+	qdiscs := []gotc.Object{
+		{Msg: gotc.Msg{Ifindex: 10}, Attribute: gotc.Attribute{Kind: "fq_codel"}},
+		{Msg: gotc.Msg{Ifindex: 11}, Attribute: gotc.Attribute{Kind: "netem"}},
+	}
+
+	if !hasNetemQdisc(qdiscs, 11) {
+		t.Fatalf("expected netem qdisc on interface index 11")
+	}
+	if hasNetemQdisc(qdiscs, 10) {
+		t.Fatalf("did not expect non-netem qdisc on interface index 10 to match")
+	}
+	if hasNetemQdisc(qdiscs, 12) {
+		t.Fatalf("did not expect missing interface index to match")
+	}
+}
+
+func TestIsNetemAlreadyClearError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil, want: false},
+		{name: "invalid argument", err: errors.New("netlink receive: invalid argument"), want: true},
+		{name: "not found", err: errors.New("could not find qdisc for interface eth1"), want: true},
+		{name: "other", err: errors.New("permission denied"), want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isNetemAlreadyClearError(tc.err); got != tc.want {
+				t.Fatalf("isNetemAlreadyClearError(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
 	}
 }
 
