@@ -434,6 +434,12 @@ func DeployTopologyHandler(c *gin.Context) {
 		return
 	}
 
+	releaseLabOperation, ok := beginLabOperationOrConflict(c, labName, "deploy")
+	if !ok {
+		return
+	}
+	defer releaseLabOperation()
+
 	requestedPath := strings.TrimSpace(c.Query("path"))
 	topologyPath := ""
 	if requestedPath != "" {

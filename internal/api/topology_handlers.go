@@ -68,6 +68,12 @@ func GenerateTopologyHandler(c *gin.Context) {
 
 	// --- Pre-Deployment Check (if Deploy=true) ---
 	if req.Deploy {
+		releaseLabOperation, ok := beginLabOperationOrConflict(c, req.Name, "deploy")
+		if !ok {
+			return
+		}
+		defer releaseLabOperation()
+
 		labInfo, exists, checkErr := getLabInfo(ctx, username, req.Name)
 		if checkErr != nil {
 			log.Errorf("GenerateTopology failed for user '%s': Error checking lab '%s' existence: %v", username, req.Name, checkErr)

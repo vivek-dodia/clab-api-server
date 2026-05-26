@@ -134,6 +134,12 @@ func handleNodeLifecycle(c *gin.Context, action clab.NodeLifecycleAction) {
 		return
 	}
 
+	releaseLabOperation, ok := beginLabOperationOrConflict(c, labName, string(action))
+	if !ok {
+		return
+	}
+	defer releaseLabOperation()
+
 	originalTopoPath, err := verifyLabOwnership(c, username, labName)
 	if err != nil {
 		return
@@ -253,6 +259,12 @@ func handleLabNodeLifecycle(c *gin.Context, action clab.NodeLifecycleAction) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid lab name format."})
 		return
 	}
+
+	releaseLabOperation, ok := beginLabOperationOrConflict(c, labName, string(action))
+	if !ok {
+		return
+	}
+	defer releaseLabOperation()
 
 	originalTopoPath, err := verifyLabOwnership(c, username, labName)
 	if err != nil {
