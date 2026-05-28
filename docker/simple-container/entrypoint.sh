@@ -1,11 +1,13 @@
 #!/bin/sh
 set -e
 
-# Setup labs directory
-SHARED_LABS_DIR=${CLAB_SHARED_LABS_DIR:-/opt/containerlab/labs}
-echo "Setting up labs directory: $SHARED_LABS_DIR"
-mkdir -p "$SHARED_LABS_DIR"
-mkdir -p "$SHARED_LABS_DIR/users"
+# Setup optional labs root. When CLAB_LABS_ROOT is unset, the API server
+# stores managed lab files in each authenticated user's ~/.clab directory.
+if [ -n "${CLAB_LABS_ROOT:-}" ]; then
+  echo "Setting up labs root: $CLAB_LABS_ROOT"
+  mkdir -p "$CLAB_LABS_ROOT"
+  mkdir -p "$CLAB_LABS_ROOT/users"
+fi
 
 mkdir -p /var/run/netns
 

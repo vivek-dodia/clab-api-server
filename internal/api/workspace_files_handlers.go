@@ -86,11 +86,8 @@ func ensureWorkspaceRoot(rootPath string, uid, gid int) error {
 		if !info.IsDir() {
 			return fmt.Errorf("workspace path is not a directory")
 		}
-	} else if err := os.MkdirAll(rootPath, 0750); err != nil {
-		return err
 	}
-	_ = os.Lchown(rootPath, uid, gid)
-	return nil
+	return ensureUserLabsBaseDirectory(rootPath, uid, gid)
 }
 
 func workspaceRelativePath(rootPath, absolutePath string) string {

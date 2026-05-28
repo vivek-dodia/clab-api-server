@@ -42,6 +42,9 @@ func TestLoadConfigDefaultsEnableTLSAutoCert(t *testing.T) {
 			AppConfig.TerminalMaxSessionsPerUser,
 		)
 	}
+	if AppConfig.ClabLabsRoot != "" {
+		t.Fatalf("expected CLAB_LABS_ROOT default to be empty, got %q", AppConfig.ClabLabsRoot)
+	}
 }
 
 func TestLoadConfigTerminalMaxSessionsPerUserOverride(t *testing.T) {
@@ -65,5 +68,69 @@ func TestLoadConfigTerminalMaxSessionsPerUserOverride(t *testing.T) {
 
 	if AppConfig.TerminalMaxSessionsPerUser != 150 {
 		t.Fatalf("expected TERMINAL_MAX_SESSIONS_PER_USER to be 150, got %d", AppConfig.TerminalMaxSessionsPerUser)
+	}
+}
+
+func TestLoadConfigClabLabsRootOverride(t *testing.T) {
+	originalWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWd)
+		viper.Reset()
+	})
+
+	t.Setenv("CLAB_LABS_ROOT", "/tmp/containerlab-labs/../containerlab-labs")
+	viper.Reset()
+	if err := LoadConfig(".env"); err != nil {
+		t.Fatalf("LoadConfig returned error: %v", err)
+	}
+
+	if AppConfig.ClabLabsRoot != "/tmp/containerlab-labs" {
+		t.Fatalf("expected CLAB_LABS_ROOT to be cleaned, got %q", AppConfig.ClabLabsRoot)
+	}
+}
+
+func TestLoadConfigRejectsRelativeClabLabsRoot(t *testing.T) {
+	originalWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWd)
+		viper.Reset()
+	})
+
+	t.Setenv("CLAB_LABS_ROOT", "relative/labs")
+	viper.Reset()
+	if err := LoadConfig(".env"); err == nil {
+		t.Fatal("expected LoadConfig to reject relative CLAB_LABS_ROOT")
+	}
+}
+
+func TestLoadConfigRejectsTildeClabLabsRoot(t *testing.T) {
+	originalWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWd)
+		viper.Reset()
+	})
+
+	t.Setenv("CLAB_LABS_ROOT", "~/labs")
+	viper.Reset()
+	if err := LoadConfig(".env"); err == nil {
+		t.Fatal("expected LoadConfig to reject tilde CLAB_LABS_ROOT")
 	}
 }

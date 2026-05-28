@@ -90,6 +90,14 @@ For an immediate start with the generated defaults, use `install --start`.
 
 The systemd service runs as `root` because the API server controls host container runtime resources, network namespaces, Linux users, and lab files.
 
+By default, managed topology files are stored under each Linux user's `~/.clab` directory. To store GUI-created and API-managed lab workspaces somewhere else, set `CLAB_LABS_ROOT` in `/etc/clab-api-server/clab-api-server.env` to an absolute path, for example:
+
+```bash
+CLAB_LABS_ROOT=/var/lib/containerlab/labs
+```
+
+With that setting, files are stored under `/var/lib/containerlab/labs/users/<username>/`. `~` expansion is not supported because the service runs as `root` while authenticating separate Linux users.
+
 ### 2. Containerlab Tools Command
 
 Use Containerlab's built-in command for quick trials or temporary API access:
@@ -110,7 +118,7 @@ This method automatically handles Docker image pulling, container creation, and 
 Common flags for the start command include:
 - `--port | -p`: Port to expose the API server on (default: `8090`)
 - `--host`: Host address for the API server (default: `localhost`)
-- `--labs-dir | -l`: Directory to mount as shared labs directory
+- `--labs-dir | -l`: Directory to mount as the managed labs root
 - `--jwt-secret`: JWT secret key for authentication, generated randomly if unset
 - `--tls-enable`: Enable TLS for HTTPS connections, enabled by default
 
@@ -158,6 +166,13 @@ docker run -d \
 ```
 > [!NOTE]
 > Volume mounts enable Docker management, networking features, Linux PAM authentication, and user file storage. No containerlab binary is required - it's integrated as a Go library.
+
+This Docker example uses the default managed lab storage: each authenticated user's `~/.clab` directory from the mounted `/home`. To use a different root, add both `CLAB_LABS_ROOT` and a matching volume mount:
+
+```bash
+  -e CLAB_LABS_ROOT=/var/lib/containerlab/labs \
+  -v /var/lib/containerlab/labs:/var/lib/containerlab/labs \
+```
 
 ## Lifecycle Management
 
@@ -207,6 +222,7 @@ sudo systemctl status clab-api-server
 | `API_USER_GROUP` | `clab_api` | Linux group for API access |
 | `SUPERUSER_GROUP` | `clab_admins` | Linux group for elevated privileges |
 | `CLAB_RUNTIME` | `docker` | Container runtime used by Containerlab |
+| `CLAB_LABS_ROOT` | unset | Optional absolute root for managed lab workspaces. When set, users store labs under `$CLAB_LABS_ROOT/users/<username>/`; otherwise labs use `<home>/.clab/`. |
 | `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`) |
 | `CORS_ALLOWED_ORIGINS` | | Comma-separated browser origin allowlist (for standalone UI) |
 | `GIN_MODE` | `release` | Web framework mode (`debug` or `release`) |

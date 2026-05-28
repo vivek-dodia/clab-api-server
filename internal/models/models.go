@@ -214,7 +214,7 @@ type GenerateResponse struct {
 	// The output from the deploy command (only if Deploy=true). JSON object keyed by lab name.
 	// Use swaggertype:"object" to represent json.RawMessage in Swagger.
 	DeployOutput json.RawMessage `json:"deployOutput,omitempty" swaggertype:"object"`
-	// Path where the file was saved (if Deploy=true, it's the path in the user's ~/.clab dir; if Deploy=false, it's the OutputFile path if provided).
+	// Path where the file was saved (if Deploy=true, it's the path in the user's managed lab directory; if Deploy=false, it's the OutputFile path if provided).
 	SavedFilePath string `json:"savedFilePath,omitempty"`
 }
 
