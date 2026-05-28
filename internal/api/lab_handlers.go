@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -199,11 +198,10 @@ func DeployLabHandler(c *gin.Context) {
 		targetFilePath := filepath.Join(targetDir, originalLabName+".clab.yml")
 		topoPathForClab = targetFilePath
 
-		if err := os.MkdirAll(targetDir, 0750); err != nil {
+		if err := ensureLabDirectory(targetDir, uid, gid); err != nil {
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to create lab directory: %s", err.Error())})
 			return
 		}
-		_ = os.Chown(targetDir, uid, gid)
 
 		if err := os.WriteFile(targetFilePath, []byte(strings.TrimSpace(topoContent)), 0640); err != nil {
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to write topology file: %s", err.Error())})
@@ -345,11 +343,10 @@ func DeployLabArchiveHandler(c *gin.Context) {
 		}
 	}
 
-	if err := os.MkdirAll(targetDir, 0750); err != nil {
+	if err := ensureLabDirectory(targetDir, uid, gid); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create lab directory."})
 		return
 	}
-	_ = os.Chown(targetDir, uid, gid)
 
 	fileHeader, err := c.FormFile("labArchive")
 	if err != nil {
@@ -463,7 +460,7 @@ func DeployLabArchiveHandler(c *gin.Context) {
 // @Produce json
 // @Param labName path string true "Name of the lab to destroy"
 // @Param cleanup query boolean false "Remove containerlab lab artifacts after destroy"
-// @Param purgeLabDir query boolean false "Purge topology parent directory for managed lab paths (~/.clab or shared labs dir)"
+// @Param purgeLabDir query boolean false "Purge topology parent directory for managed lab paths (~/.clab or CLAB_LABS_ROOT)"
 // @Param graceful query boolean false "Attempt graceful shutdown"
 // @Param gracefulTimeout query string false "Override graceful shutdown timeout when graceful=true (for example 5s or 2m)"
 // @Param keepMgmtNet query boolean false "Keep the management network"
@@ -523,7 +520,7 @@ func DestroyLabHandler(c *gin.Context) {
 
 	// For purgeLabDir checks, derive the managed base directory from the lab owner.
 	// This allows superusers to purge labs owned by other users while still enforcing
-	// path safety constraints (managed ~/.clab or shared labs directory only).
+	// path safety constraints (managed ~/.clab or CLAB_LABS_ROOT only).
 	purgeBaseUser := username
 	if purgeLabDir {
 		if info, exists, err := getLabInfo(ctx, username, labName); err == nil && exists && info != nil && info.Owner != "" {
@@ -567,18 +564,15 @@ func DestroyLabHandler(c *gin.Context) {
 
 		targetDir := filepath.Dir(originalTopoPath)
 
-		sharedDir := os.Getenv("CLAB_SHARED_LABS_DIR")
-		expectedBase := ""
-		if sharedDir != "" {
-			expectedBase = filepath.Join(sharedDir, "users", purgeBaseUser)
-		} else {
-			usr, lookupErr := user.Lookup(purgeBaseUser)
-			if lookupErr == nil {
-				expectedBase = filepath.Join(usr.HomeDir, ".clab")
-			}
+		expectedBase, baseErr := getUserLabsBaseDirectory(purgeBaseUser)
+		if baseErr != nil {
+			log.Warnf("Failed to resolve managed labs base for user '%s': %v", purgeBaseUser, baseErr)
+			return
 		}
 
-		if expectedBase != "" && strings.HasPrefix(targetDir, expectedBase) && targetDir != expectedBase {
+		expectedBase = filepath.Clean(expectedBase)
+		targetDir = filepath.Clean(targetDir)
+		if strings.HasPrefix(targetDir, expectedBase+string(filepath.Separator)) {
 			if err := os.RemoveAll(targetDir); err != nil {
 				log.Warnf("Failed to cleanup directory '%s' for user '%s': %v", targetDir, username, err)
 			} else {

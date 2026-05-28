@@ -23,7 +23,7 @@ import (
 // @Description **Notes**
 // @Description - Deployment is denied if a lab with the target name already exists.
 // @Description - The `images` and `licenses` fields map node kind to image or license path (e.g., {"nokia_srlinux":"ghcr.io/..."}).
-// @Description - When `deploy=true`, the topology is saved to the user's `~/.clab/<labName>/` directory and `outputFile` is ignored.
+// @Description - When `deploy=true`, the topology is saved to the user's managed lab directory and `outputFile` is ignored.
 // @Description - When `deploy=false` and `outputFile` is empty, YAML is returned in the response.
 // @Description - When `deploy=false` and `outputFile` is set, the file is saved to that path on the server (requires API server write permissions).
 // @Tags Topology Generation
@@ -144,7 +144,7 @@ func GenerateTopologyHandler(c *gin.Context) {
 	var uid, gid int
 
 	if req.Deploy {
-		// --- Deploy=true: Save to user's .clab directory ---
+		// --- Deploy=true: Save to the user's managed lab directory ---
 		if req.OutputFile != "" {
 			log.Warnf("GenerateTopology user '%s': 'outputFile' field provided but Deploy=true. Ignoring 'outputFile' and saving to appropriate lab directory.", username)
 		}
@@ -160,13 +160,10 @@ func GenerateTopologyHandler(c *gin.Context) {
 
 		targetFilePath = filepath.Join(targetDir, req.Name+".clab.yml")
 
-		if err := os.MkdirAll(targetDir, 0750); err != nil {
+		if err := ensureLabDirectory(targetDir, uid, gid); err != nil {
 			log.Errorf("GenerateTopology failed for user '%s': Failed to create lab directory '%s': %v", username, targetDir, err)
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to create lab directory: %s.", err.Error())})
 			return
-		}
-		if chErr := os.Chown(targetDir, uid, gid); chErr != nil {
-			log.Warnf("GenerateTopology user '%s': Failed to set ownership on lab directory '%s': %v. Continuing...", username, targetDir, chErr)
 		}
 		log.Infof("GenerateTopology user '%s': Ensured directory '%s' exists and attempted ownership set.", username, targetDir)
 

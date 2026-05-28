@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -17,6 +19,7 @@ type Config struct {
 	APIUserGroup                 string        `mapstructure:"API_USER_GROUP"`  // Group required for basic API login (alternative to clab_admins)
 	SuperuserGroup               string        `mapstructure:"SUPERUSER_GROUP"` // Group for elevated privileges
 	ClabRuntime                  string        `mapstructure:"CLAB_RUNTIME"`
+	ClabLabsRoot                 string        `mapstructure:"CLAB_LABS_ROOT"`
 	CapturePacketflixPort        int           `mapstructure:"CAPTURE_PACKETFLIX_PORT"`
 	CaptureRemoteHostname        string        `mapstructure:"CAPTURE_REMOTE_HOSTNAME"`
 	CaptureWiresharkDockerImage  string        `mapstructure:"CAPTURE_WIRESHARK_DOCKER_IMAGE"`
@@ -52,6 +55,7 @@ func LoadConfig(envFilePath string) error {
 	viper.SetDefault("API_USER_GROUP", "")
 	viper.SetDefault("SUPERUSER_GROUP", "")
 	viper.SetDefault("CLAB_RUNTIME", "docker")
+	viper.SetDefault("CLAB_LABS_ROOT", "")
 	viper.SetDefault("CAPTURE_PACKETFLIX_PORT", 5001)
 	viper.SetDefault("CAPTURE_REMOTE_HOSTNAME", "")
 	viper.SetDefault("CAPTURE_WIRESHARK_DOCKER_IMAGE", "ghcr.io/kaelemc/wireshark-vnc-docker:latest")
@@ -97,6 +101,17 @@ func LoadConfig(envFilePath string) error {
 	err = viper.Unmarshal(&AppConfig)
 	if err != nil {
 		return fmt.Errorf("unable to decode config into struct: %w", err)
+	}
+
+	AppConfig.ClabLabsRoot = strings.TrimSpace(AppConfig.ClabLabsRoot)
+	if AppConfig.ClabLabsRoot != "" {
+		if strings.HasPrefix(AppConfig.ClabLabsRoot, "~") {
+			return fmt.Errorf("CLAB_LABS_ROOT must be an absolute path; '~' is not supported")
+		}
+		if !filepath.IsAbs(AppConfig.ClabLabsRoot) {
+			return fmt.Errorf("CLAB_LABS_ROOT must be an absolute path")
+		}
+		AppConfig.ClabLabsRoot = filepath.Clean(AppConfig.ClabLabsRoot)
 	}
 
 	// No need to convert - the value is already a time.Duration thanks to the type in the struct

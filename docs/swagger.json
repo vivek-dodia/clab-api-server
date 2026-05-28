@@ -333,7 +333,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Generates a containerlab topology from CLOS definitions and can optionally deploy it for the authenticated user.\n\n**Notes**\n- Deployment is denied if a lab with the target name already exists.\n- The `images` and `licenses` fields map node kind to image or license path (e.g., {\"nokia_srlinux\":\"ghcr.io/...\"}).\n- When `deploy=true`, the topology is saved to the user's `~/.clab/\u003clabName\u003e/` directory and `outputFile` is ignored.\n- When `deploy=false` and `outputFile` is empty, YAML is returned in the response.\n- When `deploy=false` and `outputFile` is set, the file is saved to that path on the server (requires API server write permissions).",
+                "description": "Generates a containerlab topology from CLOS definitions and can optionally deploy it for the authenticated user.\n\n**Notes**\n- Deployment is denied if a lab with the target name already exists.\n- The `images` and `licenses` fields map node kind to image or license path (e.g., {\"nokia_srlinux\":\"ghcr.io/...\"}).\n- When `deploy=true`, the topology is saved to the user's managed lab directory and `outputFile` is ignored.\n- When `deploy=false` and `outputFile` is empty, YAML is returned in the response.\n- When `deploy=false` and `outputFile` is set, the file is saved to that path on the server (requires API server write permissions).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1537,7 +1537,7 @@
                     },
                     {
                         "type": "boolean",
-                        "description": "Purge topology parent directory for managed lab paths (~/.clab or shared labs dir)",
+                        "description": "Purge topology parent directory for managed lab paths (~/.clab or CLAB_LABS_ROOT)",
                         "name": "purgeLabDir",
                         "in": "query"
                     },
@@ -6642,7 +6642,7 @@
                     "type": "string"
                 },
                 "savedFilePath": {
-                    "description": "Path where the file was saved (if Deploy=true, it's the path in the user's ~/.clab dir; if Deploy=false, it's the OutputFile path if provided).",
+                    "description": "Path where the file was saved (if Deploy=true, it's the path in the user's managed lab directory; if Deploy=false, it's the OutputFile path if provided).",
                     "type": "string"
                 },
                 "topologyYaml": {

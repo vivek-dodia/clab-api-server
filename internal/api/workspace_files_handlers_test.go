@@ -17,8 +17,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/srl-labs/clab-api-server/internal/config"
 	"github.com/srl-labs/clab-api-server/internal/models"
 )
+
+func setTestClabLabsRoot(t *testing.T, root string) {
+	t.Helper()
+	previous := config.AppConfig.ClabLabsRoot
+	config.AppConfig.ClabLabsRoot = ""
+	t.Setenv("CLAB_LABS_ROOT", root)
+	t.Cleanup(func() {
+		config.AppConfig.ClabLabsRoot = previous
+	})
+}
 
 func workspaceTestRouter(t *testing.T) (*gin.Engine, string) {
 	t.Helper()
@@ -29,7 +40,7 @@ func workspaceTestRouter(t *testing.T) (*gin.Engine, string) {
 		t.Fatalf("current user: %v", err)
 	}
 	workspaceRoot := filepath.Join(t.TempDir(), "shared")
-	t.Setenv("CLAB_SHARED_LABS_DIR", workspaceRoot)
+	setTestClabLabsRoot(t, workspaceRoot)
 
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
@@ -45,6 +56,49 @@ func workspaceTestRouter(t *testing.T) (*gin.Engine, string) {
 	router.POST("/directory", CreateWorkspaceDirectoryHandler)
 
 	return router, filepath.Join(workspaceRoot, "users", currentUser.Username)
+}
+
+func TestGetLabDirectoryInfoUsesClabLabsRoot(t *testing.T) {
+	currentUser, err := user.Current()
+	if err != nil {
+		t.Fatalf("current user: %v", err)
+	}
+	labsRoot := filepath.Join(t.TempDir(), "labs")
+	setTestClabLabsRoot(t, labsRoot)
+
+	labDir, _, _, err := getLabDirectoryInfo(currentUser.Username, "demo")
+	if err != nil {
+		t.Fatalf("getLabDirectoryInfo returned error: %v", err)
+	}
+
+	expected := filepath.Join(labsRoot, "users", currentUser.Username, "demo")
+	if labDir != expected {
+		t.Fatalf("lab dir = %q, want %q", labDir, expected)
+	}
+}
+
+func TestGetLabDirectoryInfoRejectsRelativeClabLabsRoot(t *testing.T) {
+	currentUser, err := user.Current()
+	if err != nil {
+		t.Fatalf("current user: %v", err)
+	}
+	setTestClabLabsRoot(t, "relative/labs")
+
+	if _, _, _, err := getLabDirectoryInfo(currentUser.Username, "demo"); err == nil {
+		t.Fatal("expected relative CLAB_LABS_ROOT to be rejected")
+	}
+}
+
+func TestGetLabDirectoryInfoRejectsTildeClabLabsRoot(t *testing.T) {
+	currentUser, err := user.Current()
+	if err != nil {
+		t.Fatalf("current user: %v", err)
+	}
+	setTestClabLabsRoot(t, "~/labs")
+
+	if _, _, _, err := getLabDirectoryInfo(currentUser.Username, "demo"); err == nil {
+		t.Fatal("expected tilde CLAB_LABS_ROOT to be rejected")
+	}
 }
 
 func TestWorkspaceEventsStreamExternalDelete(t *testing.T) {

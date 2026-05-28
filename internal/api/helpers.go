@@ -31,6 +31,8 @@ import (
 // isValidLabName checks for potentially harmful characters in lab names.
 var labNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+const clabLabsRootEnv = "CLAB_LABS_ROOT"
+
 // isValidContainerName checks container names (often includes lab prefix)
 var containerNameRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]+$`) // Docker's typical naming restrictions
 
@@ -600,11 +602,24 @@ func extractTarGz(archiveReader io.Reader, targetDir string, uid, gid int) error
 	return nil
 }
 
-// getLabDirectoryInfo returns the appropriate directory path for a lab based on environment variables,
-// along with the user's UID/GID for ownership operations.
-// If CLAB_SHARED_LABS_DIR is set, it returns $CLAB_SHARED_LABS_DIR/users/$username/$labName
-// Otherwise, it returns $HOME/.clab/$labName
-func getLabDirectoryInfo(username, labName string) (targetDir string, uid, gid int, err error) {
+func configuredLabsRoot() (string, error) {
+	root := strings.TrimSpace(config.AppConfig.ClabLabsRoot)
+	if root == "" {
+		root = strings.TrimSpace(os.Getenv(clabLabsRootEnv))
+	}
+	if root == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(root, "~") {
+		return "", fmt.Errorf("%s must be an absolute path; '~' is not supported", clabLabsRootEnv)
+	}
+	if !filepath.IsAbs(root) {
+		return "", fmt.Errorf("%s must be an absolute path", clabLabsRootEnv)
+	}
+	return filepath.Clean(root), nil
+}
+
+func getUserLabsBaseDirectoryInfo(username string) (baseDir string, uid, gid int, err error) {
 	// Get user details first (needed for UID/GID regardless of path)
 	usr, err := user.Lookup(username)
 	if err != nil {
@@ -621,12 +636,70 @@ func getLabDirectoryInfo(username, labName string) (targetDir string, uid, gid i
 		return "", -1, -1, fmt.Errorf("could not process user GID: %w", gidErr)
 	}
 
-	// Determine the target directory
-	sharedDir := os.Getenv("CLAB_SHARED_LABS_DIR")
-	if sharedDir != "" {
-		return filepath.Join(sharedDir, "users", username, labName), uid, gid, nil
+	labsRoot, rootErr := configuredLabsRoot()
+	if rootErr != nil {
+		return "", -1, -1, rootErr
+	}
+	if labsRoot != "" {
+		return filepath.Join(labsRoot, "users", username), uid, gid, nil
 	}
 
 	// Fall back to user's home directory
-	return filepath.Join(usr.HomeDir, ".clab", labName), uid, gid, nil
+	return filepath.Join(usr.HomeDir, ".clab"), uid, gid, nil
+}
+
+// getLabDirectoryInfo returns the appropriate directory path for a lab,
+// along with the user's UID/GID for ownership operations.
+// If CLAB_LABS_ROOT is set, it returns $CLAB_LABS_ROOT/users/$username/$labName.
+// Otherwise, it returns $HOME/.clab/$labName.
+func getLabDirectoryInfo(username, labName string) (targetDir string, uid, gid int, err error) {
+	baseDir, uid, gid, err := getUserLabsBaseDirectoryInfo(username)
+	if err != nil {
+		return "", -1, -1, err
+	}
+	return filepath.Join(baseDir, labName), uid, gid, nil
+}
+
+func ensureUserLabsBaseDirectory(baseDir string, uid, gid int) error {
+	labsRoot, err := configuredLabsRoot()
+	if err != nil {
+		return err
+	}
+	if labsRoot != "" {
+		usersDir := filepath.Join(labsRoot, "users")
+		cleanBaseDir := filepath.Clean(baseDir)
+		if cleanBaseDir != usersDir && !strings.HasPrefix(cleanBaseDir, usersDir+string(filepath.Separator)) {
+			return fmt.Errorf("labs base directory escapes %s", clabLabsRootEnv)
+		}
+		if err := os.MkdirAll(usersDir, 0755); err != nil {
+			return err
+		}
+		if err := os.Chmod(labsRoot, 0755); err != nil && !os.IsNotExist(err) {
+			log.Warnf("Failed to set permissions for labs root '%s': %v", labsRoot, err)
+		}
+		if err := os.Chmod(usersDir, 0755); err != nil {
+			log.Warnf("Failed to set permissions for labs users directory '%s': %v", usersDir, err)
+		}
+	}
+
+	if err := os.MkdirAll(baseDir, 0750); err != nil {
+		return err
+	}
+	if err := os.Chown(baseDir, uid, gid); err != nil {
+		log.Warnf("Failed to set ownership for labs directory '%s' to %d:%d: %v", baseDir, uid, gid, err)
+	}
+	return nil
+}
+
+func ensureLabDirectory(labDir string, uid, gid int) error {
+	if err := ensureUserLabsBaseDirectory(filepath.Dir(labDir), uid, gid); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(labDir, 0750); err != nil {
+		return err
+	}
+	if err := os.Chown(labDir, uid, gid); err != nil {
+		log.Warnf("Failed to set ownership for lab directory '%s' to %d:%d: %v", labDir, uid, gid, err)
+	}
+	return nil
 }

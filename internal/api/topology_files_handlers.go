@@ -313,6 +313,10 @@ func ImportTopologyFromURLHandler(c *gin.Context) {
 
 	sourceDir := filepath.Clean(cloned.RepoDir)
 	targetDir = filepath.Clean(targetDir)
+	if ensureErr := ensureLabDirectory(targetDir, uid, gid); ensureErr != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to create lab directory: %s", ensureErr.Error())})
+		return
+	}
 	if sourceDir != targetDir {
 		if copyErr := copyDirectoryTree(sourceDir, targetDir, uid, gid); copyErr != nil {
 			_ = os.RemoveAll(targetDir)
@@ -671,11 +675,10 @@ func PutTopologyFileHandler(c *gin.Context) {
 		return
 	}
 
-	if mkdirErr := os.MkdirAll(labDir, 0750); mkdirErr != nil {
+	if mkdirErr := ensureLabDirectory(labDir, uid, gid); mkdirErr != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to ensure lab directory: %s", mkdirErr.Error())})
 		return
 	}
-	_ = os.Chown(labDir, uid, gid)
 
 	if writeErr := os.WriteFile(absPath, body, 0640); writeErr != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to write file: %s", writeErr.Error())})
@@ -746,9 +749,14 @@ func RenameTopologyFileHandler(c *gin.Context) {
 		return
 	}
 
-	newPath, _, _, _, newErr := resolveTopologyFilePath(username, labName, req.NewPath)
+	newPath, labDir, uid, gid, newErr := resolveTopologyFilePath(username, labName, req.NewPath)
 	if newErr != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: newErr.Error()})
+		return
+	}
+
+	if ensureErr := ensureLabDirectory(labDir, uid, gid); ensureErr != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to ensure lab directory: %s", ensureErr.Error())})
 		return
 	}
 
@@ -756,6 +764,7 @@ func RenameTopologyFileHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to ensure destination directory: %s", mkdirErr.Error())})
 		return
 	}
+	_ = os.Chown(filepath.Dir(newPath), uid, gid)
 
 	if renameErr := os.Rename(oldPath, newPath); renameErr != nil {
 		// Make rename robust for retry/concurrency races used by editor temp-file flows:
@@ -906,12 +915,11 @@ func listTopologyEntries(baseDir string) ([]models.TopologyEntry, error) {
 }
 
 func getUserLabsBaseDirectory(username string) (string, error) {
-	sentinelDir, _, _, err := getLabDirectoryInfo(username, "__sentinel__")
+	baseDir, _, _, err := getUserLabsBaseDirectoryInfo(username)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve labs directory: %w", err)
 	}
-
-	return filepath.Dir(sentinelDir), nil
+	return baseDir, nil
 }
 
 func resolveCanonicalTopologyRootPath(cleanLabDir, labName, cleanPath string) string {

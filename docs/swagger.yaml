@@ -562,8 +562,8 @@ definitions:
         type: string
       savedFilePath:
         description: Path where the file was saved (if Deploy=true, it's the path
-          in the user's ~/.clab dir; if Deploy=false, it's the OutputFile path if
-          provided).
+          in the user's managed lab directory; if Deploy=false, it's the OutputFile
+          path if provided).
         type: string
       topologyYaml:
         description: The generated topology YAML (only if Deploy=false and OutputFile
@@ -1530,7 +1530,7 @@ paths:
         **Notes**
         - Deployment is denied if a lab with the target name already exists.
         - The `images` and `licenses` fields map node kind to image or license path (e.g., {"nokia_srlinux":"ghcr.io/..."}).
-        - When `deploy=true`, the topology is saved to the user's `~/.clab/<labName>/` directory and `outputFile` is ignored.
+        - When `deploy=true`, the topology is saved to the user's managed lab directory and `outputFile` is ignored.
         - When `deploy=false` and `outputFile` is empty, YAML is returned in the response.
         - When `deploy=false` and `outputFile` is set, the file is saved to that path on the server (requires API server write permissions).
       parameters:
@@ -1810,7 +1810,7 @@ paths:
         name: cleanup
         type: boolean
       - description: Purge topology parent directory for managed lab paths (~/.clab
-          or shared labs dir)
+          or CLAB_LABS_ROOT)
         in: query
         name: purgeLabDir
         type: boolean
