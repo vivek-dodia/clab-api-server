@@ -55,7 +55,7 @@ func workspaceTestRouter(t *testing.T) (*gin.Engine, string) {
 	router.POST("/rename", RenameWorkspaceFileHandler)
 	router.POST("/directory", CreateWorkspaceDirectoryHandler)
 
-	return router, filepath.Join(workspaceRoot, "users", currentUser.Username)
+	return router, filepath.Join(workspaceRoot, currentUser.Username)
 }
 
 func TestGetLabDirectoryInfoUsesClabLabsRoot(t *testing.T) {
@@ -71,9 +71,45 @@ func TestGetLabDirectoryInfoUsesClabLabsRoot(t *testing.T) {
 		t.Fatalf("getLabDirectoryInfo returned error: %v", err)
 	}
 
-	expected := filepath.Join(labsRoot, "users", currentUser.Username, "demo")
+	expected := filepath.Join(labsRoot, currentUser.Username, "demo")
 	if labDir != expected {
 		t.Fatalf("lab dir = %q, want %q", labDir, expected)
+	}
+}
+
+func TestGetLabDirectoryInfoUsesRootClabLabsRoot(t *testing.T) {
+	currentUser, err := user.Current()
+	if err != nil {
+		t.Fatalf("current user: %v", err)
+	}
+	setTestClabLabsRoot(t, string(filepath.Separator))
+
+	labDir, _, _, err := getLabDirectoryInfo(currentUser.Username, "demo")
+	if err != nil {
+		t.Fatalf("getLabDirectoryInfo returned error: %v", err)
+	}
+
+	expected := filepath.Join(string(filepath.Separator), currentUser.Username, "demo")
+	if labDir != expected {
+		t.Fatalf("lab dir = %q, want %q", labDir, expected)
+	}
+}
+
+func TestEnsureUserLabsBaseDirectoryRejectsClabLabsRootItself(t *testing.T) {
+	currentUser, err := user.Current()
+	if err != nil {
+		t.Fatalf("current user: %v", err)
+	}
+	labsRoot := filepath.Join(t.TempDir(), "labs")
+	setTestClabLabsRoot(t, labsRoot)
+
+	_, uid, gid, err := getUserLabsBaseDirectoryInfo(currentUser.Username)
+	if err != nil {
+		t.Fatalf("getUserLabsBaseDirectoryInfo returned error: %v", err)
+	}
+
+	if err := ensureUserLabsBaseDirectory(labsRoot, uid, gid); err == nil {
+		t.Fatal("expected CLAB_LABS_ROOT itself to be rejected as a user labs directory")
 	}
 }
 

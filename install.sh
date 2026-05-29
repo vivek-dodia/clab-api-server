@@ -135,7 +135,7 @@ SUPERUSER_GROUP=clab_admins
 # Containerlab
 CLAB_RUNTIME=docker
 # Optional absolute root for managed lab workspaces.
-# Files are stored under \$CLAB_LABS_ROOT/users/<username>/ when set.
+# Files are stored under \$CLAB_LABS_ROOT/<username>/ when set.
 #CLAB_LABS_ROOT=/var/lib/containerlab/labs
 
 # Browser terminal sessions

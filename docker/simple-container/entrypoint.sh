@@ -6,7 +6,6 @@ set -e
 if [ -n "${CLAB_LABS_ROOT:-}" ]; then
   echo "Setting up labs root: $CLAB_LABS_ROOT"
   mkdir -p "$CLAB_LABS_ROOT"
-  mkdir -p "$CLAB_LABS_ROOT/users"
 fi
 
 mkdir -p /var/run/netns

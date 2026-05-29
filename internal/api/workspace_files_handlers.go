@@ -52,7 +52,14 @@ func cleanWorkspacePath(rawPath string, allowRoot bool) (string, error) {
 func pathIsInsideRoot(rootPath, targetPath string) bool {
 	cleanRoot := filepath.Clean(rootPath)
 	cleanTarget := filepath.Clean(targetPath)
-	return cleanTarget == cleanRoot || strings.HasPrefix(cleanTarget, cleanRoot+string(filepath.Separator))
+	if cleanTarget == cleanRoot {
+		return true
+	}
+	relPath, err := filepath.Rel(cleanRoot, cleanTarget)
+	if err != nil {
+		return false
+	}
+	return relPath != ".." && !strings.HasPrefix(relPath, ".."+string(filepath.Separator))
 }
 
 func resolveWorkspacePath(username, rawPath string, allowRoot bool) (absolutePath, rootPath, relativePath string, uid, gid int, err error) {
