@@ -641,7 +641,7 @@ func getUserLabsBaseDirectoryInfo(username string) (baseDir string, uid, gid int
 		return "", -1, -1, rootErr
 	}
 	if labsRoot != "" {
-		return filepath.Join(labsRoot, "users", username), uid, gid, nil
+		return filepath.Join(labsRoot, username), uid, gid, nil
 	}
 
 	// Fall back to user's home directory
@@ -650,7 +650,7 @@ func getUserLabsBaseDirectoryInfo(username string) (baseDir string, uid, gid int
 
 // getLabDirectoryInfo returns the appropriate directory path for a lab,
 // along with the user's UID/GID for ownership operations.
-// If CLAB_LABS_ROOT is set, it returns $CLAB_LABS_ROOT/users/$username/$labName.
+// If CLAB_LABS_ROOT is set, it returns $CLAB_LABS_ROOT/$username/$labName.
 // Otherwise, it returns $HOME/.clab/$labName.
 func getLabDirectoryInfo(username, labName string) (targetDir string, uid, gid int, err error) {
 	baseDir, uid, gid, err := getUserLabsBaseDirectoryInfo(username)
@@ -666,19 +666,16 @@ func ensureUserLabsBaseDirectory(baseDir string, uid, gid int) error {
 		return err
 	}
 	if labsRoot != "" {
-		usersDir := filepath.Join(labsRoot, "users")
+		cleanLabsRoot := filepath.Clean(labsRoot)
 		cleanBaseDir := filepath.Clean(baseDir)
-		if cleanBaseDir != usersDir && !strings.HasPrefix(cleanBaseDir, usersDir+string(filepath.Separator)) {
+		if cleanBaseDir == cleanLabsRoot || !pathIsInsideRoot(cleanLabsRoot, cleanBaseDir) {
 			return fmt.Errorf("labs base directory escapes %s", clabLabsRootEnv)
 		}
-		if err := os.MkdirAll(usersDir, 0755); err != nil {
+		if err := os.MkdirAll(cleanLabsRoot, 0755); err != nil {
 			return err
 		}
-		if err := os.Chmod(labsRoot, 0755); err != nil && !os.IsNotExist(err) {
+		if err := os.Chmod(cleanLabsRoot, 0755); err != nil && !os.IsNotExist(err) {
 			log.Warnf("Failed to set permissions for labs root '%s': %v", labsRoot, err)
-		}
-		if err := os.Chmod(usersDir, 0755); err != nil {
-			log.Warnf("Failed to set permissions for labs users directory '%s': %v", usersDir, err)
 		}
 	}
 

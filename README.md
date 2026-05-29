@@ -96,7 +96,7 @@ By default, managed topology files are stored under each Linux user's `~/.clab` 
 CLAB_LABS_ROOT=/var/lib/containerlab/labs
 ```
 
-With that setting, files are stored under `/var/lib/containerlab/labs/users/<username>/`. `~` expansion is not supported because the service runs as `root` while authenticating separate Linux users.
+With that setting, files are stored under `/var/lib/containerlab/labs/<username>/`. `~` expansion is not supported because the service runs as `root` while authenticating separate Linux users.
 
 ### 2. Containerlab Tools Command
 
@@ -222,7 +222,7 @@ sudo systemctl status clab-api-server
 | `API_USER_GROUP` | `clab_api` | Linux group for API access |
 | `SUPERUSER_GROUP` | `clab_admins` | Linux group for elevated privileges |
 | `CLAB_RUNTIME` | `docker` | Container runtime used by Containerlab |
-| `CLAB_LABS_ROOT` | unset | Optional absolute root for managed lab workspaces. When set, users store labs under `$CLAB_LABS_ROOT/users/<username>/`; otherwise labs use `<home>/.clab/`. |
+| `CLAB_LABS_ROOT` | unset | Optional absolute root for managed lab workspaces. When set, users store labs under `$CLAB_LABS_ROOT/<username>/`; otherwise labs use `<home>/.clab/`. |
 | `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`) |
 | `CORS_ALLOWED_ORIGINS` | | Comma-separated browser origin allowlist (for standalone UI) |
 | `GIN_MODE` | `release` | Web framework mode (`debug` or `release`) |
