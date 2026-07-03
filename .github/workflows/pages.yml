@@ -7,9 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: github-pages
@@ -17,11 +15,8 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy ReDoc to GitHub Pages
+    name: Publish ReDoc to gh-pages
     runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -36,14 +31,31 @@ jobs:
           cp docs/swagger.yaml public/swagger.yaml
           touch public/.nojekyll
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v6
+      - name: Publish to gh-pages
+        run: |
+          set -euo pipefail
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: public
+          repo_dir="$PWD"
+          publish_dir="$(mktemp -d)"
+          cleanup() {
+            cd "$repo_dir"
+            git worktree remove --force "$publish_dir" >/dev/null 2>&1 || rm -rf "$publish_dir"
+          }
+          trap cleanup EXIT
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages --depth=1
+
+          git worktree add "$publish_dir" origin/gh-pages
+          cp -a public/. "$publish_dir"/
+
+          cd "$publish_dir"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No API docs changes to publish."
+            exit 0
+          fi
+
+          git commit -m "publish api docs"
+          git push origin HEAD:gh-pages
