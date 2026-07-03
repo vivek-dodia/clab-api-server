@@ -576,6 +576,7 @@ func DeployTopologyHandler(c *gin.Context) {
 // @Description **Notes**
 // @Description - `path` defaults to the running lab topology path when the lab exists, otherwise `<labName>.clab.yml`.
 // @Description - `dryRun=true` returns the apply plan without changing the lab.
+// @Description - `stream=true` returns `application/x-ndjson` lifecycle events.
 // @Description - `includeLogs=true` includes captured lifecycle logs in the JSON response.
 // @Tags Labs
 // @Security BearerAuth
@@ -586,6 +587,7 @@ func DeployTopologyHandler(c *gin.Context) {
 // @Param maxWorkers query int false "Limit concurrent workers for new nodes"
 // @Param exportTemplate query string false "Custom Go template file for topology data export"
 // @Param skipPostDeploy query boolean false "Skip post-deploy actions for added nodes"
+// @Param stream query boolean false "Stream lifecycle output as NDJSON events"
 // @Param includeLogs query boolean false "Include captured lifecycle logs in the JSON response"
 // @Success 200 {object} models.ApplyLabResponse "Apply result"
 // @Failure 400 {object} models.ErrorResponse "Invalid input"
@@ -598,6 +600,7 @@ func DeployTopologyHandler(c *gin.Context) {
 func ApplyTopologyHandler(c *gin.Context) {
 	username := c.GetString("username")
 	labName := c.Param("labName")
+	streamLogs := c.Query("stream") == "true"
 	includeLogs := c.Query("includeLogs") == "true"
 	if !isValidLabName(labName) {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid characters in lab name."})
@@ -702,6 +705,21 @@ func ApplyTopologyHandler(c *gin.Context) {
 			return models.ApplyLabResponse{}, fmt.Errorf("Failed to apply lab '%s': %s", labName, applyErr.Error())
 		}
 		return clab.ApplyResultToResponse(result), nil
+	}
+
+	if streamLogs {
+		var result models.ApplyLabResponse
+		streamLifecycleCommandWithOptions(c, func() error {
+			var runErr error
+			result, runErr = runApply()
+			return runErr
+		}, "", &lifecycleStreamOptions{
+			Preamble: buildDeployPreambleLines(),
+			OnSuccess: func() []string {
+				return buildApplySummaryTableLines(result)
+			},
+		})
+		return
 	}
 
 	if includeLogs {
