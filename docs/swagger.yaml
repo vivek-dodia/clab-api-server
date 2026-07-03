@@ -2037,6 +2037,7 @@ paths:
         **Notes**
         - `path` defaults to the running lab topology path when the lab exists, otherwise `<labName>.clab.yml`.
         - `dryRun=true` returns the apply plan without changing the lab.
+        - `stream=true` returns `application/x-ndjson` lifecycle events.
         - `includeLogs=true` includes captured lifecycle logs in the JSON response.
       parameters:
       - description: Lab name
@@ -2064,6 +2065,10 @@ paths:
       - description: Skip post-deploy actions for added nodes
         in: query
         name: skipPostDeploy
+        type: boolean
+      - description: Stream lifecycle output as NDJSON events
+        in: query
+        name: stream
         type: boolean
       - description: Include captured lifecycle logs in the JSON response
         in: query

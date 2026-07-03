@@ -1619,7 +1619,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Applies an on-disk topology from the authenticated user's lab directory. If the lab is not running, containerlab apply deploys it; otherwise it reconciles supported topology changes in place.\n\n**Notes**\n- `path` defaults to the running lab topology path when the lab exists, otherwise `\u003clabName\u003e.clab.yml`.\n- `dryRun=true` returns the apply plan without changing the lab.\n- `includeLogs=true` includes captured lifecycle logs in the JSON response.",
+                "description": "Applies an on-disk topology from the authenticated user's lab directory. If the lab is not running, containerlab apply deploys it; otherwise it reconciles supported topology changes in place.\n\n**Notes**\n- `path` defaults to the running lab topology path when the lab exists, otherwise `\u003clabName\u003e.clab.yml`.\n- `dryRun=true` returns the apply plan without changing the lab.\n- `stream=true` returns `application/x-ndjson` lifecycle events.\n- `includeLogs=true` includes captured lifecycle logs in the JSON response.",
                 "produces": [
                     "application/json"
                 ],
@@ -1663,6 +1663,12 @@
                         "type": "boolean",
                         "description": "Skip post-deploy actions for added nodes",
                         "name": "skipPostDeploy",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Stream lifecycle output as NDJSON events",
+                        "name": "stream",
                         "in": "query"
                     },
                     {
