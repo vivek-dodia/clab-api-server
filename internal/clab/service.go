@@ -194,6 +194,16 @@ type DeployOptions struct {
 	SkipLabDirACLs bool
 }
 
+// ApplyOptions contains options for applying topology changes to a lab.
+type ApplyOptions struct {
+	TopoPath       string
+	Username       string
+	DryRun         bool
+	MaxWorkers     uint
+	ExportTemplate string
+	SkipPostDeploy bool
+}
+
 // DestroyOptions contains options for destroying a lab.
 type DestroyOptions struct {
 	LabName         string
@@ -461,6 +471,85 @@ func (s *Service) Deploy(ctx context.Context, opts DeployOptions) ([]clabruntime
 	)
 
 	return containers, nil
+}
+
+// Apply applies topology changes to a lab using the containerlab library.
+func (s *Service) Apply(ctx context.Context, opts ApplyOptions) (*clabcore.ApplyResult, error) {
+	ctx, cancel := s.ensureTimeout(ctx)
+	defer cancel()
+
+	if strings.TrimSpace(opts.TopoPath) == "" {
+		return nil, fmt.Errorf("topology path is required")
+	}
+
+	workDir, err := s.prepareWorkDir(opts.Username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare working directory: %w", err)
+	}
+
+	originalDir, _ := os.Getwd()
+	if chErr := os.Chdir(workDir); chErr != nil {
+		return nil, fmt.Errorf("failed to change to work directory: %w", chErr)
+	}
+	defer func() {
+		if restoreErr := os.Chdir(originalDir); restoreErr != nil {
+			log.Warn("Failed to restore working directory", "error", restoreErr)
+		}
+	}()
+
+	clabOpts := []clabcore.ClabOption{
+		clabcore.WithTimeout(defaultTimeout),
+		clabcore.WithTopoPath(opts.TopoPath, nil),
+		clabcore.WithRuntime(config.AppConfig.ClabRuntime, &clabruntime.RuntimeConfig{
+			Timeout: defaultTimeout,
+		}),
+	}
+
+	log.Debug("Creating containerlab instance for apply",
+		"topoPath", opts.TopoPath,
+		"username", opts.Username,
+		"runtime", config.AppConfig.ClabRuntime,
+	)
+
+	clab, err := newContainerLabForOwner(opts.Username, clabOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create containerlab instance: %w", err)
+	}
+
+	applyOpts, err := clabcore.NewApplyOptions(opts.MaxWorkers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create apply options: %w", err)
+	}
+	applyOpts.SetDryRun(opts.DryRun).
+		SetSkipPostDeploy(opts.SkipPostDeploy).
+		SetExportTemplate(opts.ExportTemplate)
+
+	log.Info("Applying lab topology",
+		"username", opts.Username,
+		"topoPath", opts.TopoPath,
+		"dryRun", opts.DryRun,
+	)
+
+	var result *clabcore.ApplyResult
+	err = func() error {
+		containerlabInitMu.Lock()
+		defer containerlabInitMu.Unlock()
+
+		restoreOwnerEnv := setProcessOwnerEnv(opts.Username)
+		defer restoreOwnerEnv()
+
+		var applyErr error
+		result, applyErr = clab.Apply(ctx, applyOpts)
+		return applyErr
+	}()
+	if err != nil {
+		return nil, fmt.Errorf("apply failed: %w", err)
+	}
+	if result != nil && strings.TrimSpace(result.LabName) == "" {
+		result.LabName = clab.Config.Name
+	}
+
+	return result, nil
 }
 
 // Destroy destroys a lab using the containerlab library.

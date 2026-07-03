@@ -38,6 +38,20 @@ type topologyEntry struct {
 	DeploymentState     string `json:"deploymentState"`
 }
 
+type applyLabResponse struct {
+	DryRun            bool              `json:"dryRun"`
+	DeployedLab       bool              `json:"deployedLab"`
+	LabName           string            `json:"labName"`
+	AddedNodes        []string          `json:"addedNodes"`
+	DeletedNodes      []string          `json:"deletedNodes"`
+	RecreatedNodes    []string          `json:"recreatedNodes"`
+	StartedNodes      []string          `json:"startedNodes"`
+	AddedLinks        []string          `json:"addedLinks"`
+	DeletedEndpoints  []string          `json:"deletedEndpoints"`
+	RestartedNodes    []string          `json:"restartedNodes"`
+	NodeChangeReasons map[string]string `json:"nodeChangeReasons"`
+}
+
 func (s *TopologyFilesSuite) topologyFileURL(labName, relPath string) string {
 	reqURL, _ := url.Parse(fmt.Sprintf("%s/api/v1/labs/%s/topology/file", s.cfg.APIURL, labName))
 	query := reqURL.Query()
@@ -118,6 +132,62 @@ func (s *TopologyFilesSuite) TestTopologyFileLifecycleAndDeploy() {
 	bodyBytes, statusCode, err = s.doRequest("DELETE", s.topologyFileURL(labName, renamedPath), s.apiUserHeaders, nil, s.cfg.RequestTimeout)
 	s.Require().NoError(err)
 	s.Require().Equal(http.StatusOK, statusCode, "Expected 200 deleting renamed topology file. Body: %s", string(bodyBytes))
+}
+
+func (s *TopologyFilesSuite) TestApplyTopologyFileAddsNode() {
+	labName := fmt.Sprintf("%s-apply-%s", s.cfg.LabNamePrefix, s.randomSuffix(5))
+	topologyPath := labName + ".clab.yml"
+	initialTopology := strings.ReplaceAll(s.cfg.SimpleTopologyContent, "{lab_name}", labName)
+	updatedTopology := s.topologyWithExtraLinuxNode(initialTopology, "srl3")
+
+	defer s.deleteTopologyFile(labName, topologyPath)
+	defer s.cleanupLab(labName, true)
+
+	s.logTest("Writing and deploying base topology file for apply test lab '%s'", labName)
+	bodyBytes, statusCode, err := s.doRequest("PUT", s.topologyFileURL(labName, topologyPath), s.apiUserHeaders, bytes.NewBufferString(initialTopology), s.cfg.RequestTimeout)
+	s.Require().NoError(err)
+	s.Require().Equal(http.StatusOK, statusCode, "Expected 200 writing topology file. Body: %s", string(bodyBytes))
+
+	deployURL := fmt.Sprintf("%s/api/v1/labs/%s/deploy?path=%s", s.cfg.APIURL, labName, url.QueryEscape(topologyPath))
+	bodyBytes, statusCode, err = s.doRequest("POST", deployURL, s.apiUserHeaders, nil, s.cfg.DeployTimeout)
+	s.Require().NoError(err)
+	s.Require().Equal(http.StatusOK, statusCode, "Expected 200 deploying topology file. Body: %s", string(bodyBytes))
+
+	s.assertInspectNodeNames(labName, s.apiUserHeaders, []string{"srl1", "srl2"}, []string{"srl3"})
+
+	s.logTest("Updating topology file for lab '%s' with an additional node", labName)
+	bodyBytes, statusCode, err = s.doRequest("PUT", s.topologyFileURL(labName, topologyPath), s.apiUserHeaders, bytes.NewBufferString(updatedTopology), s.cfg.RequestTimeout)
+	s.Require().NoError(err)
+	s.Require().Equal(http.StatusOK, statusCode, "Expected 200 updating topology file. Body: %s", string(bodyBytes))
+
+	applyURL := fmt.Sprintf("%s/api/v1/labs/%s/apply", s.cfg.APIURL, labName)
+	dryRunURL := applyURL + "?dryRun=true"
+
+	s.logTest("Dry-running apply for lab '%s'", labName)
+	bodyBytes, statusCode, err = s.doRequest("POST", dryRunURL, s.apiUserHeaders, nil, s.cfg.DeployTimeout)
+	s.Require().NoError(err)
+	s.Require().Equal(http.StatusOK, statusCode, "Expected 200 dry-running apply. Body: %s", string(bodyBytes))
+
+	var dryRunResp applyLabResponse
+	s.Require().NoError(json.Unmarshal(bodyBytes, &dryRunResp), "Failed to unmarshal dry-run apply response. Body: %s", string(bodyBytes))
+	s.Require().True(dryRunResp.DryRun, "Expected dryRun=true. Body: %s", string(bodyBytes))
+	s.Require().False(dryRunResp.DeployedLab, "Expected dry-run against existing lab not to deploy a missing lab. Body: %s", string(bodyBytes))
+	s.Require().Equal(labName, dryRunResp.LabName, "Expected apply response lab name. Body: %s", string(bodyBytes))
+	s.Require().Contains(dryRunResp.AddedNodes, "srl3", "Expected dry-run apply to report srl3 as an added node. Body: %s", string(bodyBytes))
+	s.assertInspectNodeNames(labName, s.apiUserHeaders, []string{"srl1", "srl2"}, []string{"srl3"})
+
+	s.logTest("Applying topology changes for lab '%s'", labName)
+	bodyBytes, statusCode, err = s.doRequest("POST", applyURL, s.apiUserHeaders, nil, s.cfg.DeployTimeout)
+	s.Require().NoError(err)
+	s.Require().Equal(http.StatusOK, statusCode, "Expected 200 applying topology changes. Body: %s", string(bodyBytes))
+
+	var applyResp applyLabResponse
+	s.Require().NoError(json.Unmarshal(bodyBytes, &applyResp), "Failed to unmarshal apply response. Body: %s", string(bodyBytes))
+	s.Require().False(applyResp.DryRun, "Expected dryRun=false. Body: %s", string(bodyBytes))
+	s.Require().Equal(labName, applyResp.LabName, "Expected apply response lab name. Body: %s", string(bodyBytes))
+	s.Require().Contains(applyResp.AddedNodes, "srl3", "Expected apply to report srl3 as an added node. Body: %s", string(bodyBytes))
+
+	s.assertInspectNodeNames(labName, s.apiUserHeaders, []string{"srl1", "srl2", "srl3"}, nil)
 }
 
 func (s *TopologyFilesSuite) TestTopologyFileRejectsInvalidPaths() {
@@ -205,4 +275,49 @@ func (s *TopologyFilesSuite) TestTopologyFileNonOwnerCannotReadRuntimeOwnerFile(
 	s.Require().NoError(err)
 	s.Require().Equal(http.StatusNotFound, statusCode, "Topology file endpoint should not expose another user's lab file. Body: %s", string(bodyBytes))
 	s.assertJSONError(bodyBytes, "File not found")
+}
+
+func (s *TopologyFilesSuite) topologyWithExtraLinuxNode(topologyContent, nodeName string) string {
+	s.T().Helper()
+
+	var topology map[string]interface{}
+	s.Require().NoError(json.Unmarshal([]byte(topologyContent), &topology), "Failed to parse topology content")
+
+	topologySection, ok := topology["topology"].(map[string]interface{})
+	s.Require().True(ok, "Expected topology section in test topology")
+
+	nodes, ok := topologySection["nodes"].(map[string]interface{})
+	s.Require().True(ok, "Expected nodes section in test topology")
+	nodes[nodeName] = map[string]interface{}{
+		"kind": "linux",
+	}
+
+	updated, err := json.MarshalIndent(topology, "", "  ")
+	s.Require().NoError(err, "Failed to marshal updated topology")
+
+	return string(updated)
+}
+
+func (s *TopologyFilesSuite) assertInspectNodeNames(labName string, headers http.Header, expected, absent []string) {
+	s.T().Helper()
+
+	inspectURL := fmt.Sprintf("%s/api/v1/labs/%s", s.cfg.APIURL, labName)
+	bodyBytes, statusCode, err := s.doRequest("GET", inspectURL, headers, nil, s.cfg.RequestTimeout)
+	s.Require().NoError(err, "Failed to inspect lab '%s'", labName)
+	s.Require().Equal(http.StatusOK, statusCode, "Expected 200 inspecting lab '%s'. Body: %s", labName, string(bodyBytes))
+
+	var containers []ClabContainerInfo
+	s.Require().NoError(json.Unmarshal(bodyBytes, &containers), "Failed to unmarshal inspect response. Body: %s", string(bodyBytes))
+
+	nodeNames := make(map[string]bool, len(containers))
+	for _, container := range containers {
+		nodeNames[container.NodeName] = true
+	}
+
+	for _, nodeName := range expected {
+		s.Require().True(nodeNames[nodeName], "Expected lab '%s' to include node %q. Body: %s", labName, nodeName, string(bodyBytes))
+	}
+	for _, nodeName := range absent {
+		s.Require().False(nodeNames[nodeName], "Expected lab '%s' not to include node %q. Body: %s", labName, nodeName, string(bodyBytes))
+	}
 }

@@ -101,6 +101,9 @@ func SetupRoutes(router *gin.Engine) {
 				// Deploy on-disk topology file for this lab name
 				labSpecific.POST("/deploy", DeployTopologyHandler) // POST /api/v1/labs/{labName}/deploy
 
+				// Apply on-disk topology file for this lab name
+				labSpecific.POST("/apply", ApplyTopologyHandler) // POST /api/v1/labs/{labName}/apply
+
 				// Topology-aware lab node lifecycle actions
 				labSpecific.POST("/start", StartLabNodesHandler)     // POST /api/v1/labs/{labName}/start
 				labSpecific.POST("/stop", StopLabNodesHandler)       // POST /api/v1/labs/{labName}/stop

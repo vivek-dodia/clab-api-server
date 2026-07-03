@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	clabconst "github.com/srl-labs/containerlab/constants"
+	clabcore "github.com/srl-labs/containerlab/core"
 	clabexec "github.com/srl-labs/containerlab/exec"
 	clabruntime "github.com/srl-labs/containerlab/runtime"
 	clabtypes "github.com/srl-labs/containerlab/types"
@@ -51,6 +52,46 @@ func ContainersToClabInspectOutput(containers []clabruntime.GenericContainer) mo
 	}
 
 	return result
+}
+
+// ApplyResultToResponse converts a containerlab apply result to the API response model.
+func ApplyResultToResponse(result *clabcore.ApplyResult) models.ApplyLabResponse {
+	response := models.ApplyLabResponse{
+		AddedNodes:        []string{},
+		DeletedNodes:      []string{},
+		RecreatedNodes:    []string{},
+		StartedNodes:      []string{},
+		AddedLinks:        []string{},
+		DeletedEndpoints:  []string{},
+		RestartedNodes:    []string{},
+		NodeChangeReasons: map[string]string{},
+	}
+	if result == nil {
+		return response
+	}
+
+	response.DryRun = result.DryRun
+	response.DeployedLab = result.DeployedLab
+	response.LabName = result.LabName
+	response.AddedNodes = cloneStringSlice(result.AddedNodes)
+	response.DeletedNodes = cloneStringSlice(result.DeletedNodes)
+	response.RecreatedNodes = cloneStringSlice(result.RecreatedNodes)
+	response.StartedNodes = cloneStringSlice(result.StartedNodes)
+	response.AddedLinks = cloneStringSlice(result.AddedLinks)
+	response.DeletedEndpoints = cloneStringSlice(result.DeletedEndpoints)
+	response.RestartedNodes = cloneStringSlice(result.RestartedNodes)
+	for nodeName, reason := range result.NodeChangeReasons {
+		response.NodeChangeReasons[nodeName] = reason
+	}
+
+	return response
+}
+
+func cloneStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), values...)
 }
 
 // ContainerInterfacesToNodeInterfaceInfo converts containerlab interfaces to API format.
