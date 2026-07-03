@@ -1616,6 +1616,106 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/labs/{labName}/apply": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Applies an on-disk topology from the authenticated user's lab directory. If the lab is not running, containerlab apply deploys it; otherwise it reconciles supported topology changes in place.\n\n**Notes**\n- ` + "`" + `path` + "`" + ` defaults to the running lab topology path when the lab exists, otherwise ` + "`" + `\u003clabName\u003e.clab.yml` + "`" + `.\n- ` + "`" + `dryRun=true` + "`" + ` returns the apply plan without changing the lab.\n- ` + "`" + `includeLogs=true` + "`" + ` includes captured lifecycle logs in the JSON response.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Labs"
+                ],
+                "summary": "Apply on-disk topology for lab",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lab name",
+                        "name": "labName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative topology file path inside lab directory (defaults to running topology path or \u003clabName\u003e.clab.yml)",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Show apply actions without applying them",
+                        "name": "dryRun",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit concurrent workers for new nodes",
+                        "name": "maxWorkers",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Custom Go template file for topology data export",
+                        "name": "exportTemplate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Skip post-deploy actions for added nodes",
+                        "name": "skipPostDeploy",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include captured lifecycle logs in the JSON response",
+                        "name": "includeLogs",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Apply result",
+                        "schema": {
+                            "$ref": "#/definitions/models.ApplyLabResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Lab or topology file not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/labs/{labName}/capture/packetflix": {
             "post": {
                 "security": [
@@ -5868,6 +5968,68 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "models.ApplyLabResponse": {
+            "type": "object",
+            "properties": {
+                "addedLinks": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "addedNodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "deletedEndpoints": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "deletedNodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "deployedLab": {
+                    "type": "boolean"
+                },
+                "dryRun": {
+                    "type": "boolean"
+                },
+                "labName": {
+                    "type": "string"
+                },
+                "nodeChangeReasons": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "recreatedNodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "restartedNodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "startedNodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "models.CACreateRequest": {
             "type": "object",
             "properties": {

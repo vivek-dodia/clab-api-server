@@ -77,6 +77,21 @@ type RedeployRequest struct {
 	SkipLabdirAcl  bool   `json:"skipLabdirAcl,omitempty"`  // Corresponds to --skip-labdir-acl flag
 }
 
+// ApplyLabResponse summarizes changes from a containerlab apply operation.
+type ApplyLabResponse struct {
+	DryRun            bool              `json:"dryRun"`
+	DeployedLab       bool              `json:"deployedLab"`
+	LabName           string            `json:"labName"`
+	AddedNodes        []string          `json:"addedNodes"`
+	DeletedNodes      []string          `json:"deletedNodes"`
+	RecreatedNodes    []string          `json:"recreatedNodes"`
+	StartedNodes      []string          `json:"startedNodes"`
+	AddedLinks        []string          `json:"addedLinks"`
+	DeletedEndpoints  []string          `json:"deletedEndpoints"`
+	RestartedNodes    []string          `json:"restartedNodes"`
+	NodeChangeReasons map[string]string `json:"nodeChangeReasons"`
+}
+
 // ErrorResponse represents a standard error message format
 type ErrorResponse struct {
 	Error string `json:"error" example:"Invalid credentials or user not in allowed group"`
