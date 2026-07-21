@@ -145,7 +145,7 @@ func NewManager(cfg ManagerConfig) *Manager {
 		normalized.PacketflixPort = 5001
 	}
 	if normalized.WiresharkDockerImage == "" {
-		normalized.WiresharkDockerImage = "ghcr.io/kaelemc/wireshark-vnc-docker:latest"
+		normalized.WiresharkDockerImage = "ghcr.io/srl-labs/wireshark-vnc-docker:latest"
 	}
 	if normalized.WiresharkSessionTTL <= 0 {
 		normalized.WiresharkSessionTTL = 2 * time.Hour
