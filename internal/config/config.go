@@ -58,7 +58,7 @@ func LoadConfig(envFilePath string) error {
 	viper.SetDefault("CLAB_LABS_ROOT", "")
 	viper.SetDefault("CAPTURE_PACKETFLIX_PORT", 5001)
 	viper.SetDefault("CAPTURE_REMOTE_HOSTNAME", "")
-	viper.SetDefault("CAPTURE_WIRESHARK_DOCKER_IMAGE", "ghcr.io/kaelemc/wireshark-vnc-docker:latest")
+	viper.SetDefault("CAPTURE_WIRESHARK_DOCKER_IMAGE", "ghcr.io/srl-labs/wireshark-vnc-docker:latest")
 	viper.SetDefault("CAPTURE_WIRESHARK_PULL_POLICY", "always")
 	viper.SetDefault("CAPTURE_WIRESHARK_SESSION_TTL", "2h")
 	viper.SetDefault("CAPTURE_EDGESHARK_EXTRA_ENV_VARS", "")
